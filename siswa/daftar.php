@@ -110,9 +110,9 @@ $siswa = $koneksi->query("SELECT s.*, COUNT(p.id) as jml_bayar FROM siswa s LEFT
               <label class="field-label" for="kelas-baru">Kelas</label>
               <select class="field-input field-select" id="kelas-baru" name="kelas" required>
                 <option value="">-- Pilih Kelas --</option>
-                <?php foreach(['X IPA','X IPS','XI IPA','XI IPS','XII IP','XII IS'] as $k): ?>
-                <option><?=$k?></option>
-                <?php endforeach; ?>
+                <?php for ($k = 1; $k <= 6; $k++): ?>
+                <option value="<?= $k ?>">Kelas <?= $k ?></option>
+                <?php endfor; ?>
               </select>
             </div>
           </div>

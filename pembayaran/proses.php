@@ -8,6 +8,21 @@ require_once '../koneksi.php';
 
 $aksi = $_POST['aksi'] ?? $_GET['aksi'] ?? '';
 
+function parse_amount($value) {
+    if ($value === null || $value === '') return 0.0;
+    return (float)str_replace(['.', ','], ['', '.'], (string)$value);
+}
+
+function normalize_month_code($value) {
+    $map = [
+        'Januari' => '01', 'Februari' => '02', 'Maret' => '03', 'April' => '04',
+        'Mei' => '05', 'Juni' => '06', 'Juli' => '07', 'Agustus' => '08',
+        'September' => '09', 'Oktober' => '10', 'November' => '11', 'Desember' => '12'
+    ];
+    if (isset($map[$value])) return $map[$value];
+    return str_pad((string)$value, 2, '0', STR_PAD_LEFT);
+}
+
 // ── INSERT ──────────────────────────────────
 if ($aksi === 'input') {
     $no_induk        = trim($_POST['no_induk'] ?? '');
@@ -16,32 +31,32 @@ if ($aksi === 'input') {
     if (strlen($tanggal_bayar) === 10) {
         $tanggal_bayar .= ' ' . date('H:i:s');
     }
-    $bulan_bayar     = $_POST['bulan_bayar'] ?? '';
+    $bulan_bayar     = normalize_month_code($_POST['bulan_bayar'] ?? '');
     $tahun_bayar     = $_POST['tahun_bayar'] ?? date('Y');
     
-    $uang_pangkal    = (float)($_POST['uang_pangkal'] ?? 0);
-    $uang_bangunan   = (float)($_POST['uang_bangunan'] ?? 0);
-    $uang_seragam    = (float)($_POST['uang_seragam'] ?? 0);
-    $uang_kegiatan   = (float)($_POST['uang_kegiatan'] ?? 0);
-    $uang_spp        = (float)($_POST['uang_spp'] ?? 0);
-    $uang_makan      = (float)($_POST['uang_makan'] ?? 0);
-    $uang_sorga      = (float)($_POST['uang_sorga'] ?? 0);
-    $uang_infaq      = (float)($_POST['uang_infaq'] ?? 0);
-    $uang_lain       = (float)($_POST['uang_lain'] ?? 0);
-    $uang_du         = (float)($_POST['uang_du'] ?? 0);
+    $uang_pangkal    = parse_amount($_POST['uang_pangkal'] ?? 0);
+    $uang_bangunan   = parse_amount($_POST['uang_bangunan'] ?? 0);
+    $uang_seragam    = parse_amount($_POST['uang_seragam'] ?? 0);
+    $uang_kegiatan   = parse_amount($_POST['uang_kegiatan'] ?? 0);
+    $uang_spp        = parse_amount($_POST['uang_spp'] ?? 0);
+    $uang_makan      = parse_amount($_POST['uang_makan'] ?? 0);
+    $uang_sorga      = parse_amount($_POST['uang_sorga'] ?? 0);
+    $uang_infaq      = parse_amount($_POST['uang_infaq'] ?? 0);
+    $uang_lain       = parse_amount($_POST['uang_lain'] ?? 0);
+    $uang_du         = parse_amount($_POST['uang_du'] ?? 0);
     
     $ll_1_ket        = $_POST['ll_1_ket'] ?? '';
-    $ll_1_nom        = (float)($_POST['ll_1_nom'] ?? 0);
+    $ll_1_nom        = parse_amount($_POST['ll_1_nom'] ?? 0);
     $ll_2_ket        = $_POST['ll_2_ket'] ?? '';
-    $ll_2_nom        = (float)($_POST['ll_2_nom'] ?? 0);
+    $ll_2_nom        = parse_amount($_POST['ll_2_nom'] ?? 0);
     $ll_3_ket        = $_POST['ll_3_ket'] ?? '';
-    $ll_3_nom        = (float)($_POST['ll_3_nom'] ?? 0);
+    $ll_3_nom        = parse_amount($_POST['ll_3_nom'] ?? 0);
     $ll_4_ket        = $_POST['ll_4_ket'] ?? '';
-    $ll_4_nom        = (float)($_POST['ll_4_nom'] ?? 0);
+    $ll_4_nom        = parse_amount($_POST['ll_4_nom'] ?? 0);
     
-    $potongan_spp    = (float)($_POST['potongan_spp'] ?? 0);
-    $tabungan_wajib  = (float)($_POST['tabungan_wajib'] ?? 0);
-    $total_jumlah    = (float)($_POST['total_jumlah'] ?? 0);
+    $potongan_spp    = parse_amount($_POST['potongan_spp'] ?? 0);
+    $tabungan_wajib  = parse_amount($_POST['tabungan_wajib'] ?? 0);
+    $total_jumlah    = parse_amount($_POST['total_jumlah'] ?? 0);
     $catatan         = $_POST['catatan'] ?? '';
     $kelas_du        = $_POST['kelas_du'] ?? '';
     $tahun_ajaran_du = $_POST['tahun_ajaran_du'] ?? '';
@@ -144,32 +159,32 @@ if ($aksi === 'update') {
     if (strlen($tanggal_bayar) === 10) {
         $tanggal_bayar .= ' ' . date('H:i:s');
     }
-    $bulan_bayar     = $_POST['bulan_bayar'] ?? '';
+    $bulan_bayar     = normalize_month_code($_POST['bulan_bayar'] ?? '');
     $tahun_bayar     = $_POST['tahun_bayar'] ?? date('Y');
     
-    $uang_pangkal    = (float)($_POST['uang_pangkal'] ?? 0);
-    $uang_bangunan   = (float)($_POST['uang_bangunan'] ?? 0);
-    $uang_seragam    = (float)($_POST['uang_seragam'] ?? 0);
-    $uang_kegiatan   = (float)($_POST['uang_kegiatan'] ?? 0);
-    $uang_spp        = (float)($_POST['uang_spp'] ?? 0);
-    $uang_makan      = (float)($_POST['uang_makan'] ?? 0);
-    $uang_sorga      = (float)($_POST['uang_sorga'] ?? 0);
-    $uang_infaq      = (float)($_POST['uang_infaq'] ?? 0);
-    $uang_lain       = (float)($_POST['uang_lain'] ?? 0);
-    $uang_du         = (float)($_POST['uang_du'] ?? 0);
+    $uang_pangkal    = parse_amount($_POST['uang_pangkal'] ?? 0);
+    $uang_bangunan   = parse_amount($_POST['uang_bangunan'] ?? 0);
+    $uang_seragam    = parse_amount($_POST['uang_seragam'] ?? 0);
+    $uang_kegiatan   = parse_amount($_POST['uang_kegiatan'] ?? 0);
+    $uang_spp        = parse_amount($_POST['uang_spp'] ?? 0);
+    $uang_makan      = parse_amount($_POST['uang_makan'] ?? 0);
+    $uang_sorga      = parse_amount($_POST['uang_sorga'] ?? 0);
+    $uang_infaq      = parse_amount($_POST['uang_infaq'] ?? 0);
+    $uang_lain       = parse_amount($_POST['uang_lain'] ?? 0);
+    $uang_du         = parse_amount($_POST['uang_du'] ?? 0);
     
     $ll_1_ket        = $_POST['ll_1_ket'] ?? '';
-    $ll_1_nom        = (float)($_POST['ll_1_nom'] ?? 0);
+    $ll_1_nom        = parse_amount($_POST['ll_1_nom'] ?? 0);
     $ll_2_ket        = $_POST['ll_2_ket'] ?? '';
-    $ll_2_nom        = (float)($_POST['ll_2_nom'] ?? 0);
+    $ll_2_nom        = parse_amount($_POST['ll_2_nom'] ?? 0);
     $ll_3_ket        = $_POST['ll_3_ket'] ?? '';
-    $ll_3_nom        = (float)($_POST['ll_3_nom'] ?? 0);
+    $ll_3_nom        = parse_amount($_POST['ll_3_nom'] ?? 0);
     $ll_4_ket        = $_POST['ll_4_ket'] ?? '';
-    $ll_4_nom        = (float)($_POST['ll_4_nom'] ?? 0);
+    $ll_4_nom        = parse_amount($_POST['ll_4_nom'] ?? 0);
     
-    $potongan_spp    = (float)($_POST['potongan_spp'] ?? 0);
-    $tabungan_wajib  = (float)($_POST['tabungan_wajib'] ?? 0);
-    $total_jumlah    = (float)($_POST['total_jumlah'] ?? 0);
+    $potongan_spp    = parse_amount($_POST['potongan_spp'] ?? 0);
+    $tabungan_wajib  = parse_amount($_POST['tabungan_wajib'] ?? 0);
+    $total_jumlah    = parse_amount($_POST['total_jumlah'] ?? 0);
     $catatan         = $_POST['catatan'] ?? '';
     $kelas_du        = $_POST['kelas_du'] ?? '';
     $tahun_ajaran_du = $_POST['tahun_ajaran_du'] ?? '';

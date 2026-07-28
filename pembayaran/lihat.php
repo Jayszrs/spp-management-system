@@ -11,6 +11,16 @@ requireRole(['admin']);
 $flash = $_SESSION['flash'] ?? null;
 unset($_SESSION['flash']);
 
+function month_code($value) {
+    $map = [
+        'Januari' => '01', 'Februari' => '02', 'Maret' => '03', 'April' => '04',
+        'Mei' => '05', 'Juni' => '06', 'Juli' => '07', 'Agustus' => '08',
+        'September' => '09', 'Oktober' => '10', 'November' => '11', 'Desember' => '12'
+    ];
+    if (isset($map[$value])) return $map[$value];
+    return str_pad((string)$value, 2, '0', STR_PAD_LEFT);
+}
+
 // Filter
 $search     = trim($_GET['search'] ?? '');
 $filter_bln = $_GET['bulan']  ?? '';
@@ -26,8 +36,14 @@ if ($search) {
     $types .= 'ss';
 }
 if ($filter_bln) {
-    $where .= " AND p.BULAN = ?";
+    $month_names = [
+        '01' => 'Januari', '02' => 'Februari', '03' => 'Maret', '04' => 'April',
+        '05' => 'Mei', '06' => 'Juni', '07' => 'Juli', '08' => 'Agustus',
+        '09' => 'September', '10' => 'Oktober', '11' => 'November', '12' => 'Desember'
+    ];
+    $where .= " AND (p.BULAN = ? OR p.BULAN = ?)";
     $params[] = $filter_bln; $types .= 's';
+    $params[] = $month_names[$filter_bln] ?? $filter_bln; $types .= 's';
 }
 if ($filter_thn) {
     $where .= " AND p.TAHUN = ?";
@@ -44,7 +60,11 @@ $stmt->execute();
 $result = $stmt->get_result();
 
 // Months list
-$bln_list = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
+$bln_list = [
+    '01' => 'Januari', '02' => 'Februari', '03' => 'Maret', '04' => 'April',
+    '05' => 'Mei', '06' => 'Juni', '07' => 'Juli', '08' => 'Agustus',
+    '09' => 'September', '10' => 'Oktober', '11' => 'November', '12' => 'Desember'
+];
 ?>
 <!DOCTYPE html>
 <html lang="id">
@@ -111,10 +131,10 @@ $bln_list = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus',
             <input type="text" id="search-lihat" name="search" placeholder="Cari nama / NIS..."
               value="<?= htmlspecialchars($search) ?>" />
           </div>
-          <select class="field-input field-select filter-sel" name="bulan" id="filter-bulan">
+          <select class="field-input field-select filter-sel month-code-select" name="bulan" id="filter-bulan">
             <option value="">Semua Bulan</option>
-            <?php foreach ($bln_list as $b): ?>
-            <option value="<?=$b?>" <?= $filter_bln === $b ? 'selected' : '' ?>><?=$b?></option>
+            <?php foreach ($bln_list as $code => $label): ?>
+            <option value="<?=$code?>" data-label="<?=$label?>" <?= $filter_bln === $code ? 'selected' : '' ?>><?=$label?></option>
             <?php endforeach; ?>
           </select>
           <select class="field-input field-select filter-sel" name="tahun" id="filter-tahun">
@@ -152,7 +172,7 @@ $bln_list = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus',
                 <td data-label="NIS"><span class="badge-nis"><?= htmlspecialchars($row['NO_INDUK']) ?></span></td>
                 <td data-label="Nama Siswa"><?= htmlspecialchars($row['NAMA']) ?></td>
                 <td data-label="Kelas"><?= htmlspecialchars($row['KELAS']) ?></td>
-                <td data-label="Bulan / Tahun"><?= htmlspecialchars($row['BULAN']) ?> <?= $row['TAHUN'] ?></td>
+                <td data-label="Bulan / Tahun"><?= htmlspecialchars(month_code($row['BULAN'])) ?> <?= $row['TAHUN'] ?></td>
                 <td data-label="SPP" class="nominal">Rp <?= number_format($row['U_SPP'], 0, ',', '.') ?></td>
                 <td data-label="Total Bayar" class="nominal">Rp <?= number_format($row['total_jumlah'], 0, ',', '.') ?></td>
                 <td data-label="Tanggal"><?= date('d/m/Y', strtotime($row['TGL_BYR'])) ?></td>
@@ -186,7 +206,7 @@ $bln_list = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus',
     </main>
   </div>
 
-  <script src="../assets/js/app.js?v=2.8"></script>
+  <script src="../assets/js/app.js?v=3.0"></script>
 </body>
 </html>
 

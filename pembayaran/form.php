@@ -8,7 +8,72 @@ require_once '../koneksi.php';
 require_once '../includes/auth.php';
 requireRole(['admin']);
 
-$siswa_list = $koneksi->query("SELECT id, NO_INDUK, NAMA, KELAS FROM siswa ORDER BY NAMA ASC");
+$siswa_sql = "
+    SELECT
+        s.*,
+        GREATEST(COALESCE(p.paid_pangkal, 0), COALESCE(s.PANGKAL_BAYAR, 0)) AS paid_pangkal,
+        GREATEST(COALESCE(p.paid_bangunan, 0), COALESCE(s.BANGUNAN_BAYAR, 0)) AS paid_bangunan,
+        GREATEST(COALESCE(p.paid_seragam, 0), COALESCE(s.SERAGAM_BAYAR, 0)) AS paid_seragam,
+        GREATEST(COALESCE(p.paid_kegiatan, 0), COALESCE(s.KEGIATAN_BAYAR, 0)) AS paid_kegiatan,
+        COALESCE(p.paid_makan, 0) AS paid_makan,
+        COALESCE(p.paid_sorga, 0) AS paid_sorga,
+        COALESCE(p.paid_infaq, 0) AS paid_infaq,
+        COALESCE(p.paid_lain, 0) AS paid_lain,
+        COALESCE(du.paid_du, 0) AS paid_du
+    FROM siswa s
+    LEFT JOIN (
+        SELECT
+            NO_INDUK,
+            SUM(U_PANGKAL) AS paid_pangkal,
+            SUM(U_BANGUNAN) AS paid_bangunan,
+            SUM(U_SERAGAM) AS paid_seragam,
+            SUM(U_KEGIATAN) AS paid_kegiatan,
+            SUM(U_MAKAN) AS paid_makan,
+            SUM(U_SORGA) AS paid_sorga,
+            SUM(U_INFAQ) AS paid_infaq,
+            SUM(U_LAIN) AS paid_lain
+        FROM bayar
+        GROUP BY NO_INDUK
+    ) p ON p.NO_INDUK = s.NO_INDUK
+    LEFT JOIN (
+        SELECT no_induk, SUM(jumlah) AS paid_du
+        FROM bayar_du
+        GROUP BY no_induk
+    ) du ON du.no_induk = s.NO_INDUK
+    ORDER BY s.NAMA ASC
+";
+$siswa_list = $koneksi->query($siswa_sql);
+
+$spp_paid_periods = [];
+$spp_paid_result = $koneksi->query("
+    SELECT NO_INDUK, BULAN, TAHUN, SUM(U_SPP) AS paid_spp
+    FROM bayar
+    GROUP BY NO_INDUK, BULAN, TAHUN
+");
+while ($paid = $spp_paid_result->fetch_assoc()) {
+    $bulan_key = month_code($paid['BULAN']);
+    $spp_paid_periods[$paid['NO_INDUK']][$bulan_key . '-' . $paid['TAHUN']] = (float)$paid['paid_spp'];
+}
+
+function month_code($value) {
+    $map = [
+        'Januari' => '01', 'Februari' => '02', 'Maret' => '03', 'April' => '04',
+        'Mei' => '05', 'Juni' => '06', 'Juli' => '07', 'Agustus' => '08',
+        'September' => '09', 'Oktober' => '10', 'November' => '11', 'Desember' => '12'
+    ];
+    if (isset($map[$value])) return $map[$value];
+    return str_pad((string)$value, 2, '0', STR_PAD_LEFT);
+}
+
+function money_attr($value) {
+    return htmlspecialchars((string)(float)$value, ENT_QUOTES, 'UTF-8');
+}
+
+function total_after_discount($total, $discount, $fallbackTotal = 0) {
+    $fallbackTotal = (float)$fallbackTotal;
+    if ($fallbackTotal > 0) return $fallbackTotal;
+    return max(0, (float)$total - (float)$discount);
+}
 
 // Flash message
 $flash = $_SESSION['flash'] ?? null;
@@ -86,11 +151,17 @@ unset($_SESSION['flash']);
               <div class="field-row">
                 <label class="field-label" for="bulan-bayar">Pembayaran Bulan</label>
                 <div class="field-group-inline">
-                  <select class="field-input field-select" id="bulan-bayar" name="bulan_bayar" required>
+                  <select class="field-input field-select month-code-select" id="bulan-bayar" name="bulan_bayar" required>
                     <?php
-                    $bln = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
-                    $cur = (int)date('n') - 1;
-                    foreach ($bln as $i => $b) echo "<option value=\"$b\"" . ($i === $cur ? ' selected' : '') . ">$b</option>";
+                    $month_labels = [
+                        '01' => 'Januari', '02' => 'Februari', '03' => 'Maret', '04' => 'April',
+                        '05' => 'Mei', '06' => 'Juni', '07' => 'Juli', '08' => 'Agustus',
+                        '09' => 'September', '10' => 'Oktober', '11' => 'November', '12' => 'Desember'
+                    ];
+                    $cur = date('m');
+                    foreach ($month_labels as $code => $label) {
+                        echo "<option value=\"$code\" data-label=\"$label\"" . ($code === $cur ? ' selected' : '') . ">$label</option>";
+                    }
                     ?>
                   </select>
                   <select class="field-input field-select" id="tahun-bayar" name="tahun_bayar" style="max-width:90px">
@@ -120,7 +191,27 @@ unset($_SESSION['flash']);
                 <option value="<?= htmlspecialchars($s['NO_INDUK']) ?> — <?= htmlspecialchars($s['NAMA']) ?>"
                   data-nis="<?= htmlspecialchars($s['NO_INDUK']) ?>"
                   data-nama="<?= htmlspecialchars($s['NAMA']) ?>"
-                  data-kelas="<?= htmlspecialchars($s['KELAS']) ?>">
+                  data-kelas="<?= htmlspecialchars($s['KELAS']) ?>"
+                  data-total-pangkal="<?= money_attr(total_after_discount($s['PANGKAL'], $s['potong_pangkal'], $s['tot_pangkal'])) ?>"
+                  data-total-bangunan="<?= money_attr($s['BANGUNAN']) ?>"
+                  data-total-seragam="<?= money_attr($s['SERAGAM']) ?>"
+                  data-total-kegiatan="<?= money_attr($s['KEGIATAN']) ?>"
+                  data-total-spp="<?= money_attr($s['SPP_PERBULAN']) ?>"
+                  data-total-makan="0"
+                  data-total-sorga="0"
+                  data-total-infaq="0"
+                  data-total-lain="0"
+                  data-total-du="<?= money_attr(total_after_discount($s['DAFTAR_ULANG'], $s['potong_du'], $s['tot_du'])) ?>"
+                  data-paid-pangkal="<?= money_attr($s['paid_pangkal']) ?>"
+                  data-paid-bangunan="<?= money_attr($s['paid_bangunan']) ?>"
+                  data-paid-seragam="<?= money_attr($s['paid_seragam']) ?>"
+                  data-paid-kegiatan="<?= money_attr($s['paid_kegiatan']) ?>"
+                  data-paid-spp-periods="<?= htmlspecialchars(json_encode($spp_paid_periods[$s['NO_INDUK']] ?? []), ENT_QUOTES, 'UTF-8') ?>"
+                  data-paid-makan="<?= money_attr($s['paid_makan']) ?>"
+                  data-paid-sorga="<?= money_attr($s['paid_sorga']) ?>"
+                  data-paid-infaq="<?= money_attr($s['paid_infaq']) ?>"
+                  data-paid-lain="<?= money_attr($s['paid_lain']) ?>"
+                  data-paid-du="<?= money_attr($s['paid_du']) ?>">
                   <?= htmlspecialchars($s['NAMA']) ?> (Kelas <?= htmlspecialchars($s['KELAS']) ?>)
                 </option>
                 <?php endwhile; ?>
@@ -226,9 +317,9 @@ unset($_SESSION['flash']);
               <label class="field-label" for="kelas-du">Kelas Daftar Ulang</label>
               <select class="field-input field-select" id="kelas-du" name="kelas_du">
                 <option value="">-- Pilih Kelas --</option>
-                <?php foreach(['Kelas 7','Kelas 8','Kelas 9','Kelas 10','Kelas 11','Kelas 12'] as $kl): ?>
-                <option><?= $kl ?></option>
-                <?php endforeach; ?>
+                <?php for ($kl = 1; $kl <= 6; $kl++): ?>
+                <option value="<?= $kl ?>">Kelas <?= $kl ?></option>
+                <?php endfor; ?>
               </select>
             </div>
             <div class="field-row">
@@ -268,7 +359,7 @@ unset($_SESSION['flash']);
     </main>
   </div>
 
-  <script src="../assets/js/app.js?v=2.8"></script>
+  <script src="../assets/js/app.js?v=3.0"></script>
 </body>
 </html>
 

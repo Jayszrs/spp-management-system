@@ -109,6 +109,7 @@ function pilihSiswaDatalist(input) {
     document.getElementById('disp-nis').value = '';
     document.getElementById('disp-nama').value = '';
     document.getElementById('disp-kelas').value = '';
+    clearPaymentDetails();
     return;
   }
   
@@ -123,6 +124,7 @@ function pilihSiswaDatalist(input) {
       document.getElementById('disp-nis').value = nis || '';
       document.getElementById('disp-nama').value = nama || '';
       document.getElementById('disp-kelas').value = opt.dataset.kelas || '';
+      applyStudentPaymentDetails(opt);
       found = true;
       break;
     }
@@ -132,7 +134,85 @@ function pilihSiswaDatalist(input) {
     document.getElementById('disp-nis').value = '';
     document.getElementById('disp-nama').value = '';
     document.getElementById('disp-kelas').value = '';
+    clearPaymentDetails();
   }
+}
+
+function selectedPaymentPeriod() {
+  const bulan = document.getElementById('bulan-bayar')?.value || '';
+  const tahun = document.getElementById('tahun-bayar')?.value || '';
+  return bulan && tahun ? bulan + '-' + tahun : '';
+}
+
+function datasetNumber(opt, prefix, key) {
+  if (!opt) return 0;
+  const name = prefix + key.charAt(0).toUpperCase() + key.slice(1);
+  return parseNumber(opt.dataset[name] || 0);
+}
+
+function selectedStudentOption() {
+  const input = document.getElementById('siswa-search');
+  const list = document.getElementById('siswa-list');
+  const nis = document.getElementById('disp-nis')?.value || '';
+  if (!input || !list || !nis) return null;
+  return Array.from(list.options).find(opt => opt.dataset.nis === nis || opt.value === input.value) || null;
+}
+
+function paidSppForPeriod(opt) {
+  if (!opt) return 0;
+  try {
+    const periods = JSON.parse(opt.dataset.paidSppPeriods || '{}');
+    return parseNumber(periods[selectedPaymentPeriod()] || 0);
+  } catch (_) {
+    return 0;
+  }
+}
+
+function setPaymentComponent(key, total, paid) {
+  const totalEl = document.getElementById(key + '-total');
+  const paidEl = document.getElementById(key + '-bayar');
+  if (totalEl) totalEl.value = formatRupiahString(total || 0);
+  if (paidEl) paidEl.value = formatRupiahString(paid || 0);
+  hitungSisa(key);
+}
+
+function applyStudentPaymentDetails(opt) {
+  if (!opt) return;
+  ['pangkal','bangunan','seragam','kegiatan','spp','makan','sorga','infaq','lain','du'].forEach(key => {
+    const total = datasetNumber(opt, 'total', key);
+    const paid = key === 'spp' ? paidSppForPeriod(opt) : datasetNumber(opt, 'paid', key);
+    setPaymentComponent(key, total, paid);
+  });
+  updateTotal();
+}
+
+function clearPaymentDetails() {
+  ['pangkal','bangunan','seragam','kegiatan','spp','makan','sorga','infaq','lain','du'].forEach(key => {
+    ['total','bayar','sisa'].forEach(part => {
+      const el = document.getElementById(key + '-' + part);
+      if (el) el.value = '0';
+    });
+  });
+  updateTotal();
+}
+
+function refreshSelectedStudentPaymentDetails() {
+  const opt = selectedStudentOption();
+  if (opt) applyStudentPaymentDetails(opt);
+}
+
+function showMonthLabels(select) {
+  if (!select) return;
+  Array.from(select.options).forEach(opt => {
+    if (opt.value && opt.dataset.label) opt.textContent = opt.dataset.label;
+  });
+}
+
+function showSelectedMonthCode(select) {
+  if (!select) return;
+  showMonthLabels(select);
+  const opt = select.options[select.selectedIndex];
+  if (opt && opt.value) opt.textContent = opt.value;
 }
 
 // Helper to parse formatted rupiah string back to raw number
@@ -161,6 +241,22 @@ document.addEventListener('DOMContentLoaded', function () {
   if (tgl && !tgl.value) {
     tgl.value = new Date().toISOString().split('T')[0];
   }
+
+  ['bulan-bayar', 'tahun-bayar'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('change', refreshSelectedStudentPaymentDetails);
+  });
+
+  document.querySelectorAll('.month-code-select').forEach(select => {
+    showSelectedMonthCode(select);
+    select.addEventListener('pointerdown', () => showMonthLabels(select));
+    select.addEventListener('focus', () => showMonthLabels(select));
+    select.addEventListener('keydown', () => showMonthLabels(select));
+    select.addEventListener('change', () => {
+      window.setTimeout(() => showSelectedMonthCode(select), 0);
+    });
+    select.addEventListener('blur', () => showSelectedMonthCode(select));
+  });
 
   // Format all numeric fields dynamically
   const numericInputs = document.querySelectorAll(
@@ -193,7 +289,7 @@ document.addEventListener('DOMContentLoaded', function () {
       }
       
       // Trigger logic
-      if (this.id.endsWith('-total') || this.id.endsWith('-bayar')) {
+      if (this.id.endsWith('-total') || this.id.endsWith('-bayar') || this.id.endsWith('-input')) {
         const key = this.id.split('-')[0];
         hitungSisa(key);
       }
@@ -219,8 +315,9 @@ document.addEventListener('DOMContentLoaded', function () {
 function hitungSisa(key) {
   const total  = parseNumber(document.getElementById(key + '-total')?.value  || 0);
   const bayar  = parseNumber(document.getElementById(key + '-bayar')?.value  || 0);
+  const input  = parseNumber(document.getElementById(key + '-input')?.value  || 0);
   const sisaEl = document.getElementById(key + '-sisa');
-  if (sisaEl) sisaEl.value = formatRupiahString(Math.max(0, total - bayar));
+  if (sisaEl) sisaEl.value = formatRupiahString(Math.max(0, total - bayar - input));
 }
 
 /* ── Update Total ────────────────────────── */
