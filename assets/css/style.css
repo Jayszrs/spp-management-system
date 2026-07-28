@@ -860,6 +860,8 @@ h1, h2, h3, h4, h5, h6, .card-title, .topbar-title h2, .sidebar-brand-name {
   font-size: 13.5px;
 }
 .search-box input::placeholder { color: var(--text-muted); }
+input[list]::-webkit-calendar-picker-indicator { display: none !important; }
+
 
 /* ── Empty State ─────────────────────────── */
 .empty-state {

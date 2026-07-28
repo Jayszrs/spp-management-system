@@ -23,7 +23,7 @@ unset($_SESSION['flash']);
   <meta name="description" content="Form input transaksi pembayaran siswa." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="../assets/css/style.css?v=2.6" />
+  <link rel="stylesheet" href="../assets/css/style.css?v=2.9" />
   <!-- Prevent theme flash -->
   <script>(function(){var t=localStorage.getItem('spp_theme')||'dark';document.documentElement.setAttribute('data-theme',t);})();</script>
 </head>
@@ -110,7 +110,10 @@ unset($_SESSION['flash']);
           <div class="fields-grid">
             <div class="field-row full-span">
               <label class="field-label" for="siswa-search">Cari Siswa (Ketik Nama / No. Induk)</label>
-              <input class="field-input" type="text" id="siswa-search" list="siswa-list" placeholder="Ketik nama atau No. Induk..." oninput="pilihSiswaDatalist(this)" autocomplete="off" />
+              <div class="search-box">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                <input type="text" id="siswa-search" list="siswa-list" placeholder="Ketik nama atau No. Induk..." oninput="pilihSiswaDatalist(this)" autocomplete="off" />
+              </div>
               <datalist id="siswa-list">
                 <?php while ($s = $siswa_list->fetch_assoc()): ?>
                 <option value="<?= htmlspecialchars($s['NO_INDUK']) ?> — <?= htmlspecialchars($s['NAMA']) ?>"

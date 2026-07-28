@@ -50,7 +50,7 @@ $siswa = $koneksi->query("SELECT s.*, COUNT(p.id) as jml_bayar FROM siswa s LEFT
   <meta name="description" content="Manajemen data siswa sistem pembayaran SPP." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="../assets/css/style.css?v=2.6" />
+  <link rel="stylesheet" href="../assets/css/style.css?v=2.9" />
   <!-- Prevent theme flash -->
   <script>(function(){var t=localStorage.getItem('spp_theme')||'dark';document.documentElement.setAttribute('data-theme',t);})();</script>
 </head>
