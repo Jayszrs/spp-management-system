@@ -695,6 +695,86 @@ h1, h2, h3, h4, h5, h6, .card-title, .topbar-title h2, .sidebar-brand-name {
   font-size: 12px;
   font-weight: 600;
 }
+.badge-role {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-size: 11.5px;
+  font-weight: 700;
+  text-transform: capitalize;
+  border: 1px solid transparent;
+}
+.badge-role-admin {
+  background: rgba(99,102,241,0.14);
+  color: var(--accent-light);
+  border-color: rgba(99,102,241,0.25);
+}
+.badge-role-bendahara {
+  background: rgba(34,197,94,0.12);
+  color: var(--green);
+  border-color: rgba(34,197,94,0.22);
+}
+.badge-role-kasir {
+  background: rgba(245,158,11,0.12);
+  color: var(--orange);
+  border-color: rgba(245,158,11,0.22);
+}
+.field-hint {
+  color: var(--text-muted);
+  font-size: 11.5px;
+  line-height: 1.45;
+}
+.password-field-wrap {
+  position: relative;
+}
+.password-field-wrap .field-input {
+  padding-right: 44px;
+}
+.account-summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.account-avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  background: rgba(99,102,241,0.14);
+  color: var(--accent-light);
+  font-size: 12px;
+  font-weight: 800;
+}
+.account-name {
+  display: block;
+  color: var(--text-primary);
+  font-weight: 600;
+}
+.account-username {
+  display: block;
+  color: var(--text-muted);
+  font-size: 11.5px;
+  margin-top: 2px;
+}
+.modal-account {
+  margin: -10px 0 18px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: rgba(99,102,241,0.08);
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+.modal-form-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  text-align: left;
+  margin-bottom: 22px;
+}
 
 /* Table action buttons */
 .aksi-col { white-space: nowrap; }

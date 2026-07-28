@@ -23,7 +23,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $admin  = $result->fetch_assoc();
         $stmt->close();
 
-        if ($admin && $admin['password'] === md5($password)) {
+        $passwordValid = false;
+        $legacyMd5     = false;
+
+        if ($admin) {
+            $storedPassword = (string)$admin['password'];
+            $passwordInfo   = password_get_info($storedPassword);
+
+            if (!empty($passwordInfo['algo'])) {
+                $passwordValid = password_verify($password, $storedPassword);
+            } elseif (preg_match('/^[a-f0-9]{32}$/i', $storedPassword)) {
+                // Kompatibilitas akun lama. Hash akan langsung ditingkatkan setelah login.
+                $passwordValid = hash_equals(strtolower($storedPassword), md5($password));
+                $legacyMd5     = $passwordValid;
+            }
+        }
+
+        if ($admin && $passwordValid) {
+            if ($legacyMd5 || password_needs_rehash($admin['password'], PASSWORD_DEFAULT)) {
+                $newHash = password_hash($password, PASSWORD_DEFAULT);
+                $update  = $koneksi->prepare("UPDATE admin SET password = ? WHERE id = ?");
+                $update->bind_param('si', $newHash, $admin['id']);
+                $update->execute();
+                $update->close();
+            }
+
+            session_regenerate_id(true);
             $_SESSION['admin_id']   = $admin['id'];
             $_SESSION['admin_nama'] = $admin['nama'];
             $_SESSION['admin_role'] = $admin['role'];

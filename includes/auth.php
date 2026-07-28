@@ -10,20 +10,24 @@
  * @param array $roles  Contoh: ['admin'], atau ['admin','bendahara']
  */
 function requireRole(array $roles): void {
+    $dir  = basename(dirname($_SERVER['PHP_SELF']));
+    $root = in_array($dir, ['pembayaran', 'siswa', 'tabungan', 'laporan'], true) ? '../' : '';
+
     if (!isset($_SESSION['admin_id'])) {
-        // Hitung root path agar redirect benar dari subfolder
-        $dir = basename(dirname($_SERVER['PHP_SELF']));
-        $root = ($dir !== 'Project PHP' && $dir !== 'htdocs') ? '../' : '';
         header('Location: ' . $root . 'login.php');
         exit;
     }
 
-    $currentRole = $_SESSION['admin_role'] ?? 'admin';
+    $currentRole = $_SESSION['admin_role'] ?? '';
+    if (!in_array($currentRole, ['admin', 'bendahara', 'kasir'], true)) {
+        session_unset();
+        session_destroy();
+        header('Location: ' . $root . 'login.php');
+        exit;
+    }
+
     if (!in_array($currentRole, $roles, true)) {
         // Redirect ke halaman default sesuai role
-        $dir  = basename(dirname($_SERVER['PHP_SELF']));
-        $root = ($dir !== 'Project PHP' && $dir !== 'htdocs') ? '../' : '';
-
         if ($currentRole === 'kasir') {
             header('Location: ' . $root . 'tabungan/masuk.php');
         } elseif ($currentRole === 'bendahara') {

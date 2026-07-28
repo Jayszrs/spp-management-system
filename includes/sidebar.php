@@ -10,7 +10,7 @@ if (in_array($dir, ['pembayaran', 'siswa', 'tabungan', 'laporan'])) {
     $root = '';
 }
 
-$role = $_SESSION['admin_role'] ?? 'admin';
+$role = $_SESSION['admin_role'] ?? '';
 
 // Definisi semua nav item: [href, label, svg-path, roles yang boleh akses]
 $allNavItems = [
@@ -28,6 +28,10 @@ $allNavItems = [
 
   ['siswa/daftar.php', 'Data Siswa',
    '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
+   ['admin']],
+
+  ['role_management.php', 'Role Management',
+   '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/>',
    ['admin']],
 
   ['tabungan/masuk.php', 'Tabungan Masuk',
@@ -56,6 +60,7 @@ $shortLabels = [
   'Input Pembayaran'  => 'Input',
   'Lihat Pembayaran'  => 'Lihat',
   'Data Siswa'        => 'Siswa',
+  'Role Management'   => 'Akun',
   'Tabungan Masuk'    => 'Masuk',
   'Tabungan Keluar'   => 'Keluar',
   'Riwayat Tabungan'  => 'Riwayat',
@@ -64,7 +69,7 @@ $shortLabels = [
 
 // Role label
 $roleLabels = ['admin' => 'Administrator', 'bendahara' => 'Bendahara TU', 'kasir' => 'Kasir'];
-$roleLabel  = $roleLabels[$role] ?? 'Administrator';
+$roleLabel  = $roleLabels[$role] ?? 'Pengguna';
 ?>
 <!-- Early theme init to prevent flash -->
 <script>(function(){var t=localStorage.getItem('spp_theme')||'dark';document.documentElement.setAttribute('data-theme',t);})();</script>
