@@ -32,6 +32,15 @@ $tanggal_dt = $tanggal . ' ' . date('H:i:s');
 $koneksi->begin_transaction();
 
 try {
+    $stmtStudent = $koneksi->prepare('SELECT id FROM siswa WHERE NO_INDUK = ? AND is_active = 1 FOR UPDATE');
+    $stmtStudent->bind_param('s', $no_induk);
+    $stmtStudent->execute();
+    $activeStudent = $stmtStudent->get_result()->fetch_assoc();
+    $stmtStudent->close();
+    if (!$activeStudent) {
+        throw new RuntimeException('Siswa tidak ditemukan atau sudah diarsipkan.');
+    }
+
     // 1) Ambil atau buat record saldo tabungan siswa
     $stmt = $koneksi->prepare("SELECT SALDO FROM tabungan WHERE NO_INDUK = ? FOR UPDATE");
     $stmt->bind_param('s', $no_induk);

@@ -12,7 +12,7 @@ require_once 'includes/auth.php';
 requireRole(['admin', 'bendahara']);
 
 // Stats
-$total_siswa    = $koneksi->query("SELECT COUNT(*) as c FROM siswa")->fetch_assoc()['c'];
+$total_siswa    = $koneksi->query("SELECT COUNT(*) as c FROM siswa WHERE is_active = 1")->fetch_assoc()['c'];
 $total_bayar    = $koneksi->query("SELECT COUNT(*) as c FROM bayar")->fetch_assoc()['c'];
 $total_nominal  = $koneksi->query("SELECT COALESCE(SUM(total_jumlah),0) as s FROM bayar")->fetch_assoc()['s'];
 $bayar_bulan_ini = $koneksi->query(

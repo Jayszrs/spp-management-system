@@ -34,25 +34,46 @@ DROP TABLE IF EXISTS `siswa`;
 CREATE TABLE `siswa` (
   `id`              INT AUTO_INCREMENT PRIMARY KEY,
   `NO_INDUK`        VARCHAR(10) NOT NULL UNIQUE,
-  `NAMA`            VARCHAR(30) DEFAULT NULL,
-  `KELAS`           VARCHAR(5) DEFAULT NULL,
-  `SPP_PERBULAN`    DOUBLE DEFAULT 0,
-  `PANGKAL`         DOUBLE DEFAULT 0,
-  `BANGUNAN`        DOUBLE DEFAULT 0,
-  `SERAGAM`         DOUBLE DEFAULT 0,
-  `KEGIATAN`        DOUBLE DEFAULT 0,
-  `PANGKAL_BAYAR`   DOUBLE DEFAULT 0,
-  `BANGUNAN_BAYAR`  DOUBLE DEFAULT 0,
-  `SERAGAM_BAYAR`   DOUBLE DEFAULT 0,
-  `KEGIATAN_BAYAR`  DOUBLE DEFAULT 0,
-  `POMG`            DOUBLE DEFAULT 0,
-  `DAFTAR_ULANG`    DOUBLE DEFAULT 0,
+  `NAMA`            VARCHAR(100) NOT NULL,
+  `KELAS`           CHAR(1) NOT NULL,
+  `SPP_PERBULAN`    DECIMAL(15,2) NOT NULL DEFAULT 0,
+  `PANGKAL`         DECIMAL(15,2) NOT NULL DEFAULT 0,
+  `BANGUNAN`        DECIMAL(15,2) NOT NULL DEFAULT 0,
+  `SERAGAM`         DECIMAL(15,2) NOT NULL DEFAULT 0,
+  `KEGIATAN`        DECIMAL(15,2) NOT NULL DEFAULT 0,
+  `PANGKAL_BAYAR`   DECIMAL(15,2) NOT NULL DEFAULT 0,
+  `BANGUNAN_BAYAR`  DECIMAL(15,2) NOT NULL DEFAULT 0,
+  `SERAGAM_BAYAR`   DECIMAL(15,2) NOT NULL DEFAULT 0,
+  `KEGIATAN_BAYAR`  DECIMAL(15,2) NOT NULL DEFAULT 0,
+  `POMG`            DECIMAL(15,2) NOT NULL DEFAULT 0,
+  `DAFTAR_ULANG`    DECIMAL(15,2) NOT NULL DEFAULT 0,
   `NO_induk_diknas` CHAR(10) DEFAULT NULL,
-  `potong_pangkal`  DOUBLE DEFAULT 0,
-  `tot_pangkal`     DOUBLE DEFAULT 0,
-  `tot_du`          DOUBLE DEFAULT 0,
-  `potong_du`       DOUBLE DEFAULT 0,
-  `created_at`      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  `potong_pangkal`  DECIMAL(15,2) NOT NULL DEFAULT 0,
+  `tot_pangkal`     DECIMAL(15,2) NOT NULL DEFAULT 0,
+  `tot_du`          DECIMAL(15,2) NOT NULL DEFAULT 0,
+  `potong_du`       DECIMAL(15,2) NOT NULL DEFAULT 0,
+  `is_active`       TINYINT(1) NOT NULL DEFAULT 1,
+  `created_at`      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  KEY `idx_siswa_status_kelas_nama` (`is_active`, `KELAS`, `NAMA`),
+  CONSTRAINT `chk_siswa_kelas_sd` CHECK (`KELAS` IN ('1','2','3','4','5','6'))
+) ENGINE=InnoDB;
+
+-- Audit perubahan master siswa
+DROP TABLE IF EXISTS `siswa_audit_log`;
+CREATE TABLE `siswa_audit_log` (
+  `id`                BIGINT AUTO_INCREMENT PRIMARY KEY,
+  `siswa_id`          INT DEFAULT NULL,
+  `no_induk_snapshot` VARCHAR(10) NOT NULL,
+  `aksi`              VARCHAR(30) NOT NULL,
+  `before_data`       LONGTEXT DEFAULT NULL,
+  `after_data`        LONGTEXT DEFAULT NULL,
+  `admin_id`          INT DEFAULT NULL,
+  `admin_name`        VARCHAR(100) NOT NULL,
+  `created_at`        TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  KEY `idx_siswa_audit_siswa` (`siswa_id`, `created_at`),
+  KEY `idx_siswa_audit_no_induk` (`no_induk_snapshot`, `created_at`),
+  CONSTRAINT `fk_siswa_audit_siswa` FOREIGN KEY (`siswa_id`) REFERENCES `siswa` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
+  CONSTRAINT `fk_siswa_audit_admin` FOREIGN KEY (`admin_id`) REFERENCES `admin` (`id`) ON DELETE SET NULL ON UPDATE CASCADE
 ) ENGINE=InnoDB;
 
 -- Data siswa contoh
@@ -78,6 +99,7 @@ CREATE TABLE `bayar` (
   `U_MAKAN`     DOUBLE DEFAULT 0,
   `U_SORGA`     DOUBLE DEFAULT 0,
   `U_INFAQ`     DOUBLE DEFAULT 0,
+  `U_KOMITE`    DECIMAL(15,2) NOT NULL DEFAULT 0,
   `U_LAIN`      DOUBLE DEFAULT 0,
   `KETERANGAN`  VARCHAR(20) DEFAULT NULL,
   `TGL_BYR`     DATETIME DEFAULT NULL,
@@ -98,6 +120,39 @@ CREATE TABLE `bayar` (
   `total_jumlah` DOUBLE DEFAULT 0, -- Kolom bantu kalkulasi total pembayaran
   `created_at`  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (`NO_INDUK`) REFERENCES `siswa`(`NO_INDUK`) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB;
+
+-- Master jenis biaya lain
+DROP TABLE IF EXISTS `master_biaya_lain`;
+CREATE TABLE `master_biaya_lain` (
+  `id`         INT AUTO_INCREMENT PRIMARY KEY,
+  `nama`       VARCHAR(100) NOT NULL UNIQUE,
+  `nominal`    DECIMAL(15,2) NOT NULL,
+  `is_active`  TINYINT(1) NOT NULL DEFAULT 1,
+  `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT `chk_master_biaya_lain_nominal` CHECK (`nominal` > 0)
+) ENGINE=InnoDB;
+
+-- Detail biaya lain per transaksi. Nama dan nominal disimpan sebagai snapshot
+-- agar perubahan master tidak mengubah riwayat transaksi.
+DROP TABLE IF EXISTS `bayar_biaya_lain`;
+CREATE TABLE `bayar_biaya_lain` (
+  `id`                         INT AUTO_INCREMENT PRIMARY KEY,
+  `bayar_id`                   INT NOT NULL,
+  `master_biaya_lain_id`       INT DEFAULT NULL,
+  `nama_biaya_snapshot`        VARCHAR(100) NOT NULL,
+  `nominal_snapshot`           DECIMAL(15,2) NOT NULL,
+  `keterangan`                 VARCHAR(255) DEFAULT NULL,
+  `urutan`                     SMALLINT UNSIGNED NOT NULL DEFAULT 1,
+  `legacy_key`                 VARCHAR(10) DEFAULT NULL,
+  `created_at`                 TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY `uk_bayar_biaya_lain_legacy` (`bayar_id`, `legacy_key`),
+  KEY `idx_bayar_biaya_lain_master` (`master_biaya_lain_id`),
+  CONSTRAINT `fk_bayar_biaya_lain_bayar`
+    FOREIGN KEY (`bayar_id`) REFERENCES `bayar` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `fk_bayar_biaya_lain_master`
+    FOREIGN KEY (`master_biaya_lain_id`) REFERENCES `master_biaya_lain` (`id`) ON DELETE RESTRICT ON UPDATE CASCADE
 ) ENGINE=InnoDB;
 
 -- Tabel Daftar Ulang

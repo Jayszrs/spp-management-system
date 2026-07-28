@@ -18,7 +18,7 @@ $bulan_label = $bln_names[$filter_bulan] ?? 'Unknown';
 $stmt = $koneksi->prepare("
     SELECT s.NO_INDUK, s.NAMA, s.KELAS, b.BULAN, b.TAHUN,
            b.U_PANGKAL, b.U_BANGUNAN, b.U_SERAGAM, b.U_KEGIATAN,
-           b.U_SPP, b.U_MAKAN, b.U_SORGA, b.U_INFAQ, b.U_LAIN,
+           b.U_SPP, b.U_MAKAN, b.U_SORGA, b.U_INFAQ, b.U_KOMITE,
            b.total_jumlah, b.TGL_BYR
     FROM bayar b JOIN siswa s ON s.NO_INDUK = b.NO_INDUK
     WHERE MONTH(b.TGL_BYR) = ? AND YEAR(b.TGL_BYR) = ?
@@ -28,6 +28,43 @@ $stmt->bind_param('ii', $filter_bulan, $filter_tahun);
 $stmt->execute();
 $rows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
 $stmt->close();
+
+$stmtKomponen = $koneksi->prepare("
+    SELECT SUM(U_PANGKAL) AS pangkal, SUM(U_BANGUNAN) AS bangunan,
+           SUM(U_SERAGAM) AS seragam, SUM(U_KEGIATAN) AS kegiatan,
+           SUM(U_SPP) AS spp, SUM(U_MAKAN) AS makan,
+           SUM(U_SORGA) AS sorga, SUM(U_INFAQ) AS infaq,
+           SUM(U_KOMITE) AS komite
+    FROM bayar WHERE MONTH(TGL_BYR) = ? AND YEAR(TGL_BYR) = ?
+");
+$stmtKomponen->bind_param('ii', $filter_bulan, $filter_tahun);
+$stmtKomponen->execute();
+$komponenTetap = $stmtKomponen->get_result()->fetch_assoc();
+$stmtKomponen->close();
+
+$komponen_rows = [];
+$komponenMap = [
+    'Uang Pangkal' => 'pangkal', 'Uang Bangunan' => 'bangunan',
+    'Uang Seragam' => 'seragam', 'Uang Kegiatan' => 'kegiatan',
+    'Uang SPP' => 'spp', 'Uang Komite' => 'komite', 'Uang Makan' => 'makan',
+    'Uang Sorga' => 'sorga', 'Uang Infaq' => 'infaq'
+];
+foreach ($komponenMap as $nama => $key) {
+    if ((float)($komponenTetap[$key] ?? 0) > 0) {
+        $komponen_rows[] = ['nama' => $nama, 'total' => $komponenTetap[$key]];
+    }
+}
+
+$stmtBiayaLain = $koneksi->prepare("
+    SELECT d.nama_biaya_snapshot AS nama, SUM(d.nominal_snapshot) AS total
+    FROM bayar_biaya_lain d JOIN bayar b ON b.id = d.bayar_id
+    WHERE MONTH(b.TGL_BYR) = ? AND YEAR(b.TGL_BYR) = ?
+    GROUP BY d.nama_biaya_snapshot ORDER BY d.nama_biaya_snapshot ASC
+");
+$stmtBiayaLain->bind_param('ii', $filter_bulan, $filter_tahun);
+$stmtBiayaLain->execute();
+$komponen_rows = array_merge($komponen_rows, $stmtBiayaLain->get_result()->fetch_all(MYSQLI_ASSOC));
+$stmtBiayaLain->close();
 
 // Ambil data tabungan periode ini
 $stmt2 = $koneksi->prepare("
@@ -73,6 +110,16 @@ header('Cache-Control: max-age=0');
 <h2 style="font-family:Arial;color:#4c3d8f;">Laporan Keuangan Sistem SPP</h2>
 <p style="font-family:Arial;">Periode: <?= $bulan_label . ' ' . $filter_tahun ?> | Dicetak: <?= date('d M Y H:i') ?></p>
 <br>
+
+<table>
+  <tr class="header-row"><td colspan="2">RINCIAN KOMPONEN PEMBAYARAN</td></tr>
+  <tr><th>Komponen</th><th>Total (Rp)</th></tr>
+  <?php foreach ($komponen_rows as $komponen): ?>
+  <tr><td><?= htmlspecialchars($komponen['nama']) ?></td><td><?= number_format((float)$komponen['total'],0,',','.') ?></td></tr>
+  <?php endforeach; ?>
+</table>
+
+<br><br>
 
 <!-- Sheet 1: Pembayaran SPP -->
 <table>

@@ -47,7 +47,6 @@ $siswa_sql = "
         COALESCE(p.paid_makan, 0) AS paid_makan,
         COALESCE(p.paid_sorga, 0) AS paid_sorga,
         COALESCE(p.paid_infaq, 0) AS paid_infaq,
-        COALESCE(p.paid_lain, 0) AS paid_lain,
         COALESCE(du.paid_du, 0) AS paid_du
     FROM siswa s
     LEFT JOIN (
@@ -59,8 +58,7 @@ $siswa_sql = "
             SUM(U_KEGIATAN) AS paid_kegiatan,
             SUM(U_MAKAN) AS paid_makan,
             SUM(U_SORGA) AS paid_sorga,
-            SUM(U_INFAQ) AS paid_infaq,
-            SUM(U_LAIN) AS paid_lain
+            SUM(U_INFAQ) AS paid_infaq
         FROM bayar
         WHERE id <> $id
         GROUP BY NO_INDUK
@@ -70,20 +68,46 @@ $siswa_sql = "
         FROM bayar_du
         GROUP BY no_induk
     ) du ON du.no_induk = s.NO_INDUK
+    WHERE s.is_active = 1 OR s.NO_INDUK = '" . $koneksi->real_escape_string($d['NO_INDUK']) . "'
     ORDER BY s.NAMA ASC
 ";
 $siswa_list = $koneksi->query($siswa_sql);
 
-$spp_paid_periods = [];
+$period_payments = [];
 $spp_paid_result = $koneksi->query("
-    SELECT NO_INDUK, BULAN, TAHUN, SUM(U_SPP) AS paid_spp
+    SELECT NO_INDUK, BULAN, TAHUN, SUM(U_SPP) AS paid_spp, SUM(U_KOMITE) AS paid_komite
     FROM bayar
     WHERE id <> $id
     GROUP BY NO_INDUK, BULAN, TAHUN
 ");
 while ($paid = $spp_paid_result->fetch_assoc()) {
     $bulan_key = month_code($paid['BULAN']);
-    $spp_paid_periods[$paid['NO_INDUK']][$bulan_key . '-' . $paid['TAHUN']] = (float)$paid['paid_spp'];
+    $periodKey = $bulan_key . '-' . $paid['TAHUN'];
+    $period_payments[$paid['NO_INDUK']]['spp'][$periodKey] = (float)$paid['paid_spp'];
+    $period_payments[$paid['NO_INDUK']]['komite'][$periodKey] = (float)$paid['paid_komite'];
+}
+
+$master_biaya_lain = $koneksi->query("
+    SELECT id, nama, nominal, is_active
+    FROM master_biaya_lain
+    ORDER BY is_active DESC, nama ASC
+")->fetch_all(MYSQLI_ASSOC);
+
+$stmt_biaya_lain = $koneksi->prepare("
+    SELECT d.*
+    FROM bayar_biaya_lain d
+    WHERE d.bayar_id = ?
+    ORDER BY d.urutan ASC, d.id ASC
+");
+$stmt_biaya_lain->bind_param('i', $id);
+$stmt_biaya_lain->execute();
+$biaya_lain_details = $stmt_biaya_lain->get_result()->fetch_all(MYSQLI_ASSOC);
+$stmt_biaya_lain->close();
+if (!$biaya_lain_details) {
+    $biaya_lain_details[] = [
+        'id' => '', 'master_biaya_lain_id' => '', 'nama_biaya_snapshot' => '',
+        'nominal_snapshot' => 0, 'keterangan' => ''
+    ];
 }
 
 function money_attr($value) {
@@ -116,7 +140,7 @@ function month_code($value) {
   <meta name="description" content="Edit data transaksi pembayaran siswa." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="../assets/css/style.css?v=3.2" />
+  <link rel="stylesheet" href="../assets/css/style.css?v=3.3" />
   <!-- Prevent theme flash -->
   <script>(function(){var t=localStorage.getItem('spp_theme')||'dark';document.documentElement.setAttribute('data-theme',t);})();</script>
 </head>
@@ -215,20 +239,20 @@ function month_code($value) {
                   data-total-seragam="<?= money_attr($s['SERAGAM']) ?>"
                   data-total-kegiatan="<?= money_attr($s['KEGIATAN']) ?>"
                   data-total-spp="<?= money_attr($s['SPP_PERBULAN']) ?>"
+                  data-total-komite="<?= money_attr($s['POMG']) ?>"
                   data-total-makan="0"
                   data-total-sorga="0"
                   data-total-infaq="0"
-                  data-total-lain="0"
                   data-total-du="<?= money_attr(total_after_discount($s['DAFTAR_ULANG'], $s['potong_du'], $s['tot_du'])) ?>"
                   data-paid-pangkal="<?= money_attr($s['paid_pangkal']) ?>"
                   data-paid-bangunan="<?= money_attr($s['paid_bangunan']) ?>"
                   data-paid-seragam="<?= money_attr($s['paid_seragam']) ?>"
                   data-paid-kegiatan="<?= money_attr($s['paid_kegiatan']) ?>"
-                  data-paid-spp-periods="<?= htmlspecialchars(json_encode($spp_paid_periods[$s['NO_INDUK']] ?? []), ENT_QUOTES, 'UTF-8') ?>"
+                  data-paid-spp-periods="<?= htmlspecialchars(json_encode($period_payments[$s['NO_INDUK']]['spp'] ?? []), ENT_QUOTES, 'UTF-8') ?>"
+                  data-paid-komite-periods="<?= htmlspecialchars(json_encode($period_payments[$s['NO_INDUK']]['komite'] ?? []), ENT_QUOTES, 'UTF-8') ?>"
                   data-paid-makan="<?= money_attr($s['paid_makan']) ?>"
                   data-paid-sorga="<?= money_attr($s['paid_sorga']) ?>"
                   data-paid-infaq="<?= money_attr($s['paid_infaq']) ?>"
-                  data-paid-lain="<?= money_attr($s['paid_lain']) ?>"
                   data-paid-du="<?= money_attr(max(0, (float)$s['paid_du'] - ($s['NO_INDUK'] === $d['NO_INDUK'] ? (float)$d['uang_du'] : 0))) ?>">
                   <?= htmlspecialchars($s['NAMA']) ?> (Kelas <?= htmlspecialchars($s['KELAS']) ?>)
                 </option>
@@ -273,9 +297,9 @@ function month_code($value) {
                   ['makan', '🍽️ Uang Makan', 'U_MAKAN', 'uang_makan'],
                   ['sorga', '🌅 Uang Sorga', 'U_SORGA', 'uang_sorga'],
                   ['infaq', '🕌 Uang Infaq', 'U_INFAQ', 'uang_infaq'],
-                  ['lain', '💵 Uang Lain', 'U_LAIN', 'uang_lain'],
                   ['du', '📚 Uang Daftar Ulang', 'uang_du', 'uang_du']
                 ];
+                array_splice($komp, 5, 0, [[ 'komite', 'Uang Komite', 'U_KOMITE', 'uang_komite' ]]);
                 foreach ($komp as $i => [$key,$label,$col,$inputName]):
                 ?>
                 <tr class="<?= $i%2===0?'row-highlight':'' ?>">
@@ -294,22 +318,55 @@ function month_code($value) {
 
           <!-- Lain-lain -->
           <div class="section-divider"><span>Lain-lain</span></div>
-          <div class="lainlain-grid">
-             <?php for ($ll = 1; $ll <= 4; $ll++): ?>
-             <div class="lainlain-row">
-               <span class="ll-num"><?=$ll?></span>
-               <input class="field-input" type="text" name="ll_<?=$ll?>_ket"
-                 value="<?= htmlspecialchars($d["LAIN_LAIN{$ll}"] ?? '') ?>" placeholder="Keterangan..." />
-               <select class="field-input field-select" name="ll_<?=$ll?>_sel">
-                 <option value="">-- Pilih --</option>
-                 <option>Biaya Ekskul</option><option>Biaya Seragam</option>
-                 <option>Biaya Buku</option><option>Lainnya</option>
-               </select>
-               <input class="field-input" type="text" name="ll_<?=$ll?>_nom" id="ll-nom-<?=$ll?>"
-                 value="<?= number_format((float)($d["JUMLAH{$ll}"] ?? 0), 0, ',', '.') ?>" />
-             </div>
-             <?php endfor; ?>
+          <div class="lainlain-grid" id="biaya-lain-list">
+            <?php foreach ($biaya_lain_details as $index => $detail):
+              $selectedMasterId = (int)($detail['master_biaya_lain_id'] ?? 0);
+            ?>
+            <div class="lainlain-row biaya-lain-row">
+              <span class="ll-num"><?= $index + 1 ?></span>
+              <input type="hidden" name="biaya_lain_detail_id[]" value="<?= (int)($detail['id'] ?? 0) ?: '' ?>" />
+              <select class="field-input field-select biaya-lain-select" name="biaya_lain_master_id[]">
+                <option value="" <?= $selectedMasterId === 0 ? 'selected' : '' ?>><?= $selectedMasterId === 0 && !empty($detail['id']) ? htmlspecialchars($detail['nama_biaya_snapshot']) . ' (Data lama)' : '-- Pilih Biaya --' ?></option>
+                <?php foreach ($master_biaya_lain as $biaya):
+                  $isSelected = (int)$biaya['id'] === $selectedMasterId;
+                  if (!(int)$biaya['is_active'] && !$isSelected) continue;
+                ?>
+                <option value="<?= (int)$biaya['id'] ?>" data-nominal="<?= money_attr($isSelected ? $detail['nominal_snapshot'] : $biaya['nominal']) ?>" <?= $isSelected ? 'selected' : '' ?>>
+                  <?= htmlspecialchars($isSelected ? $detail['nama_biaya_snapshot'] : $biaya['nama']) ?><?= !(int)$biaya['is_active'] ? ' (Nonaktif)' : '' ?>
+                </option>
+                <?php endforeach; ?>
+              </select>
+              <input class="field-input biaya-lain-nominal" type="text" readonly aria-label="Nominal biaya"
+                value="<?= number_format((float)($detail['nominal_snapshot'] ?? 0), 0, ',', '.') ?>" />
+              <input class="field-input biaya-lain-keterangan" type="text" name="biaya_lain_keterangan[]" maxlength="255"
+                value="<?= htmlspecialchars($detail['keterangan'] ?? '') ?>" placeholder="Keterangan opsional..." />
+              <button class="btn-icon-danger btn-remove-biaya-lain" type="button" title="Hapus baris" aria-label="Hapus baris">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/></svg>
+              </button>
+            </div>
+            <?php endforeach; ?>
           </div>
+          <button class="btn btn-ghost btn-add-biaya-lain" id="btn-add-biaya-lain" type="button">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Tambah Biaya Lain
+          </button>
+          <template id="biaya-lain-row-template">
+            <div class="lainlain-row biaya-lain-row">
+              <span class="ll-num"></span>
+              <input type="hidden" name="biaya_lain_detail_id[]" value="" />
+              <select class="field-input field-select biaya-lain-select" name="biaya_lain_master_id[]">
+                <option value="">-- Pilih Biaya --</option>
+                <?php foreach ($master_biaya_lain as $biaya): if (!(int)$biaya['is_active']) continue; ?>
+                <option value="<?= (int)$biaya['id'] ?>" data-nominal="<?= money_attr($biaya['nominal']) ?>"><?= htmlspecialchars($biaya['nama']) ?></option>
+                <?php endforeach; ?>
+              </select>
+              <input class="field-input biaya-lain-nominal" type="text" value="0" readonly aria-label="Nominal biaya" />
+              <input class="field-input biaya-lain-keterangan" type="text" placeholder="Keterangan opsional..." name="biaya_lain_keterangan[]" maxlength="255" />
+              <button class="btn-icon-danger btn-remove-biaya-lain" type="button" title="Hapus baris" aria-label="Hapus baris">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/></svg>
+              </button>
+            </div>
+          </template>
 
           <!-- Potongan & Tabungan -->
           <div class="section-divider"><span>Potongan & Tabungan</span></div>
@@ -384,7 +441,7 @@ function month_code($value) {
       updateTotal();
     });
   </script>
-  <script src="../assets/js/app.js?v=3.0"></script>
+  <script src="../assets/js/app.js?v=3.3"></script>
 </body>
 </html>
 

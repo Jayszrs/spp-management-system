@@ -158,10 +158,11 @@ function selectedStudentOption() {
   return Array.from(list.options).find(opt => opt.dataset.nis === nis || opt.value === input.value) || null;
 }
 
-function paidSppForPeriod(opt) {
+function paidForPeriod(opt, key) {
   if (!opt) return 0;
   try {
-    const periods = JSON.parse(opt.dataset.paidSppPeriods || '{}');
+    const datasetKey = key === 'komite' ? 'paidKomitePeriods' : 'paidSppPeriods';
+    const periods = JSON.parse(opt.dataset[datasetKey] || '{}');
     return parseNumber(periods[selectedPaymentPeriod()] || 0);
   } catch (_) {
     return 0;
@@ -178,16 +179,16 @@ function setPaymentComponent(key, total, paid) {
 
 function applyStudentPaymentDetails(opt) {
   if (!opt) return;
-  ['pangkal','bangunan','seragam','kegiatan','spp','makan','sorga','infaq','lain','du'].forEach(key => {
+  ['pangkal','bangunan','seragam','kegiatan','spp','komite','makan','sorga','infaq','du'].forEach(key => {
     const total = datasetNumber(opt, 'total', key);
-    const paid = key === 'spp' ? paidSppForPeriod(opt) : datasetNumber(opt, 'paid', key);
+    const paid = ['spp', 'komite'].includes(key) ? paidForPeriod(opt, key) : datasetNumber(opt, 'paid', key);
     setPaymentComponent(key, total, paid);
   });
   updateTotal();
 }
 
 function clearPaymentDetails() {
-  ['pangkal','bangunan','seragam','kegiatan','spp','makan','sorga','infaq','lain','du'].forEach(key => {
+  ['pangkal','bangunan','seragam','kegiatan','spp','komite','makan','sorga','infaq','du'].forEach(key => {
     ['total','bayar','sisa'].forEach(part => {
       const el = document.getElementById(key + '-' + part);
       if (el) el.value = '0';
@@ -260,7 +261,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
   // Format all numeric fields dynamically
   const numericInputs = document.querySelectorAll(
-    '.tbl-input, #potongan-spp, #tab-wajib, #kewajiban-spp, [id^="ll-nom-"]'
+    '.tbl-input, #potongan-spp, #tab-wajib, #kewajiban-spp'
   );
   
   numericInputs.forEach(input => {
@@ -311,6 +312,65 @@ document.addEventListener('DOMContentLoaded', function () {
   autoHideFlash();
 });
 
+function renumberBiayaLainRows() {
+  document.querySelectorAll('#biaya-lain-list .biaya-lain-row').forEach((row, index) => {
+    const number = row.querySelector('.ll-num');
+    if (number) number.textContent = index + 1;
+  });
+}
+
+function setBiayaLainNominal(row, preserveLegacy) {
+  const select = row?.querySelector('.biaya-lain-select');
+  const nominal = row?.querySelector('.biaya-lain-nominal');
+  if (!select || !nominal) return;
+  const option = select.options[select.selectedIndex];
+  const rawNominal = option?.dataset.nominal || '';
+  if (rawNominal !== '') {
+    nominal.value = formatRupiahString(rawNominal);
+  } else if (!preserveLegacy) {
+    nominal.value = '0';
+  }
+  updateTotal();
+}
+
+function addBiayaLainRow() {
+  const list = document.getElementById('biaya-lain-list');
+  const template = document.getElementById('biaya-lain-row-template');
+  if (!list || !template) return;
+  list.appendChild(template.content.cloneNode(true));
+  renumberBiayaLainRows();
+  updateTotal();
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+  const list = document.getElementById('biaya-lain-list');
+  const addButton = document.getElementById('btn-add-biaya-lain');
+  if (!list || !addButton) return;
+
+  addButton.addEventListener('click', addBiayaLainRow);
+  list.addEventListener('change', function (event) {
+    if (event.target.classList.contains('biaya-lain-select')) {
+      setBiayaLainNominal(event.target.closest('.biaya-lain-row'), false);
+    }
+  });
+  list.addEventListener('click', function (event) {
+    const removeButton = event.target.closest('.btn-remove-biaya-lain');
+    if (!removeButton) return;
+    const row = removeButton.closest('.biaya-lain-row');
+    if (list.querySelectorAll('.biaya-lain-row').length === 1) {
+      row.querySelector('.biaya-lain-select').value = '';
+      row.querySelector('[name="biaya_lain_detail_id[]"]').value = '';
+      row.querySelector('.biaya-lain-keterangan').value = '';
+      row.querySelector('.biaya-lain-nominal').value = '0';
+    } else {
+      row.remove();
+    }
+    renumberBiayaLainRows();
+    updateTotal();
+  });
+  renumberBiayaLainRows();
+});
+
 /* ── Hitung Sisa ─────────────────────────── */
 function hitungSisa(key) {
   const total  = parseNumber(document.getElementById(key + '-total')?.value  || 0);
@@ -322,12 +382,15 @@ function hitungSisa(key) {
 
 /* ── Update Total ────────────────────────── */
 function updateTotal() {
-  const ids = ['pangkal-input','bangunan-input','seragam-input','kegiatan-input','spp-input','makan-input','sorga-input','infaq-input','lain-input','du-input',
-               'll-nom-1','ll-nom-2','ll-nom-3','ll-nom-4'];
+  const ids = ['pangkal-input','bangunan-input','seragam-input','kegiatan-input','spp-input','komite-input','makan-input','sorga-input','infaq-input','du-input'];
   let total = 0;
   ids.forEach(id => {
     const el = document.getElementById(id);
     if (el) total += parseNumber(el.value || 0);
+  });
+
+  document.querySelectorAll('.biaya-lain-nominal').forEach(input => {
+    total += parseNumber(input.value || 0);
   });
 
   // Subtract potongan
@@ -360,12 +423,20 @@ function resetForm() {
   const hiddenEl = document.getElementById('hidden-total');
   if (hiddenEl) hiddenEl.value = 0;
 
-  ['pangkal','bangunan','seragam','kegiatan','spp','makan','sorga','infaq','lain','du'].forEach(k => {
+  ['pangkal','bangunan','seragam','kegiatan','spp','komite','makan','sorga','infaq','du'].forEach(k => {
     ['total','bayar','sisa','input'].forEach(s => {
       const el = document.getElementById(k + '-' + s);
       if (el) el.value = '0';
     });
   });
+
+  const list = document.getElementById('biaya-lain-list');
+  const template = document.getElementById('biaya-lain-row-template');
+  if (list && template) {
+    list.innerHTML = '';
+    list.appendChild(template.content.cloneNode(true));
+    renumberBiayaLainRows();
+  }
 }
 
 /* ── Cari Siswa (standalone page only) ────── */

@@ -10,7 +10,7 @@ requireRole(['admin', 'kasir']);
 $flash = $_SESSION['flash'] ?? null;
 unset($_SESSION['flash']);
 
-$siswa_list = $koneksi->query("SELECT id, NO_INDUK, NAMA, KELAS FROM siswa ORDER BY NAMA ASC");
+$siswa_list = $koneksi->query("SELECT id, NO_INDUK, NAMA, KELAS FROM siswa WHERE is_active = 1 ORDER BY NAMA ASC");
 ?>
 <!DOCTYPE html>
 <html lang="id">

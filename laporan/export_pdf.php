@@ -23,7 +23,7 @@ $receipt_no = 'LAP-' . str_pad((string)$filter_bulan, 2, '0', STR_PAD_LEFT) . '-
 $stmt = $koneksi->prepare("
     SELECT s.NO_INDUK, s.NAMA, s.KELAS, b.BULAN, b.TAHUN,
            b.U_PANGKAL, b.U_BANGUNAN, b.U_SERAGAM, b.U_KEGIATAN,
-           b.U_SPP, b.U_MAKAN, b.U_SORGA, b.U_INFAQ, b.U_LAIN,
+           b.U_SPP, b.U_MAKAN, b.U_SORGA, b.U_INFAQ, b.U_KOMITE,
            b.total_jumlah, b.TGL_BYR
     FROM bayar b
     JOIN siswa s ON s.NO_INDUK = b.NO_INDUK
@@ -40,7 +40,8 @@ $stmt_rek = $koneksi->prepare("
            SUM(U_SERAGAM) as seragam, SUM(U_KEGIATAN) as kegiatan,
            SUM(U_SPP) as spp, SUM(U_MAKAN) as makan,
            SUM(U_SORGA) as sorga, SUM(U_INFAQ) as infaq,
-           SUM(U_LAIN) as lain, SUM(total_jumlah) as total
+           SUM(U_KOMITE) as komite,
+           SUM(total_jumlah) as total
     FROM bayar
     WHERE MONTH(TGL_BYR) = ? AND YEAR(TGL_BYR) = ?
 ");
@@ -48,6 +49,19 @@ $stmt_rek->bind_param('ii', $filter_bulan, $filter_tahun);
 $stmt_rek->execute();
 $rek = $stmt_rek->get_result()->fetch_assoc();
 $stmt_rek->close();
+
+$stmt_biaya_lain = $koneksi->prepare("
+    SELECT d.nama_biaya_snapshot AS nama, SUM(d.nominal_snapshot) AS total
+    FROM bayar_biaya_lain d
+    JOIN bayar b ON b.id = d.bayar_id
+    WHERE MONTH(b.TGL_BYR) = ? AND YEAR(b.TGL_BYR) = ?
+    GROUP BY d.nama_biaya_snapshot
+    ORDER BY d.nama_biaya_snapshot ASC
+");
+$stmt_biaya_lain->bind_param('ii', $filter_bulan, $filter_tahun);
+$stmt_biaya_lain->execute();
+$rekap_biaya_lain = $stmt_biaya_lain->get_result()->fetch_all(MYSQLI_ASSOC);
+$stmt_biaya_lain->close();
 
 $stmt_tm = $koneksi->prepare("SELECT COALESCE(SUM(MASUK),0) as t FROM transaksi_m WHERE MONTH(TANGGAL)=? AND YEAR(TANGGAL)=?");
 $stmt_tm->bind_param('ii', $filter_bulan, $filter_tahun);
@@ -81,10 +95,10 @@ $component_map = [
     'Uang Seragam' => 'seragam',
     'Uang Kegiatan' => 'kegiatan',
     'Uang SPP' => 'spp',
+    'Uang Komite' => 'komite',
     'Uang Makan' => 'makan',
     'Uang Sorga' => 'sorga',
-    'Uang Infaq' => 'infaq',
-    'Uang Lain' => 'lain'
+    'Uang Infaq' => 'infaq'
 ];
 ?>
 <!DOCTYPE html>
@@ -421,6 +435,14 @@ $component_map = [
                 <td class="center"><?= $no++ ?></td>
                 <td><?= htmlspecialchars($label) ?></td>
                 <td class="nominal"><?= rp($rek[$key]) ?></td>
+              </tr>
+            <?php endforeach; ?>
+            <?php foreach ($rekap_biaya_lain as $biaya): ?>
+              <?php if ((float)$biaya['total'] <= 0) continue; ?>
+              <tr>
+                <td class="center"><?= $no++ ?></td>
+                <td><?= htmlspecialchars($biaya['nama']) ?></td>
+                <td class="nominal"><?= rp($biaya['total']) ?></td>
               </tr>
             <?php endforeach; ?>
             <?php if ($no === 1): ?>

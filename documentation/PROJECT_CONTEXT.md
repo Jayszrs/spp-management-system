@@ -1,0 +1,309 @@
+# Konteks Proyek SistemSPP
+
+Dokumen ini adalah sumber konteks utama untuk developer dan AI yang bekerja pada repository SistemSPP. Baca dokumen ini terlebih dahulu, lalu baca [AI_CHANGELOG.md](./AI_CHANGELOG.md) sebelum menganalisis atau mengubah kode.
+
+## 1. Ringkasan Proyek
+
+SistemSPP adalah aplikasi administrasi sekolah berbasis web untuk SDIT. Aplikasi mengelola:
+
+- data dan tarif siswa kelas 1 sampai 6;
+- transaksi pembayaran sekolah;
+- Uang Komite bulanan;
+- master biaya lain dan rincian biaya tambahan;
+- daftar ulang dan potongan;
+- tabungan masuk, tabungan keluar, dan saldo siswa;
+- pengguna dengan role berbeda;
+- rekap laporan web, dokumen cetak/PDF, dan export Excel.
+
+Aplikasi ini merupakan aplikasi PHP tradisional tanpa framework. Halaman merender HTML di server, memakai JavaScript biasa untuk interaksi browser, dan mengakses MySQL melalui `mysqli`.
+
+## 2. Stack dan Lingkungan Lokal
+
+| Bagian | Teknologi |
+| --- | --- |
+| Backend | PHP 8.x, procedural/object-oriented `mysqli` |
+| Database | MySQL/MariaDB, database `db_spp` |
+| Frontend | HTML, CSS, JavaScript tanpa framework |
+| Web server lokal | Apache dari XAMPP |
+| Export PDF | Halaman HTML khusus cetak melalui browser |
+| Export Excel | HTML table dengan response `.xls` |
+| Dependency manager | Tidak ada Composer atau npm runtime dependency |
+
+Lokasi kerja standar pada mesin pengembangan saat ini:
+
+```text
+C:\xampp\htdocs\Project PHP
+```
+
+URL lokal:
+
+```text
+http://localhost/Project%20PHP/
+```
+
+Konfigurasi koneksi berada di `koneksi.php`. Default lokal menggunakan host `localhost`, user MySQL `root`, password kosong, dan database `db_spp`. Jangan menyalin konfigurasi lokal ini ke produksi tanpa secret management dan kredensial baru.
+
+## 3. Menjalankan Proyek
+
+1. Aktifkan Apache dan MySQL dari XAMPP.
+2. Pastikan repository berada di document root Apache.
+3. Untuk instalasi database baru, jalankan `sql/schema.sql`.
+4. Buka URL lokal dan login menggunakan akun seed pengembangan.
+5. Segera ganti password seed pada lingkungan selain pengembangan lokal.
+
+Contoh impor schema baru melalui PowerShell:
+
+```powershell
+Get-Content sql\schema.sql -Raw | C:\xampp\mysql\bin\mysql.exe -u root
+```
+
+`sql/schema.sql` menyediakan akun seed lokal `admin`, `bendahara`, dan `kasir`. Password seed terlihat di schema dan hanya ditujukan untuk pengembangan. Login lama yang masih memakai MD5 akan otomatis dinaikkan ke `PASSWORD_DEFAULT` setelah autentikasi berhasil.
+
+## 4. Struktur Repository
+
+| Path | Tanggung jawab |
+| --- | --- |
+| `dashboard.php` | Ringkasan jumlah siswa aktif, transaksi, nominal, dan transaksi terbaru |
+| `login.php`, `logout.php` | Autentikasi session dan keluar aplikasi |
+| `role_management.php` | CRUD akun dan role, hanya untuk admin |
+| `master_biaya_lain.php` | CRUD master jenis biaya tambahan |
+| `pembayaran/` | Input, daftar, edit, hapus, dan proses transaksi pembayaran |
+| `siswa/` | Master siswa, mode Advance, arsip, filter, dan audit perubahan |
+| `tabungan/` | Transaksi masuk/keluar, saldo, dan riwayat tabungan |
+| `laporan/` | Rekap web, halaman cetak/PDF, dan export Excel |
+| `includes/auth.php` | Guard autentikasi dan role |
+| `includes/sidebar.php` | Navigasi desktop/mobile sesuai role |
+| `assets/css/` | Tema, layout, dan responsive design |
+| `assets/js/app.js` | Interaksi UI dan kalkulasi tampilan pembayaran |
+| `sql/schema.sql` | Schema lengkap untuk instalasi baru |
+| `sql/add_*.sql` | Migrasi bertahap untuk database lama |
+| `documentation/` | Konteks stabil proyek dan riwayat perubahan AI |
+
+## 5. Role dan Hak Akses
+
+Guard backend memakai `requireRole()` dari `includes/auth.php`. Menyembunyikan menu saja tidak dianggap sebagai kontrol akses.
+
+| Fitur | Admin | Bendahara | Kasir |
+| --- | :---: | :---: | :---: |
+| Dashboard | Ya | Ya | Tidak |
+| Input/lihat/edit pembayaran | Ya | Tidak | Tidak |
+| Master Siswa | Ya | Tidak | Tidak |
+| Master Biaya Lain | Ya | Tidak | Tidak |
+| Role Management | Ya | Tidak | Tidak |
+| Tabungan masuk/keluar | Ya | Tidak | Ya |
+| Riwayat tabungan | Ya | Ya | Ya |
+| Laporan, PDF, dan Excel | Ya | Ya | Tidak |
+
+Role yang valid hanya `admin`, `bendahara`, dan `kasir`. Pengguna tanpa role valid harus dikeluarkan dari session dan diarahkan kembali ke login.
+
+## 6. Model Data Utama
+
+### `admin`
+
+Menyimpan akun, hash password, nama, dan role. Password baru wajib dibuat dengan `password_hash()`.
+
+### `siswa`
+
+Menyimpan identitas, kelas, tarif per siswa, potongan, saldo awal pembayaran, dan status aktif. Aturan penting:
+
+- `NO_INDUK` unik dan menjadi foreign key pada transaksi;
+- `KELAS` hanya `1` sampai `6`;
+- nominal master siswa menggunakan `DECIMAL(15,2)`;
+- `is_active=0` berarti siswa diarsipkan, bukan dihapus;
+- `tot_pangkal = MAX(0, PANGKAL - potong_pangkal)`;
+- `tot_du = MAX(0, DAFTAR_ULANG - potong_du)`;
+- `POMG` adalah tarif dasar Uang Komite bulanan.
+
+### `siswa_audit_log`
+
+Menyimpan aksi, admin, waktu, nomor induk snapshot, serta JSON sebelum dan sesudah perubahan siswa. Relasi siswa dan admin memakai `ON DELETE SET NULL` agar catatan audit tidak hilang ketika parent tidak tersedia.
+
+### `bayar`
+
+Header dan komponen utama transaksi pembayaran. `NO_INDUK` berelasi ke siswa dengan `ON UPDATE CASCADE` dan `ON DELETE CASCADE`. Kolom `U_KOMITE` menyimpan pembayaran Komite untuk kombinasi siswa, bulan, dan tahun.
+
+Kolom lama `U_LAIN`, `LAIN_LAIN1-4`, dan `JUMLAH1-4` masih dipertahankan untuk kompatibilitas data. Transaksi baru memakai tabel detail biaya lain dan mengisi kolom lama dengan nilai netral.
+
+### `master_biaya_lain`
+
+Master nama, nominal, dan status biaya tambahan. Nama unik, nominal harus lebih dari nol, dan master nonaktif tidak boleh dipilih untuk transaksi baru.
+
+### `bayar_biaya_lain`
+
+Detail biaya tambahan per transaksi. Nama dan nominal disimpan sebagai snapshot agar perubahan tarif master tidak mengubah histori. Relasi ke transaksi memakai `ON DELETE CASCADE`; master yang sudah digunakan dilindungi dengan `ON DELETE RESTRICT`.
+
+### `bayar_du` dan `Daftar_ulang`
+
+`bayar_du` menyimpan pembayaran daftar ulang per siswa dan tahun ajaran. Tabel `Daftar_ulang` masih tersedia sebagai struktur tarif lama; alur aktif mengambil tarif dasar daftar ulang dari data siswa.
+
+### `tabungan`, `transaksi_m`, dan `transaksi_k`
+
+`tabungan` menyimpan saldo berjalan per siswa. `transaksi_m` dan `transaksi_k` menyimpan jurnal masuk dan keluar. Semua foreign key nomor induk mengikuti perubahan nomor induk melalui `ON UPDATE CASCADE`.
+
+## 7. Alur dan Aturan Bisnis
+
+### Master Siswa
+
+- Form dasar memuat nomor induk, nama, dan kelas.
+- Switch `Advance` membuka NIS Diknas, tarif, Komite, potongan, total turunan, dan saldo awal.
+- Menutup Advance saat edit tidak boleh menimpa field lanjutan dengan nol.
+- NIS Diknas harus tepat 10 digit bila diisi.
+- Nominal tidak boleh negatif dan potongan tidak boleh melebihi tagihan.
+- Saldo awal hanya dapat diedit sebelum ada histori pada pembayaran, daftar ulang, tabungan masuk, atau tabungan keluar.
+- Perubahan nomor induk dilakukan dalam database transaction dan mengandalkan foreign key `ON UPDATE CASCADE`.
+- Aksi hapus pada UI diganti menjadi Arsipkan/Pulihkan.
+- Siswa arsip tetap tersedia untuk histori dan laporan, tetapi tidak boleh dipakai pada transaksi baru.
+- Tambah, edit, perubahan tarif, perubahan nomor induk, arsip, dan pemulihan dicatat pada audit log.
+
+### Pembayaran
+
+- Dropdown bulan menampilkan nama bulan saat dibuka dan menampilkan kode `01` sampai `12` setelah dipilih.
+- Hanya siswa aktif yang muncul pada transaksi baru.
+- Edit transaksi lama tetap mengizinkan siswa arsip yang memang menjadi pemilik transaksi; siswa arsip lain tidak dapat dipilih.
+- Backend mengambil kelas, tarif Komite, dan nominal biaya lain langsung dari database.
+- `total_jumlah` dihitung ulang di backend dari komponen pembayaran, daftar ulang, biaya lain, dan potongan SPP. Hidden total dari browser bukan sumber kebenaran.
+- Nominal negatif, periode tidak valid, dan pembayaran Komite melebihi sisa periode harus ditolak.
+- Simpan, edit, dan hapus transaksi utama, daftar ulang, tabungan terkait, serta detail biaya lain dijalankan dalam transaction.
+
+### Uang Komite
+
+- Tarif dasar berasal dari `siswa.POMG`.
+- Komite bersifat opsional; input default nol.
+- Sudah dibayar dan sisa dihitung per `NO_INDUK + BULAN + TAHUN`.
+- Periode berbeda memiliki saldo Komite yang terpisah.
+- Edit transaksi mengecualikan transaksi yang sedang diedit saat menghitung pembayaran periode sebelumnya.
+
+### Master Biaya Lain
+
+- Admin dapat menambah, mengubah, mengaktifkan, atau menonaktifkan master.
+- Penghapusan permanen hanya boleh jika master belum pernah digunakan.
+- Form pembayaran mendukung beberapa baris biaya lain dan master yang sama dapat dipakai lebih dari sekali dengan keterangan berbeda.
+- Nominal di browser hanya untuk tampilan; backend memakai nominal master aktif.
+- Bila master pada detail lama tidak berubah, nama dan nominal snapshot lama dipertahankan.
+- Master nonaktif tetap dapat ditampilkan pada edit transaksi lama, tetapi tidak untuk pilihan baru.
+
+### Tabungan
+
+- Hanya siswa aktif yang dapat menerima transaksi tabungan baru.
+- Penarikan tidak boleh melebihi saldo.
+- Saldo dan jurnal harus diperbarui dalam satu transaction dengan row lock.
+- Histori siswa arsip tetap tampil.
+
+### Laporan
+
+- Rekap web, PDF, dan Excel mengambil data transaksi berdasarkan periode tanggal bayar.
+- Rekap komponen tetap mencakup Uang Komite.
+- Biaya lain diagregasi berdasarkan `nama_biaya_snapshot`, bukan nama master saat ini.
+- Siswa arsip tidak dikeluarkan dari histori laporan.
+- Halaman PDF adalah dokumen HTML bergaya kwitansi yang dicetak atau disimpan melalui fitur print browser.
+
+## 8. Instalasi dan Migrasi Database
+
+### Database baru
+
+Gunakan hanya:
+
+```text
+sql/schema.sql
+```
+
+Schema ini bersifat destruktif untuk sebagian tabel karena memakai `DROP TABLE`. Jangan jalankan pada database berisi data produksi.
+
+### Upgrade database lama
+
+1. Buat backup database.
+2. Pastikan seluruh nilai `siswa.KELAS` sudah berupa `1` sampai `6`.
+3. Jalankan `sql/add_master_biaya_lain.sql`.
+4. Jalankan `sql/add_student_advanced.sql`.
+5. Jalankan ulang verifikasi schema dan aplikasi.
+
+Contoh PowerShell:
+
+```powershell
+Get-Content sql\add_master_biaya_lain.sql -Raw | C:\xampp\mysql\bin\mysql.exe -u root
+Get-Content sql\add_student_advanced.sql -Raw | C:\xampp\mysql\bin\mysql.exe -u root
+```
+
+Kedua migrasi dirancang idempotent. Migrasi siswa melakukan preflight dan berhenti bila menemukan kelas selain `1` sampai `6`. Migrasi biaya lain menyalin data legacy secara idempotent melalui `legacy_key` dan tidak mengubah `bayar.total_jumlah`.
+
+## 9. Konvensi Keamanan
+
+- Semua halaman privat harus memulai session dan memakai `requireRole()`.
+- Semua query dengan input pengguna harus memakai prepared statement.
+- Mutasi lintas tabel wajib memakai database transaction dan rollback saat gagal.
+- Data uang, role, status, tarif, dan total harus divalidasi ulang di backend.
+- Output pengguna wajib melalui `htmlspecialchars()` sesuai konteks HTML.
+- Mutation baru wajib memakai CSRF token dan `hash_equals()`.
+- Nomor induk, ID, nominal, role, hidden input, dan atribut `readonly` dari browser tetap dianggap tidak tepercaya.
+- Jangan menulis password plaintext, dump data siswa nyata, cookie, token session, atau secret ke repository maupun dokumentasi.
+
+Cakupan CSRF saat ini belum merata. Master Siswa dan Role Management sudah memakai CSRF, sedangkan pembayaran, tabungan, dan Master Biaya Lain masih menjadi technical debt. Jangan menyatakan endpoint tersebut sudah terlindungi sebelum implementasinya benar-benar ditambahkan dan diuji.
+
+## 10. Checklist Verifikasi
+
+### Static check
+
+```powershell
+Get-ChildItem -Recurse -Filter *.php | ForEach-Object { C:\xampp\php\php.exe -l $_.FullName }
+node --check assets\js\app.js
+git diff --check
+```
+
+### Database
+
+- Uji schema atau migrasi pada salinan database lebih dahulu.
+- Jalankan migrasi dua kali untuk memastikan idempotensi.
+- Periksa tipe kolom, index, check constraint, foreign key, dan jumlah data sebelum/sesudah.
+- Hapus semua data pengujian setelah selesai.
+
+### HTTP dan hak akses
+
+- Uji halaman sebagai admin, bendahara, kasir, dan tanpa session.
+- Uji POST valid, POST dengan CSRF salah pada endpoint yang terlindungi, serta manipulasi nominal/status/ID.
+- Pastikan redirect role mengarah ke halaman default yang benar.
+
+### Alur bisnis
+
+- Uji CRUD dasar dan Advance siswa, preservasi field, audit, arsip, perubahan nomor induk, dan cascade.
+- Uji pembayaran Komite sebagian, penuh, berlebih, dan pada dua periode berbeda.
+- Uji biaya lain aktif/nonaktif, snapshot, edit, penghapusan master terpakai, dan cascade detail.
+- Uji tabungan masuk, keluar, saldo tidak cukup, dan siswa arsip.
+- Bandingkan total web, PDF, Excel, dan data database.
+
+### UI
+
+- Periksa desktop dan mobile dengan screenshot browser nyata.
+- Pastikan tidak ada overflow horizontal, overlap, teks terpotong, atau kontrol yang sulit digunakan.
+- Periksa light mode dan dark mode bila CSS terkait tema berubah.
+
+## 11. Keterbatasan dan Technical Debt
+
+- Belum ada automated test suite; pengujian saat ini memakai lint, HTTP request, query database, dan screenshot manual/headless.
+- Export Excel masih berupa HTML table dengan ekstensi `.xls`, bukan file XLSX native.
+- PDF bergantung pada print/save-as-PDF browser, bukan library pembuat PDF server-side.
+- CSRF belum diterapkan pada seluruh endpoint mutasi.
+- Beberapa kolom transaksi legacy masih memakai `DOUBLE` dan struktur lama tetap dipertahankan untuk kompatibilitas.
+- Penamaan `user_id` pada tabel legacy belum konsisten antara ID dan nama pengguna serta belum semuanya menjadi foreign key.
+- Konfigurasi database masih berada langsung di `koneksi.php` dan belum menggunakan environment variable.
+
+## 12. Aturan Wajib untuk Developer dan AI
+
+1. Baca file ini, lalu [AI_CHANGELOG.md](./AI_CHANGELOG.md), sebelum bekerja.
+2. Periksa `git status`, kode terkait, dan schema sebelum membuat asumsi.
+3. Jangan menghapus atau mengembalikan perubahan worktree yang tidak dibuat olehmu.
+4. Bila dokumentasi berbeda dengan kode/schema, anggap kode dan schema sebagai fakta saat ini, lalu perbaiki dokumentasinya dalam task yang sama.
+5. Perbarui file ini jika arsitektur, role, schema, setup, aturan bisnis, security contract, atau prosedur testing berubah.
+6. Tambahkan satu entri pada `AI_CHANGELOG.md` untuk setiap perubahan kode, database, UI, konfigurasi, keamanan, atau dokumentasi.
+7. Catatan changelog harus menyebut dampak database, kompatibilitas, dan pengujian secara jujur. Jangan mengklaim test yang tidak dijalankan.
+8. Jangan menulis ulang atau menghapus riwayat lama. Koreksi dibuat sebagai entri baru dengan referensi ke entri sebelumnya.
+9. Dokumentasi dan implementasi harus masuk commit yang sama.
+10. Sebelum commit, jalankan checklist yang relevan dan pastikan tidak ada file preview, credential, dump, cookie, atau data uji.
+
+## 13. Urutan Baca untuk AI Baru
+
+1. `documentation/PROJECT_CONTEXT.md`
+2. `documentation/AI_CHANGELOG.md`
+3. `git status` dan `git log` terbaru
+4. File implementasi dan SQL yang berhubungan langsung dengan permintaan
+
+Dokumentasi membantu orientasi, tetapi bukan pengganti pembacaan kode untuk perubahan yang akan diimplementasikan.

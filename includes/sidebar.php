@@ -30,6 +30,10 @@ $allNavItems = [
    '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
    ['admin']],
 
+  ['master_biaya_lain.php', 'Master Biaya Lain',
+   '<path d="M20 12V8H6a2 2 0 0 1 0-4h12v4"/><path d="M4 6v12a2 2 0 0 0 2 2h14v-4"/><path d="M18 12a2 2 0 0 0 0 4h4v-4z"/>',
+   ['admin']],
+
   ['role_management.php', 'Role Management',
    '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/>',
    ['admin']],
@@ -60,6 +64,7 @@ $shortLabels = [
   'Input Pembayaran'  => 'Input',
   'Lihat Pembayaran'  => 'Lihat',
   'Data Siswa'        => 'Siswa',
+  'Master Biaya Lain' => 'Biaya',
   'Role Management'   => 'Akun',
   'Tabungan Masuk'    => 'Masuk',
   'Tabungan Keluar'   => 'Keluar',

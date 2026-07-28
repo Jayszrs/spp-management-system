@@ -5,12 +5,75 @@
 session_start();
 if (!isset($_SESSION['admin_id'])) { header('Location: ../login.php'); exit; }
 require_once '../koneksi.php';
+require_once '../includes/auth.php';
+requireRole(['admin']);
 
 $aksi = $_POST['aksi'] ?? $_GET['aksi'] ?? '';
 
 function parse_amount($value) {
     if ($value === null || $value === '') return 0.0;
-    return (float)str_replace(['.', ','], ['', '.'], (string)$value);
+    $normalized = str_replace(['.', ','], ['', '.'], trim((string)$value));
+    return is_numeric($normalized) ? (float)$normalized : NAN;
+}
+
+function validate_payment_amounts(array $amounts): void {
+    foreach ($amounts as $label => $amount) {
+        if (!is_finite($amount) || $amount < 0) {
+            throw new RuntimeException("Nominal $label harus berupa angka positif atau nol.");
+        }
+    }
+}
+
+function validate_payment_context(string $tanggal, string $bulan, string $tahun, float $uangDu, string $kelasDu, string $tahunAjaran): void {
+    if (!in_array($bulan, ['01','02','03','04','05','06','07','08','09','10','11','12'], true)) {
+        throw new RuntimeException('Bulan pembayaran tidak valid.');
+    }
+    if (!preg_match('/^\d{4}$/', $tahun)) throw new RuntimeException('Tahun pembayaran tidak valid.');
+    $datePart = substr($tanggal, 0, 10);
+    $parsedDate = DateTime::createFromFormat('!Y-m-d', $datePart);
+    if (!$parsedDate || $parsedDate->format('Y-m-d') !== $datePart) {
+        throw new RuntimeException('Tanggal pembayaran tidak valid.');
+    }
+    if ($uangDu > 0 && !in_array($kelasDu, ['1','2','3','4','5','6'], true)) {
+        throw new RuntimeException('Kelas daftar ulang harus dipilih dari kelas 1 sampai 6.');
+    }
+    if ($uangDu > 0 && !preg_match('/^\d{4}\/\d{4}$/', $tahunAjaran)) {
+        throw new RuntimeException('Tahun ajaran daftar ulang tidak valid.');
+    }
+}
+
+function validate_student_and_komite(
+    mysqli $db,
+    string $noInduk,
+    string $bulan,
+    string $tahun,
+    float $uangKomite,
+    int $excludePaymentId = 0,
+    ?string $archivedStudentAllowed = null
+): array {
+    $stmt = $db->prepare('SELECT KELAS, POMG, is_active FROM siswa WHERE NO_INDUK = ? FOR UPDATE');
+    $stmt->bind_param('s', $noInduk);
+    $stmt->execute();
+    $student = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+    if (!$student) throw new RuntimeException('Data siswa tidak ditemukan.');
+    if ((int)$student['is_active'] !== 1 && $noInduk !== $archivedStudentAllowed) {
+        throw new RuntimeException('Siswa yang diarsipkan tidak dapat dipakai untuk transaksi baru.');
+    }
+
+    $stmt = $db->prepare('SELECT U_KOMITE FROM bayar WHERE NO_INDUK = ? AND BULAN = ? AND TAHUN = ? AND id <> ? FOR UPDATE');
+    $stmt->bind_param('sssi', $noInduk, $bulan, $tahun, $excludePaymentId);
+    $stmt->execute();
+    $paid = 0.0;
+    $result = $stmt->get_result();
+    while ($row = $result->fetch_assoc()) $paid += (float)$row['U_KOMITE'];
+    $stmt->close();
+
+    $remaining = max(0, (float)$student['POMG'] - $paid);
+    if ($uangKomite > $remaining + 0.001) {
+        throw new RuntimeException('Pembayaran Uang Komite melebihi sisa periode. Sisa: Rp ' . number_format($remaining, 0, ',', '.'));
+    }
+    return $student;
 }
 
 function normalize_month_code($value) {
@@ -21,6 +84,103 @@ function normalize_month_code($value) {
     ];
     if (isset($map[$value])) return $map[$value];
     return str_pad((string)$value, 2, '0', STR_PAD_LEFT);
+}
+
+function collect_biaya_lain(mysqli $koneksi, int $bayarId = 0): array {
+    $detailIds = $_POST['biaya_lain_detail_id'] ?? [];
+    $masterIds = $_POST['biaya_lain_master_id'] ?? [];
+    $notes = $_POST['biaya_lain_keterangan'] ?? [];
+    if (!is_array($detailIds) || !is_array($masterIds) || !is_array($notes)) {
+        throw new RuntimeException('Format biaya lain tidak valid.');
+    }
+
+    $existing = [];
+    if ($bayarId > 0) {
+        $stmt = $koneksi->prepare('SELECT * FROM bayar_biaya_lain WHERE bayar_id = ?');
+        $stmt->bind_param('i', $bayarId);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        while ($row = $result->fetch_assoc()) $existing[(int)$row['id']] = $row;
+        $stmt->close();
+    }
+
+    $lines = [];
+    $rowCount = max(count($detailIds), count($masterIds), count($notes));
+    for ($index = 0; $index < $rowCount; $index++) {
+        $detailId = (int)($detailIds[$index] ?? 0);
+        $masterId = (int)($masterIds[$index] ?? 0);
+        $note = trim((string)($notes[$index] ?? ''));
+        if (mb_strlen($note) > 255) $note = mb_substr($note, 0, 255);
+
+        $oldLine = $detailId > 0 && isset($existing[$detailId]) ? $existing[$detailId] : null;
+        if ($masterId <= 0) {
+            // Detail hasil migrasi tidak memiliki master, tetapi snapshot-nya tetap sah.
+            if ($oldLine && $oldLine['master_biaya_lain_id'] === null) {
+                $lines[] = [
+                    'master_id' => null,
+                    'nama' => $oldLine['nama_biaya_snapshot'],
+                    'nominal' => (float)$oldLine['nominal_snapshot'],
+                    'keterangan' => $note,
+                ];
+            }
+            continue;
+        }
+
+        if ($oldLine && (int)$oldLine['master_biaya_lain_id'] === $masterId) {
+            $lines[] = [
+                'master_id' => $masterId,
+                'nama' => $oldLine['nama_biaya_snapshot'],
+                'nominal' => (float)$oldLine['nominal_snapshot'],
+                'keterangan' => $note,
+            ];
+            continue;
+        }
+
+        $stmt = $koneksi->prepare('SELECT id, nama, nominal FROM master_biaya_lain WHERE id = ? AND is_active = 1 AND nominal > 0 LIMIT 1');
+        $stmt->bind_param('i', $masterId);
+        $stmt->execute();
+        $master = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+        if (!$master) throw new RuntimeException('Pilihan master biaya lain tidak tersedia atau sudah nonaktif.');
+
+        $lines[] = [
+            'master_id' => (int)$master['id'],
+            'nama' => $master['nama'],
+            'nominal' => (float)$master['nominal'],
+            'keterangan' => $note,
+        ];
+    }
+    return $lines;
+}
+
+function save_biaya_lain(mysqli $koneksi, int $bayarId, array $lines): void {
+    $stmtDelete = $koneksi->prepare('DELETE FROM bayar_biaya_lain WHERE bayar_id = ?');
+    $stmtDelete->bind_param('i', $bayarId);
+    $stmtDelete->execute();
+    $stmtDelete->close();
+
+    if (!$lines) return;
+    $stmt = $koneksi->prepare("
+        INSERT INTO bayar_biaya_lain
+            (bayar_id, master_biaya_lain_id, nama_biaya_snapshot, nominal_snapshot, keterangan, urutan)
+        VALUES (?, ?, ?, ?, NULLIF(?, ''), ?)
+    ");
+    foreach ($lines as $index => $line) {
+        $masterId = $line['master_id'];
+        $nama = $line['nama'];
+        $nominal = $line['nominal'];
+        $keterangan = $line['keterangan'];
+        $urutan = $index + 1;
+        $stmt->bind_param('iisdsi', $bayarId, $masterId, $nama, $nominal, $keterangan, $urutan);
+        $stmt->execute();
+    }
+    $stmt->close();
+}
+
+function calculate_payment_total(array $components, float $uangDu, float $potonganSpp, array $biayaLain): float {
+    $total = array_sum($components) + $uangDu;
+    foreach ($biayaLain as $line) $total += (float)$line['nominal'];
+    return max(0, $total - $potonganSpp);
 }
 
 // ── INSERT ──────────────────────────────────
@@ -39,24 +199,18 @@ if ($aksi === 'input') {
     $uang_seragam    = parse_amount($_POST['uang_seragam'] ?? 0);
     $uang_kegiatan   = parse_amount($_POST['uang_kegiatan'] ?? 0);
     $uang_spp        = parse_amount($_POST['uang_spp'] ?? 0);
+    $uang_komite     = parse_amount($_POST['uang_komite'] ?? 0);
     $uang_makan      = parse_amount($_POST['uang_makan'] ?? 0);
     $uang_sorga      = parse_amount($_POST['uang_sorga'] ?? 0);
     $uang_infaq      = parse_amount($_POST['uang_infaq'] ?? 0);
-    $uang_lain       = parse_amount($_POST['uang_lain'] ?? 0);
+    $uang_lain       = 0.0;
     $uang_du         = parse_amount($_POST['uang_du'] ?? 0);
-    
-    $ll_1_ket        = $_POST['ll_1_ket'] ?? '';
-    $ll_1_nom        = parse_amount($_POST['ll_1_nom'] ?? 0);
-    $ll_2_ket        = $_POST['ll_2_ket'] ?? '';
-    $ll_2_nom        = parse_amount($_POST['ll_2_nom'] ?? 0);
-    $ll_3_ket        = $_POST['ll_3_ket'] ?? '';
-    $ll_3_nom        = parse_amount($_POST['ll_3_nom'] ?? 0);
-    $ll_4_ket        = $_POST['ll_4_ket'] ?? '';
-    $ll_4_nom        = parse_amount($_POST['ll_4_nom'] ?? 0);
+    $ll_1_ket = $ll_2_ket = $ll_3_ket = $ll_4_ket = '';
+    $ll_1_nom = $ll_2_nom = $ll_3_nom = $ll_4_nom = 0.0;
     
     $potongan_spp    = parse_amount($_POST['potongan_spp'] ?? 0);
     $tabungan_wajib  = parse_amount($_POST['tabungan_wajib'] ?? 0);
-    $total_jumlah    = parse_amount($_POST['total_jumlah'] ?? 0);
+    $total_jumlah    = 0.0;
     $catatan         = $_POST['catatan'] ?? '';
     $kelas_du        = $_POST['kelas_du'] ?? '';
     $tahun_ajaran_du = $_POST['tahun_ajaran_du'] ?? '';
@@ -67,39 +221,51 @@ if ($aksi === 'input') {
         exit;
     }
 
-    // Ambil kelas siswa saat ini dari tabel siswa
-    $stmt_siswa = $koneksi->prepare("SELECT KELAS FROM siswa WHERE NO_INDUK = ?");
-    $stmt_siswa->bind_param('s', $no_induk);
-    $stmt_siswa->execute();
-    $siswa_data = $stmt_siswa->get_result()->fetch_assoc();
-    $kelas_siswa = $siswa_data ? $siswa_data['KELAS'] : '';
-    $stmt_siswa->close();
-
     $koneksi->begin_transaction();
 
     try {
+        validate_payment_amounts([
+            'Pangkal' => $uang_pangkal, 'Bangunan' => $uang_bangunan,
+            'Seragam' => $uang_seragam, 'Kegiatan' => $uang_kegiatan,
+            'SPP' => $uang_spp, 'Komite' => $uang_komite, 'Makan' => $uang_makan,
+            'Sorga' => $uang_sorga, 'Infaq' => $uang_infaq, 'Daftar Ulang' => $uang_du,
+            'Potongan SPP' => $potongan_spp, 'Tabungan Wajib' => $tabungan_wajib
+        ]);
+        validate_payment_context($tanggal_bayar, $bulan_bayar, (string)$tahun_bayar, $uang_du, $kelas_du, $tahun_ajaran_du);
+        if ($potongan_spp > $uang_spp) throw new RuntimeException('Potongan SPP tidak boleh melebihi pembayaran SPP.');
+        $siswa_data = validate_student_and_komite($koneksi, $no_induk, $bulan_bayar, $tahun_bayar, $uang_komite);
+        $kelas_siswa = $siswa_data['KELAS'];
+        $biaya_lain = collect_biaya_lain($koneksi);
+        $total_jumlah = calculate_payment_total([
+            $uang_pangkal, $uang_bangunan, $uang_seragam, $uang_kegiatan,
+            $uang_spp, $uang_komite, $uang_makan, $uang_sorga, $uang_infaq
+        ], $uang_du, $potongan_spp, $biaya_lain);
+
         // 1. Simpan transaksi utama ke tabel bayar
         $sql = "INSERT INTO bayar (
             NO_INDUK, KELAS, U_PANGKAL, U_BANGUNAN, U_SERAGAM, U_KEGIATAN,
-            U_SPP, U_MAKAN, U_SORGA, U_INFAQ, U_LAIN, KETERANGAN,
+            U_SPP, U_MAKAN, U_SORGA, U_INFAQ, U_KOMITE, U_LAIN, KETERANGAN,
             TGL_BYR, BULAN, TAHUN, user_id,
             LAIN_LAIN1, JUMLAH1, LAIN_LAIN2, JUMLAH2, LAIN_LAIN3, JUMLAH3, LAIN_LAIN4, JUMLAH4,
             th_ajaran, kelas_du, potong_spp, total_jumlah
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
         $stmt = $koneksi->prepare($sql);
         $user_id = $_SESSION['admin_nama'] ?? 'admin';
         
         $stmt->bind_param(
-            'ssdddddddddssssssdsdsdsdssdd',
+            'ssddddddddddssssssdsdsdsdssdd',
             $no_induk, $kelas_siswa, $uang_pangkal, $uang_bangunan, $uang_seragam, $uang_kegiatan,
-            $uang_spp, $uang_makan, $uang_sorga, $uang_infaq, $uang_lain, $catatan,
+            $uang_spp, $uang_makan, $uang_sorga, $uang_infaq, $uang_komite, $uang_lain, $catatan,
             $tanggal_bayar, $bulan_bayar, $tahun_bayar, $user_id,
             $ll_1_ket, $ll_1_nom, $ll_2_ket, $ll_2_nom, $ll_3_ket, $ll_3_nom, $ll_4_ket, $ll_4_nom,
             $tahun_ajaran_du, $kelas_du, $potongan_spp, $total_jumlah
         );
         $stmt->execute();
+        $bayar_id = $koneksi->insert_id;
         $stmt->close();
+
+        save_biaya_lain($koneksi, $bayar_id, $biaya_lain);
 
         // 2. Simpan daftar ulang ke tabel bayar_du jika ada nominal
         if ($uang_du > 0) {
@@ -167,24 +333,18 @@ if ($aksi === 'update') {
     $uang_seragam    = parse_amount($_POST['uang_seragam'] ?? 0);
     $uang_kegiatan   = parse_amount($_POST['uang_kegiatan'] ?? 0);
     $uang_spp        = parse_amount($_POST['uang_spp'] ?? 0);
+    $uang_komite     = parse_amount($_POST['uang_komite'] ?? 0);
     $uang_makan      = parse_amount($_POST['uang_makan'] ?? 0);
     $uang_sorga      = parse_amount($_POST['uang_sorga'] ?? 0);
     $uang_infaq      = parse_amount($_POST['uang_infaq'] ?? 0);
-    $uang_lain       = parse_amount($_POST['uang_lain'] ?? 0);
+    $uang_lain       = 0.0;
     $uang_du         = parse_amount($_POST['uang_du'] ?? 0);
-    
-    $ll_1_ket        = $_POST['ll_1_ket'] ?? '';
-    $ll_1_nom        = parse_amount($_POST['ll_1_nom'] ?? 0);
-    $ll_2_ket        = $_POST['ll_2_ket'] ?? '';
-    $ll_2_nom        = parse_amount($_POST['ll_2_nom'] ?? 0);
-    $ll_3_ket        = $_POST['ll_3_ket'] ?? '';
-    $ll_3_nom        = parse_amount($_POST['ll_3_nom'] ?? 0);
-    $ll_4_ket        = $_POST['ll_4_ket'] ?? '';
-    $ll_4_nom        = parse_amount($_POST['ll_4_nom'] ?? 0);
+    $ll_1_ket = $ll_2_ket = $ll_3_ket = $ll_4_ket = '';
+    $ll_1_nom = $ll_2_nom = $ll_3_nom = $ll_4_nom = 0.0;
     
     $potongan_spp    = parse_amount($_POST['potongan_spp'] ?? 0);
     $tabungan_wajib  = parse_amount($_POST['tabungan_wajib'] ?? 0);
-    $total_jumlah    = parse_amount($_POST['total_jumlah'] ?? 0);
+    $total_jumlah    = 0.0;
     $catatan         = $_POST['catatan'] ?? '';
     $kelas_du        = $_POST['kelas_du'] ?? '';
     $tahun_ajaran_du = $_POST['tahun_ajaran_du'] ?? '';
@@ -216,21 +376,31 @@ if ($aksi === 'update') {
     $old_tab_val = $old_tab_data ? (float)$old_tab_data['MASUK'] : 0.0;
     $stmt_old_tab->close();
 
-    // Ambil kelas siswa saat ini dari tabel siswa
-    $stmt_siswa = $koneksi->prepare("SELECT KELAS FROM siswa WHERE NO_INDUK = ?");
-    $stmt_siswa->bind_param('s', $no_induk);
-    $stmt_siswa->execute();
-    $siswa_data = $stmt_siswa->get_result()->fetch_assoc();
-    $kelas_siswa = $siswa_data ? $siswa_data['KELAS'] : '';
-    $stmt_siswa->close();
-
     $koneksi->begin_transaction();
 
     try {
+        validate_payment_amounts([
+            'Pangkal' => $uang_pangkal, 'Bangunan' => $uang_bangunan,
+            'Seragam' => $uang_seragam, 'Kegiatan' => $uang_kegiatan,
+            'SPP' => $uang_spp, 'Komite' => $uang_komite, 'Makan' => $uang_makan,
+            'Sorga' => $uang_sorga, 'Infaq' => $uang_infaq, 'Daftar Ulang' => $uang_du,
+            'Potongan SPP' => $potongan_spp, 'Tabungan Wajib' => $tabungan_wajib
+        ]);
+        validate_payment_context($tanggal_bayar, $bulan_bayar, (string)$tahun_bayar, $uang_du, $kelas_du, $tahun_ajaran_du);
+        if ($potongan_spp > $uang_spp) throw new RuntimeException('Potongan SPP tidak boleh melebihi pembayaran SPP.');
+        $allowedArchived = $no_induk === $old_bayar['NO_INDUK'] ? $old_bayar['NO_INDUK'] : null;
+        $siswa_data = validate_student_and_komite($koneksi, $no_induk, $bulan_bayar, $tahun_bayar, $uang_komite, $id, $allowedArchived);
+        $kelas_siswa = $siswa_data['KELAS'];
+        $biaya_lain = collect_biaya_lain($koneksi, $id);
+        $total_jumlah = calculate_payment_total([
+            $uang_pangkal, $uang_bangunan, $uang_seragam, $uang_kegiatan,
+            $uang_spp, $uang_komite, $uang_makan, $uang_sorga, $uang_infaq
+        ], $uang_du, $potongan_spp, $biaya_lain);
+
         // 1. Update data utama ke tabel bayar
         $sql = "UPDATE bayar SET
             NO_INDUK=?, KELAS=?, U_PANGKAL=?, U_BANGUNAN=?, U_SERAGAM=?, U_KEGIATAN=?,
-            U_SPP=?, U_MAKAN=?, U_SORGA=?, U_INFAQ=?, U_LAIN=?, KETERANGAN=?,
+            U_SPP=?, U_MAKAN=?, U_SORGA=?, U_INFAQ=?, U_KOMITE=?, U_LAIN=?, KETERANGAN=?,
             TGL_BYR=?, BULAN=?, TAHUN=?, user_id=?,
             LAIN_LAIN1=?, JUMLAH1=?, LAIN_LAIN2=?, JUMLAH2=?, LAIN_LAIN3=?, JUMLAH3=?, LAIN_LAIN4=?, JUMLAH4=?,
             th_ajaran=?, kelas_du=?, potong_spp=?, total_jumlah=?
@@ -240,15 +410,17 @@ if ($aksi === 'update') {
         $user_id = $_SESSION['admin_nama'] ?? 'admin';
         
         $stmt->bind_param(
-            'ssdddddddddssssssdsdsdsdssddi',
+            'ssddddddddddssssssdsdsdsdssddi',
             $no_induk, $kelas_siswa, $uang_pangkal, $uang_bangunan, $uang_seragam, $uang_kegiatan,
-            $uang_spp, $uang_makan, $uang_sorga, $uang_infaq, $uang_lain, $catatan,
+            $uang_spp, $uang_makan, $uang_sorga, $uang_infaq, $uang_komite, $uang_lain, $catatan,
             $tanggal_bayar, $bulan_bayar, $tahun_bayar, $user_id,
             $ll_1_ket, $ll_1_nom, $ll_2_ket, $ll_2_nom, $ll_3_ket, $ll_3_nom, $ll_4_ket, $ll_4_nom,
             $tahun_ajaran_du, $kelas_du, $potongan_spp, $total_jumlah, $id
         );
         $stmt->execute();
         $stmt->close();
+
+        save_biaya_lain($koneksi, $id, $biaya_lain);
 
         // 2. Sesuaikan daftar ulang (Hapus record lama, lalu masukkan yang baru jika ada nominal)
         $stmt_del_du = $koneksi->prepare("DELETE FROM bayar_du WHERE no_induk = ? AND th_ajaran = ?");

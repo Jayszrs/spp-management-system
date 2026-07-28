@@ -15,20 +15,33 @@ $filter_tahun = $_GET['tahun'] ?? date('Y');
 
 // ── Rekap Pembayaran SPP per bulan
 $stmt = $koneksi->prepare("
-    SELECT b.BULAN, b.TAHUN, COUNT(*) as jml_tx,
+    SELECT COUNT(*) as jml_tx,
            SUM(b.U_PANGKAL) as pangkal, SUM(b.U_BANGUNAN) as bangunan,
            SUM(b.U_SERAGAM) as seragam, SUM(b.U_KEGIATAN) as kegiatan,
            SUM(b.U_SPP) as spp, SUM(b.U_MAKAN) as makan,
            SUM(b.U_SORGA) as sorga, SUM(b.U_INFAQ) as infaq,
-           SUM(b.U_LAIN) as lain, SUM(b.total_jumlah) as total
+           SUM(b.U_KOMITE) as komite,
+           SUM(b.total_jumlah) as total
     FROM bayar b
     WHERE MONTH(b.TGL_BYR) = ? AND YEAR(b.TGL_BYR) = ?
-    GROUP BY b.BULAN, b.TAHUN
 ");
 $stmt->bind_param('ii', $filter_bulan, $filter_tahun);
 $stmt->execute();
 $bayar_recap = $stmt->get_result()->fetch_assoc();
 $stmt->close();
+
+$stmtBiayaLain = $koneksi->prepare("
+    SELECT d.nama_biaya_snapshot AS nama, SUM(d.nominal_snapshot) AS total
+    FROM bayar_biaya_lain d
+    JOIN bayar b ON b.id = d.bayar_id
+    WHERE MONTH(b.TGL_BYR) = ? AND YEAR(b.TGL_BYR) = ?
+    GROUP BY d.nama_biaya_snapshot
+    ORDER BY d.nama_biaya_snapshot ASC
+");
+$stmtBiayaLain->bind_param('ii', $filter_bulan, $filter_tahun);
+$stmtBiayaLain->execute();
+$rekap_biaya_lain = $stmtBiayaLain->get_result()->fetch_all(MYSQLI_ASSOC);
+$stmtBiayaLain->close();
 
 // ── Rekap Tabungan
 $stmt2 = $koneksi->prepare("
@@ -53,7 +66,7 @@ $stmt3->close();
 $stmt4 = $koneksi->prepare("
     SELECT b.id, s.NO_INDUK, s.NAMA, s.KELAS, b.BULAN, b.TAHUN,
            b.U_PANGKAL, b.U_BANGUNAN, b.U_SERAGAM, b.U_KEGIATAN,
-           b.U_SPP, b.U_MAKAN, b.U_SORGA, b.U_INFAQ, b.U_LAIN,
+           b.U_SPP, b.U_MAKAN, b.U_SORGA, b.U_INFAQ, b.U_KOMITE,
            b.total_jumlah, b.TGL_BYR
     FROM bayar b
     JOIN siswa s ON s.NO_INDUK = b.NO_INDUK
@@ -182,15 +195,18 @@ $bulan_label = $bln_names[str_pad($filter_bulan, 2, '0', STR_PAD_LEFT)];
                 'Uang Seragam'   => $bayar_recap['seragam'],
                 'Uang Kegiatan'  => $bayar_recap['kegiatan'],
                 'Uang SPP'       => $bayar_recap['spp'],
+                'Uang Komite'    => $bayar_recap['komite'],
                 'Uang Makan'     => $bayar_recap['makan'],
                 'Uang Sorga'     => $bayar_recap['sorga'],
                 'Uang Infaq'     => $bayar_recap['infaq'],
-                'Uang Lain'      => $bayar_recap['lain'],
               ];
               foreach ($komponen_map as $nama => $val):
                 if ((float)$val <= 0) continue;
               ?>
               <tr><td><?= $nama ?></td><td class="nominal">Rp <?= number_format((float)$val,0,',','.') ?></td></tr>
+              <?php endforeach; ?>
+              <?php foreach ($rekap_biaya_lain as $biaya): if ((float)$biaya['total'] <= 0) continue; ?>
+              <tr><td><?= htmlspecialchars($biaya['nama']) ?></td><td class="nominal">Rp <?= number_format((float)$biaya['total'],0,',','.') ?></td></tr>
               <?php endforeach; ?>
               <tr style="font-weight:700;border-top:2px solid var(--border);">
                 <td>TOTAL</td>
@@ -238,7 +254,7 @@ $bulan_label = $bln_names[str_pad($filter_bulan, 2, '0', STR_PAD_LEFT)];
 </div>
 
 <div class="toast" id="toast"><span id="toast-icon"></span><span id="toast-msg"></span></div>
-<script src="../assets/js/app.js?v=2.8"></script>
+  <script src="../assets/js/app.js?v=3.1"></script>
 <script>document.addEventListener('DOMContentLoaded', function(){ autoHideFlash(); });</script>
 </body>
 </html>
