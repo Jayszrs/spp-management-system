@@ -5,6 +5,8 @@
 session_start();
 if (!isset($_SESSION['admin_id'])) { header('Location: ../login.php'); exit; }
 require_once '../koneksi.php';
+require_once '../includes/auth.php';
+requireRole(['admin']);
 
 $siswa_list = $koneksi->query("SELECT id, NO_INDUK, NAMA, KELAS FROM siswa ORDER BY NAMA ASC");
 
@@ -265,3 +267,4 @@ unset($_SESSION['flash']);
   <script src="../assets/js/app.js?v=2.8"></script>
 </body>
 </html>
+

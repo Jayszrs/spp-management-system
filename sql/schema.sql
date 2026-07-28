@@ -17,13 +17,17 @@ CREATE TABLE IF NOT EXISTS `admin` (
   `username`   VARCHAR(50)  NOT NULL UNIQUE,
   `password`   VARCHAR(255) NOT NULL,
   `nama`       VARCHAR(100) NOT NULL,
+  `role`       ENUM('admin','bendahara','kasir') NOT NULL DEFAULT 'admin',
   `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB;
 
--- Default admin: username=admin, password=admin123 (MD5)
-INSERT INTO `admin` (`username`, `password`, `nama`) VALUES
-('admin', MD5('admin123'), 'Administrator')
-ON DUPLICATE KEY UPDATE `nama`='Administrator';
+-- Default users: admin / bendahara / kasir
+INSERT INTO `admin` (`username`, `password`, `nama`, `role`) VALUES
+('admin',      MD5('admin123'),      'Administrator', 'admin'),
+('bendahara',  MD5('bendahara123'),  'Bendahara TU',  'bendahara'),
+('kasir',      MD5('kasir123'),      'Kasir',         'kasir')
+ON DUPLICATE KEY UPDATE `nama`=VALUES(`nama`), `role`=VALUES(`role`);
+
 
 -- Tabel Siswa (Revisi Baru)
 DROP TABLE IF EXISTS `siswa`;

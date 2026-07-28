@@ -16,7 +16,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $password = $_POST['password'] ?? '';
 
     if ($username && $password) {
-        $stmt = $koneksi->prepare("SELECT id, nama, password FROM admin WHERE username = ?");
+        $stmt = $koneksi->prepare("SELECT id, nama, password, role FROM admin WHERE username = ?");
         $stmt->bind_param('s', $username);
         $stmt->execute();
         $result = $stmt->get_result();
@@ -26,7 +26,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($admin && $admin['password'] === md5($password)) {
             $_SESSION['admin_id']   = $admin['id'];
             $_SESSION['admin_nama'] = $admin['nama'];
-            header('Location: dashboard.php');
+            $_SESSION['admin_role'] = $admin['role'];
+
+            // Redirect sesuai role
+            if ($admin['role'] === 'kasir') {
+                header('Location: tabungan/masuk.php');
+            } elseif ($admin['role'] === 'bendahara') {
+                header('Location: laporan/index.php');
+            } else {
+                header('Location: dashboard.php');
+            }
             exit;
         } else {
             $error = 'Username atau password salah!';
@@ -35,6 +44,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $error = 'Username dan password wajib diisi!';
     }
 }
+
 ?>
 <!DOCTYPE html>
 <html lang="id">

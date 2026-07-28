@@ -5,6 +5,8 @@
 session_start();
 if (!isset($_SESSION['admin_id'])) { header('Location: ../login.php'); exit; }
 require_once '../koneksi.php';
+require_once '../includes/auth.php';
+requireRole(['admin']);
 
 $flash = $_SESSION['flash'] ?? null;
 unset($_SESSION['flash']);
@@ -186,3 +188,4 @@ $bln_list = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus',
   <script src="../assets/js/app.js?v=2.8"></script>
 </body>
 </html>
+

@@ -8,6 +8,8 @@ if (!isset($_SESSION['admin_id'])) {
     exit;
 }
 require_once 'koneksi.php';
+require_once 'includes/auth.php';
+requireRole(['admin', 'bendahara']);
 
 // Stats
 $total_siswa    = $koneksi->query("SELECT COUNT(*) as c FROM siswa")->fetch_assoc()['c'];
