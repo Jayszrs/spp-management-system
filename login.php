@@ -77,13 +77,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Login | SistemSPP</title>
+  <link rel="icon" type="image/png" href="assets/img/favicon.png" />
   <meta name="description" content="Login admin sistem pembayaran SPP sekolah — kelola pembayaran siswa dengan mudah." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
   <!-- Prevent theme flash -->
   <script>(function(){var t=localStorage.getItem('spp_theme')||'dark';document.documentElement.setAttribute('data-theme',t);})();</script>
-  <link rel="stylesheet" href="assets/css/style.css?v=2.9" />
-  <link rel="stylesheet" href="assets/css/login.css" />
+  <link rel="stylesheet" href="assets/css/style.css?v=3.1" />
+  <link rel="stylesheet" href="assets/css/login.css?v=3.1" />
 </head>
 <body class="login-split-body">
 
@@ -96,10 +97,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <!-- Top badge -->
     <div class="left-topbar">
       <div class="left-brand">
-        <div class="brand-icon">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>
-          </svg>
+        <div class="brand-icon brand-logo-wrap">
+          <img src="assets/img/school-logo.png" alt="Logo SD MH" class="brand-logo-img" />
         </div>
         <span class="brand-name-left">SistemSPP</span>
       </div>
@@ -126,7 +125,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
       <!-- Illustration -->
       <div class="left-illustration-wrap">
-        <img src="assets/img/login_illustration.png" alt="Ilustrasi sistem pembayaran sekolah" class="left-illustration" />
+        <img src="assets/img/school-logo.png" alt="Logo SD MH" class="left-illustration login-school-logo" />
       </div>
 
       <!-- Hero Metrics (Simpler tapi Menarik) -->
@@ -183,10 +182,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
       <!-- Brand (mobile only) -->
       <div class="right-brand-mobile">
-        <div class="brand-icon">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>
-          </svg>
+        <div class="brand-icon brand-logo-wrap">
+          <img src="assets/img/school-logo.png" alt="Logo SD MH" class="brand-logo-img" />
         </div>
         <span class="brand-name">SistemSPP</span>
       </div>

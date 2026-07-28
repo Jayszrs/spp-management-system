@@ -76,10 +76,8 @@ $roleLabel  = $roleLabels[$role] ?? 'Pengguna';
 
 <aside class="sidebar" id="sidebar">
   <div class="sidebar-brand">
-    <div class="brand-icon">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>
-      </svg>
+    <div class="brand-icon brand-logo-wrap">
+      <img src="<?= $root ?>assets/img/school-logo.png" alt="Logo SD MH" class="brand-logo-img" />
     </div>
     <span class="brand-name">SistemSPP</span>
   </div>
