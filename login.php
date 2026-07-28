@@ -84,7 +84,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   <!-- Prevent theme flash -->
   <script>(function(){var t=localStorage.getItem('spp_theme')||'dark';document.documentElement.setAttribute('data-theme',t);})();</script>
   <link rel="stylesheet" href="assets/css/style.css?v=3.1" />
-  <link rel="stylesheet" href="assets/css/login.css?v=3.1" />
+  <link rel="stylesheet" href="assets/css/login.css?v=3.2" />
 </head>
 <body class="login-split-body">
 
@@ -105,67 +105,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       <span class="left-version-badge">v2.0</span>
     </div>
 
-    <!-- Decorative circles -->
-    <div class="deco-circle deco-c1"></div>
-    <div class="deco-circle deco-c2"></div>
-    <div class="deco-circle deco-c3"></div>
-
-    <!-- Hero content -->
+    <!-- School portal introduction -->
     <div class="left-hero">
+      <div class="left-feature-icon" aria-hidden="true">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+          <polyline points="9 12 11 14 15 10"/>
+        </svg>
+      </div>
       <div class="left-tagline">
         <h1>
-          Kelola Pembayaran<br/>
-          <span class="tagline-accent">SPP Siswa</span><br/>
-          Lebih Mudah &amp; Cepat!
+          Portal Pembayaran<br/>
+          <span class="tagline-accent">SPP Sekolah</span>
         </h1>
         <p class="left-desc">
-          Sistem terintegrasi untuk admin sekolah — input, pantau, dan kelola semua transaksi pembayaran siswa dalam satu platform modern.
+          Kelola pembayaran siswa, tabungan, dan laporan keuangan sekolah dalam satu sistem yang aman dan terintegrasi.
         </p>
       </div>
 
-      <!-- Illustration -->
-      <div class="left-illustration-wrap">
-        <img src="assets/img/school-logo.png" alt="Logo SD MH" class="left-illustration login-school-logo" />
-      </div>
-
-      <!-- Hero Metrics (Simpler tapi Menarik) -->
-      <div class="left-metrics-row">
-        <div class="metric-pill">
-          <div class="mp-icon mpi-green">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-          </div>
-          <div class="mp-info">
-            <span class="mp-val">Rp 750Rb</span>
-            <span class="mp-lbl">PSB Terbaru</span>
-          </div>
+      <div class="left-school-card">
+        <img src="assets/img/school-logo.png" alt="" class="left-school-logo" />
+        <div>
+          <strong>SistemSPP</strong>
+          <span>Portal administrasi sekolah</span>
         </div>
-        <div class="metric-pill">
-          <div class="mp-icon mpi-blue">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
-          </div>
-          <div class="mp-info">
-            <span class="mp-val">248 Siswa</span>
-            <span class="mp-lbl">Total Aktif</span>
-          </div>
-        </div>
-        <div class="metric-pill">
-          <div class="mp-icon mpi-purple">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
-          </div>
-          <div class="mp-info">
-            <span class="mp-val">Rp 42.5Jt</span>
-            <span class="mp-lbl">Bulan Ini</span>
-          </div>
-        </div>
-      </div>
-
-      <!-- Bottom dots decoration -->
-      <div class="left-dots">
-        <span class="dot dot-active"></span>
-        <span class="dot"></span>
-        <span class="dot"></span>
       </div>
     </div>
+
+    <p class="left-footer">&copy; <?= date('Y') ?> SistemSPP. Sistem administrasi sekolah.</p>
 
   </div><!-- /login-left -->
 
