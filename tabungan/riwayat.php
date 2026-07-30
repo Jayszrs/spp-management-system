@@ -15,27 +15,41 @@ $filter_nis = trim($_GET['nis'] ?? '');
 $filter_bulan = $_GET['bulan'] ?? date('m');
 $filter_tahun = $_GET['tahun'] ?? date('Y');
 
-// Query gabungan masuk + keluar
-$where_nis = $filter_nis ? "AND tm.NO_INDUK = '$filter_nis'" : '';
+// Query gabungan masuk + keluar. Filter NIS selalu diparameterkan agar
+// input URL tidak pernah menjadi bagian dari SQL.
+$where_nis_masuk = $filter_nis !== '' ? ' AND tm.NO_INDUK = ?' : '';
+$where_nis_keluar = $filter_nis !== '' ? ' AND tk.NO_INDUK = ?' : '';
 
 $sql_masuk = "
     SELECT tm.id, tm.NO_INDUK, s.NAMA, s.KELAS, tm.TANGGAL,
            tm.MASUK as nominal, 0 as keluar, 'masuk' as jenis, tm.user_id
     FROM transaksi_m tm
     JOIN siswa s ON s.NO_INDUK = tm.NO_INDUK
-    WHERE MONTH(tm.TANGGAL) = ? AND YEAR(tm.TANGGAL) = ? $where_nis
+    WHERE MONTH(tm.TANGGAL) = ? AND YEAR(tm.TANGGAL) = ?$where_nis_masuk
 ";
 $sql_keluar = "
     SELECT tk.id, tk.NO_INDUK, s.NAMA, s.KELAS, tk.TANGGAL,
            0 as nominal, tk.KELUAR as keluar, 'keluar' as jenis, tk.user_id
     FROM transaksi_k tk
     JOIN siswa s ON s.NO_INDUK = tk.NO_INDUK
-    WHERE MONTH(tk.TANGGAL) = ? AND YEAR(tk.TANGGAL) = ? $where_nis
+    WHERE MONTH(tk.TANGGAL) = ? AND YEAR(tk.TANGGAL) = ?$where_nis_keluar
 ";
 
 $sql = "($sql_masuk) UNION ALL ($sql_keluar) ORDER BY TANGGAL DESC";
 $stmt = $koneksi->prepare($sql);
-$stmt->bind_param('iiii', $filter_bulan, $filter_tahun, $filter_bulan, $filter_tahun);
+if ($filter_nis !== '') {
+    $stmt->bind_param(
+        'iisiis',
+        $filter_bulan,
+        $filter_tahun,
+        $filter_nis,
+        $filter_bulan,
+        $filter_tahun,
+        $filter_nis
+    );
+} else {
+    $stmt->bind_param('iiii', $filter_bulan, $filter_tahun, $filter_bulan, $filter_tahun);
+}
 $stmt->execute();
 $rows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
 $stmt->close();

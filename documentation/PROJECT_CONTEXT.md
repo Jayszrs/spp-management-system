@@ -200,6 +200,7 @@ Detail biaya tambahan per transaksi. Nama dan nominal disimpan sebagai snapshot 
 - Rekap komponen tetap mencakup Uang Komite.
 - Biaya lain diagregasi berdasarkan `nama_biaya_snapshot`, bukan nama master saat ini.
 - Siswa arsip tidak dikeluarkan dari histori laporan.
+- Filter laporan yang menerima input pengguna, termasuk filter NIS riwayat tabungan, wajib menggunakan prepared statement; input tidak boleh dirangkai ke SQL.
 - Halaman PDF adalah dokumen HTML bergaya kwitansi yang dicetak atau disimpan melalui fitur print browser.
 
 ## 8. Instalasi dan Migrasi Database

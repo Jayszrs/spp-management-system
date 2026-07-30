@@ -26,7 +26,8 @@ Dokumen kerja ini melacak pekerjaan teknis yang sedang dan sudah dilakukan. Perb
 | FIN-002 | Pembalikan setoran Tabungan Wajib dapat membuat saldo tabungan negatif. | Kritis | Selesai | Saldo dikunci dalam transaction sebelum dibalikkan; update/hapus ditolak dan di-rollback bila saldo tidak cukup. |
 | DB-001 | Database lama belum memiliki relasi pembayaran eksplisit. | Kritis | Selesai | Migrasi idempoten dan `verify_schema.sql` tersedia; migrasi dijalankan dua kali pada database lokal dan pemeriksaan mengembalikan `OK`. |
 | COMP-001 | Histori pembayaran lama tidak dapat dibuktikan relasinya secara aman. | Tinggi | Diterima / dibatasi | Tetap legacy (`payment_link_version=0`, child `bayar_id=NULL`), tidak dicocokkan otomatis, dan hanya dapat direkonsiliasi manual. |
-| SEC-001 | CSRF, SQL injection, dan XSS lain masih belum ditangani menyeluruh. | Tinggi | Terbuka | Di luar ruang lingkup perbaikan integritas pembayaran ini; lihat `PROJECT_CONTEXT.md`. |
+| SEC-001 | CSRF serta lokasi SQL injection/XSS lain masih belum ditangani menyeluruh. | Tinggi | Terbuka | Perbaikan SEC-002 menutup filter NIS riwayat tabungan; endpoint mutasi dan lokasi lain tetap menjadi pekerjaan terpisah. |
+| SEC-002 | Filter NIS riwayat tabungan merangkai input URL langsung ke query SQL. | Kritis | Selesai | Kedua cabang query `UNION` sekarang memakai placeholder prepared statement. Uji filter kosong, NIS valid, dan payload SQL dilakukan tanpa error atau perluasan hasil. |
 
 ## Kontrak kompatibilitas pembayaran
 

@@ -13,6 +13,36 @@ File ini mencatat perubahan proyek secara reverse chronological. Baca [PROJECT_C
 - Jangan menghapus atau menulis ulang entri lama. Tambahkan entri koreksi bila diperlukan.
 - Perubahan implementasi dan entri changelog wajib masuk commit yang sama.
 
+## 2026-07-30 - Perbaikan SQL Injection Riwayat Tabungan
+
+**AI/Aktor:** Codex berbasis GPT-5, bersama pemilik proyek
+
+**Tujuan:** Menutup SQL injection pada filter NIS di riwayat tabungan tanpa mengubah perilaku laporan.
+
+**Perubahan fitur dan perilaku:**
+
+- Menghapus interpolasi langsung `$_GET['nis']` dari query masuk dan keluar pada `tabungan/riwayat.php`.
+- Filter NIS kosong tetap menampilkan seluruh transaksi pada periode yang dipilih.
+- Filter NIS terisi tetap menggunakan exact match, tetapi nilainya sekarang dikirim sebagai parameter prepared statement.
+
+**Database dan migrasi:**
+
+- Tidak ada perubahan schema atau migrasi database.
+
+**Kompatibilitas dan data lama:**
+
+- Format URL, filter bulan/tahun, hasil laporan normal, saldo, jurnal, pembayaran, dan transaksi legacy tetap tidak berubah.
+
+**Verifikasi:**
+
+- Lint seluruh file PHP, `node --check assets/js/app.js`, dan `git diff --check` dijalankan.
+- Filter kosong, filter NIS valid, dan payload SQL `' OR 1=1 --` diuji melalui HTTP; payload diperlakukan sebagai nilai literal tanpa SQL error atau perluasan hasil.
+- Tidak ada data transaksi yang tersisa setelah pengujian.
+
+**Catatan tindak lanjut:**
+
+- CSRF pada endpoint mutasi pembayaran, tabungan, dan Master Biaya Lain tetap berada di luar scope dan dicatat sebagai technical debt.
+
 ## 2026-07-30 - Integritas Child Pembayaran dan Kesiapan Schema
 
 **AI/Aktor:** Codex berbasis GPT-5, bersama pemilik proyek
