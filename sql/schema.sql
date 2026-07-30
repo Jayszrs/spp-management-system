@@ -118,6 +118,7 @@ CREATE TABLE `bayar` (
   `kelas_du`    CHAR(5) DEFAULT NULL,
   `potong_spp`  DOUBLE DEFAULT 0,
   `total_jumlah` DOUBLE DEFAULT 0, -- Kolom bantu kalkulasi total pembayaran
+  `payment_link_version` TINYINT UNSIGNED NOT NULL DEFAULT 0,
   `created_at`  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (`NO_INDUK`) REFERENCES `siswa`(`NO_INDUK`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB;
@@ -168,11 +169,15 @@ CREATE TABLE `Daftar_ulang` (
 DROP TABLE IF EXISTS `bayar_du`;
 CREATE TABLE `bayar_du` (
   `id`        INT AUTO_INCREMENT PRIMARY KEY,
+  `bayar_id`  INT DEFAULT NULL,
   `no_induk`  VARCHAR(50) DEFAULT NULL,
   `kelas`     VARCHAR(5) DEFAULT NULL,
   `th_ajaran` CHAR(9) DEFAULT NULL,
   `jumlah`    DECIMAL(18,2) DEFAULT 0,
-  FOREIGN KEY (`no_induk`) REFERENCES `siswa`(`NO_INDUK`) ON DELETE CASCADE ON UPDATE CASCADE
+  UNIQUE KEY `uk_bayar_du_bayar_id` (`bayar_id`),
+  FOREIGN KEY (`no_induk`) REFERENCES `siswa`(`NO_INDUK`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `fk_bayar_du_bayar`
+    FOREIGN KEY (`bayar_id`) REFERENCES `bayar`(`id`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB;
 
 -- Tabel Tabungan
@@ -188,12 +193,16 @@ CREATE TABLE `tabungan` (
 DROP TABLE IF EXISTS `transaksi_m`;
 CREATE TABLE `transaksi_m` (
   `id`        INT AUTO_INCREMENT PRIMARY KEY,
+  `bayar_id`  INT DEFAULT NULL,
   `NO_INDUK`  VARCHAR(10) DEFAULT NULL,
   `TANGGAL`   DATETIME DEFAULT NULL,
   `MASUK`     DOUBLE DEFAULT 0,
   `KELUAR`    DOUBLE DEFAULT 0,
   `user_id`   CHAR(10) DEFAULT NULL,
-  FOREIGN KEY (`NO_INDUK`) REFERENCES `siswa`(`NO_INDUK`) ON DELETE CASCADE ON UPDATE CASCADE
+  UNIQUE KEY `uk_transaksi_m_bayar_id` (`bayar_id`),
+  FOREIGN KEY (`NO_INDUK`) REFERENCES `siswa`(`NO_INDUK`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `fk_transaksi_m_bayar`
+    FOREIGN KEY (`bayar_id`) REFERENCES `bayar`(`id`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB;
 
 -- Tabel Transaksi Keluar

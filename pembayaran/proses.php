@@ -183,6 +183,89 @@ function calculate_payment_total(array $components, float $uangDu, float $potong
     return max(0, $total - $potonganSpp);
 }
 
+/**
+ * Pastikan pembayaran bukan histori legacy dan kunci header sebelum dimutasi.
+ */
+function find_linked_payment(mysqli $db, int $bayarId): array {
+    $stmt = $db->prepare('SELECT * FROM bayar WHERE id = ? FOR UPDATE');
+    $stmt->bind_param('i', $bayarId);
+    $stmt->execute();
+    $payment = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+
+    if (!$payment) throw new RuntimeException('Data pembayaran tidak ditemukan.');
+    if ((int)($payment['payment_link_version'] ?? 0) !== 1) {
+        throw new RuntimeException('Pembayaran legacy tidak dapat diubah atau dihapus. Rekonsiliasi manual diperlukan terlebih dahulu.');
+    }
+    return $payment;
+}
+
+/**
+ * Membatalkan setoran tabungan wajib yang benar-benar terhubung ke pembayaran.
+ * Mutasi dibatalkan bila saldo saat ini tidak cukup untuk dibalikkan.
+ */
+function reverse_linked_savings(mysqli $db, int $bayarId): void {
+    $stmt = $db->prepare('SELECT id, NO_INDUK, MASUK FROM transaksi_m WHERE bayar_id = ? FOR UPDATE');
+    $stmt->bind_param('i', $bayarId);
+    $stmt->execute();
+    $saving = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+    if (!$saving) return;
+
+    $amount = (float)$saving['MASUK'];
+    if ($amount < 0) throw new RuntimeException('Jurnal tabungan pembayaran tidak valid.');
+
+    $stmtSaldo = $db->prepare('SELECT SALDO FROM tabungan WHERE NO_INDUK = ? FOR UPDATE');
+    $stmtSaldo->bind_param('s', $saving['NO_INDUK']);
+    $stmtSaldo->execute();
+    $saldoRow = $stmtSaldo->get_result()->fetch_assoc();
+    $stmtSaldo->close();
+    if (!$saldoRow) throw new RuntimeException('Saldo tabungan terkait pembayaran tidak ditemukan.');
+    if ((float)$saldoRow['SALDO'] + 0.001 < $amount) {
+        throw new RuntimeException('Pembayaran tidak dapat diubah atau dihapus karena tabungan wajibnya sudah dipakai. Selesaikan rekonsiliasi tabungan terlebih dahulu.');
+    }
+
+    $stmtUpdate = $db->prepare('UPDATE tabungan SET SALDO = SALDO - ? WHERE NO_INDUK = ?');
+    $stmtUpdate->bind_param('ds', $amount, $saving['NO_INDUK']);
+    $stmtUpdate->execute();
+    $stmtUpdate->close();
+
+    $stmtDelete = $db->prepare('DELETE FROM transaksi_m WHERE bayar_id = ?');
+    $stmtDelete->bind_param('i', $bayarId);
+    $stmtDelete->execute();
+    $stmtDelete->close();
+}
+
+/**
+ * Menambah saldo dan jurnal setoran tabungan wajib untuk satu pembayaran.
+ */
+function save_linked_savings(mysqli $db, int $bayarId, string $noInduk, string $tanggal, float $amount, string $userId): void {
+    if ($amount <= 0) return;
+
+    $stmtCheck = $db->prepare('SELECT SALDO FROM tabungan WHERE NO_INDUK = ? FOR UPDATE');
+    $stmtCheck->bind_param('s', $noInduk);
+    $stmtCheck->execute();
+    $tabungan = $stmtCheck->get_result()->fetch_assoc();
+    $stmtCheck->close();
+
+    if ($tabungan) {
+        $stmtUpdate = $db->prepare('UPDATE tabungan SET SALDO = SALDO + ? WHERE NO_INDUK = ?');
+        $stmtUpdate->bind_param('ds', $amount, $noInduk);
+        $stmtUpdate->execute();
+        $stmtUpdate->close();
+    } else {
+        $stmtInsert = $db->prepare('INSERT INTO tabungan (NO_INDUK, SALDO) VALUES (?, ?)');
+        $stmtInsert->bind_param('sd', $noInduk, $amount);
+        $stmtInsert->execute();
+        $stmtInsert->close();
+    }
+
+    $stmtJournal = $db->prepare('INSERT INTO transaksi_m (bayar_id, NO_INDUK, TANGGAL, MASUK, KELUAR, user_id) VALUES (?, ?, ?, ?, 0, ?)');
+    $stmtJournal->bind_param('issds', $bayarId, $noInduk, $tanggal, $amount, $userId);
+    $stmtJournal->execute();
+    $stmtJournal->close();
+}
+
 // ── INSERT ──────────────────────────────────
 if ($aksi === 'input') {
     $no_induk        = trim($_POST['no_induk'] ?? '');
@@ -247,8 +330,8 @@ if ($aksi === 'input') {
             U_SPP, U_MAKAN, U_SORGA, U_INFAQ, U_KOMITE, U_LAIN, KETERANGAN,
             TGL_BYR, BULAN, TAHUN, user_id,
             LAIN_LAIN1, JUMLAH1, LAIN_LAIN2, JUMLAH2, LAIN_LAIN3, JUMLAH3, LAIN_LAIN4, JUMLAH4,
-            th_ajaran, kelas_du, potong_spp, total_jumlah
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+            th_ajaran, kelas_du, potong_spp, total_jumlah, payment_link_version
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)";
 
         $stmt = $koneksi->prepare($sql);
         $user_id = $_SESSION['admin_nama'] ?? 'admin';
@@ -269,39 +352,14 @@ if ($aksi === 'input') {
 
         // 2. Simpan daftar ulang ke tabel bayar_du jika ada nominal
         if ($uang_du > 0) {
-            $stmt_du = $koneksi->prepare("INSERT INTO bayar_du (no_induk, kelas, th_ajaran, jumlah) VALUES (?, ?, ?, ?)");
-            $stmt_du->bind_param('sssd', $no_induk, $kelas_du, $tahun_ajaran_du, $uang_du);
+            $stmt_du = $koneksi->prepare("INSERT INTO bayar_du (bayar_id, no_induk, kelas, th_ajaran, jumlah) VALUES (?, ?, ?, ?, ?)");
+            $stmt_du->bind_param('isssd', $bayar_id, $no_induk, $kelas_du, $tahun_ajaran_du, $uang_du);
             $stmt_du->execute();
             $stmt_du->close();
         }
 
-        // 3. Simpan tabungan ke tabel tabungan & log transaksi_m jika ada nominal
-        if ($tabungan_wajib > 0) {
-            // Cek data tabungan siswa
-            $stmt_check = $koneksi->prepare("SELECT SALDO FROM tabungan WHERE NO_INDUK = ?");
-            $stmt_check->bind_param('s', $no_induk);
-            $stmt_check->execute();
-            $tab_data = $stmt_check->get_result()->fetch_assoc();
-            $stmt_check->close();
-
-            if ($tab_data) {
-                $stmt_up = $koneksi->prepare("UPDATE tabungan SET SALDO = SALDO + ? WHERE NO_INDUK = ?");
-                $stmt_up->bind_param('ds', $tabungan_wajib, $no_induk);
-                $stmt_up->execute();
-                $stmt_up->close();
-            } else {
-                $stmt_ins = $koneksi->prepare("INSERT INTO tabungan (NO_INDUK, SALDO) VALUES (?, ?)");
-                $stmt_ins->bind_param('sd', $no_induk, $tabungan_wajib);
-                $stmt_ins->execute();
-                $stmt_ins->close();
-            }
-
-            // Log transaksi masuk tabungan
-            $stmt_trans = $koneksi->prepare("INSERT INTO transaksi_m (NO_INDUK, TANGGAL, MASUK, KELUAR, user_id) VALUES (?, ?, ?, 0, ?)");
-            $stmt_trans->bind_param('ssds', $no_induk, $tanggal_bayar, $tabungan_wajib, $user_id);
-            $stmt_trans->execute();
-            $stmt_trans->close();
-        }
+        // 3. Simpan tabungan wajib dengan referensi eksplisit ke pembayaran.
+        save_linked_savings($koneksi, $bayar_id, $no_induk, $tanggal_bayar, $tabungan_wajib, $user_id);
 
         $koneksi->commit();
         $_SESSION['flash'] = ['type' => 'success', 'msg' => 'Data pembayaran berhasil disimpan!'];
@@ -355,30 +413,9 @@ if ($aksi === 'update') {
         exit;
     }
 
-    // Ambil data pembayaran lama untuk penyesuaian saldo tabungan & daftar ulang
-    $stmt_old = $koneksi->prepare("SELECT * FROM bayar WHERE id = ?");
-    $stmt_old->bind_param('i', $id);
-    $stmt_old->execute();
-    $old_bayar = $stmt_old->get_result()->fetch_assoc();
-    $stmt_old->close();
-
-    if (!$old_bayar) {
-        $_SESSION['flash'] = ['type' => 'error', 'msg' => 'Data lama tidak ditemukan!'];
-        header('Location: lihat.php');
-        exit;
-    }
-
-    // Ambil nilai tabungan lama dari transaksi_m
-    $stmt_old_tab = $koneksi->prepare("SELECT MASUK FROM transaksi_m WHERE NO_INDUK = ? AND DATE(TANGGAL) = DATE(?) LIMIT 1");
-    $stmt_old_tab->bind_param('ss', $old_bayar['NO_INDUK'], $old_bayar['TGL_BYR']);
-    $stmt_old_tab->execute();
-    $old_tab_data = $stmt_old_tab->get_result()->fetch_assoc();
-    $old_tab_val = $old_tab_data ? (float)$old_tab_data['MASUK'] : 0.0;
-    $stmt_old_tab->close();
-
     $koneksi->begin_transaction();
-
     try {
+        $old_bayar = find_linked_payment($koneksi, $id);
         validate_payment_amounts([
             'Pangkal' => $uang_pangkal, 'Bangunan' => $uang_bangunan,
             'Seragam' => $uang_seragam, 'Kegiatan' => $uang_kegiatan,
@@ -403,7 +440,7 @@ if ($aksi === 'update') {
             U_SPP=?, U_MAKAN=?, U_SORGA=?, U_INFAQ=?, U_KOMITE=?, U_LAIN=?, KETERANGAN=?,
             TGL_BYR=?, BULAN=?, TAHUN=?, user_id=?,
             LAIN_LAIN1=?, JUMLAH1=?, LAIN_LAIN2=?, JUMLAH2=?, LAIN_LAIN3=?, JUMLAH3=?, LAIN_LAIN4=?, JUMLAH4=?,
-            th_ajaran=?, kelas_du=?, potong_spp=?, total_jumlah=?
+            th_ajaran=?, kelas_du=?, potong_spp=?, total_jumlah=?, payment_link_version=1
             WHERE id=?";
 
         $stmt = $koneksi->prepare($sql);
@@ -422,58 +459,22 @@ if ($aksi === 'update') {
 
         save_biaya_lain($koneksi, $id, $biaya_lain);
 
-        // 2. Sesuaikan daftar ulang (Hapus record lama, lalu masukkan yang baru jika ada nominal)
-        $stmt_del_du = $koneksi->prepare("DELETE FROM bayar_du WHERE no_induk = ? AND th_ajaran = ?");
-        $stmt_del_du->bind_param('ss', $old_bayar['NO_INDUK'], $old_bayar['th_ajaran']);
+        // 2. Hapus hanya Daftar Ulang yang dimiliki pembayaran ini, lalu simpan nilai baru.
+        $stmt_del_du = $koneksi->prepare("DELETE FROM bayar_du WHERE bayar_id = ?");
+        $stmt_del_du->bind_param('i', $id);
         $stmt_del_du->execute();
         $stmt_del_du->close();
 
         if ($uang_du > 0) {
-            $stmt_ins_du = $koneksi->prepare("INSERT INTO bayar_du (no_induk, kelas, th_ajaran, jumlah) VALUES (?, ?, ?, ?)");
-            $stmt_ins_du->bind_param('sssd', $no_induk, $kelas_du, $tahun_ajaran_du, $uang_du);
+            $stmt_ins_du = $koneksi->prepare("INSERT INTO bayar_du (bayar_id, no_induk, kelas, th_ajaran, jumlah) VALUES (?, ?, ?, ?, ?)");
+            $stmt_ins_du->bind_param('isssd', $id, $no_induk, $kelas_du, $tahun_ajaran_du, $uang_du);
             $stmt_ins_du->execute();
             $stmt_ins_du->close();
         }
 
-        // 3. Sesuaikan tabungan
-        // Kurangi saldo tabungan lama
-        $stmt_sub_tab = $koneksi->prepare("UPDATE tabungan SET SALDO = SALDO - ? WHERE NO_INDUK = ?");
-        $stmt_sub_tab->bind_param('ds', $old_tab_val, $old_bayar['NO_INDUK']);
-        $stmt_sub_tab->execute();
-        $stmt_sub_tab->close();
-
-        // Hapus log transaksi tabungan lama
-        $stmt_del_log = $koneksi->prepare("DELETE FROM transaksi_m WHERE NO_INDUK = ? AND DATE(TANGGAL) = DATE(?)");
-        $stmt_del_log->bind_param('ss', $old_bayar['NO_INDUK'], $old_bayar['TGL_BYR']);
-        $stmt_del_log->execute();
-        $stmt_del_log->close();
-
-        // Terapkan tabungan baru jika ada nominal
-        if ($tabungan_wajib > 0) {
-            $stmt_check = $koneksi->prepare("SELECT SALDO FROM tabungan WHERE NO_INDUK = ?");
-            $stmt_check->bind_param('s', $no_induk);
-            $stmt_check->execute();
-            $tab_data = $stmt_check->get_result()->fetch_assoc();
-            $stmt_check->close();
-
-            if ($tab_data) {
-                $stmt_up = $koneksi->prepare("UPDATE tabungan SET SALDO = SALDO + ? WHERE NO_INDUK = ?");
-                $stmt_up->bind_param('ds', $tabungan_wajib, $no_induk);
-                $stmt_up->execute();
-                $stmt_up->close();
-            } else {
-                $stmt_ins = $koneksi->prepare("INSERT INTO tabungan (NO_INDUK, SALDO) VALUES (?, ?)");
-                $stmt_ins->bind_param('sd', $no_induk, $tabungan_wajib);
-                $stmt_ins->execute();
-                $stmt_ins->close();
-            }
-
-            // Log transaksi masuk tabungan yang baru
-            $stmt_trans = $koneksi->prepare("INSERT INTO transaksi_m (NO_INDUK, TANGGAL, MASUK, KELUAR, user_id) VALUES (?, ?, ?, 0, ?)");
-            $stmt_trans->bind_param('ssds', $no_induk, $tanggal_bayar, $tabungan_wajib, $user_id);
-            $stmt_trans->execute();
-            $stmt_trans->close();
-        }
+        // 3. Balikkan dan buat ulang hanya setoran tabungan milik pembayaran ini.
+        reverse_linked_savings($koneksi, $id);
+        save_linked_savings($koneksi, $id, $no_induk, $tanggal_bayar, $tabungan_wajib, $user_id);
 
         $koneksi->commit();
         $_SESSION['flash'] = ['type' => 'success', 'msg' => 'Data pembayaran berhasil diperbarui!'];
@@ -492,49 +493,16 @@ if ($aksi === 'hapus') {
     $id = (int)($_GET['id'] ?? 0);
     if ($id <= 0) { header('Location: lihat.php'); exit; }
 
-    // Ambil data pembayaran untuk membatalkan tabungan dan daftar ulang
-    $stmt_old = $koneksi->prepare("SELECT * FROM bayar WHERE id = ?");
-    $stmt_old->bind_param('i', $id);
-    $stmt_old->execute();
-    $old_bayar = $stmt_old->get_result()->fetch_assoc();
-    $stmt_old->close();
-
-    if (!$old_bayar) {
-        $_SESSION['flash'] = ['type' => 'error', 'msg' => 'Data tidak ditemukan!'];
-        header('Location: lihat.php');
-        exit;
-    }
-
-    // Ambil nilai tabungan lama dari transaksi_m
-    $stmt_old_tab = $koneksi->prepare("SELECT MASUK FROM transaksi_m WHERE NO_INDUK = ? AND DATE(TANGGAL) = DATE(?) LIMIT 1");
-    $stmt_old_tab->bind_param('ss', $old_bayar['NO_INDUK'], $old_bayar['TGL_BYR']);
-    $stmt_old_tab->execute();
-    $old_tab_data = $stmt_old_tab->get_result()->fetch_assoc();
-    $old_tab_val = $old_tab_data ? (float)$old_tab_data['MASUK'] : 0.0;
-    $stmt_old_tab->close();
-
     $koneksi->begin_transaction();
 
     try {
-        // 1. Kurangi saldo tabungan
-        $stmt_sub_tab = $koneksi->prepare("UPDATE tabungan SET SALDO = SALDO - ? WHERE NO_INDUK = ?");
-        $stmt_sub_tab->bind_param('ds', $old_tab_val, $old_bayar['NO_INDUK']);
-        $stmt_sub_tab->execute();
-        $stmt_sub_tab->close();
+        find_linked_payment($koneksi, $id);
 
-        // 2. Hapus log transaksi tabungan
-        $stmt_del_log = $koneksi->prepare("DELETE FROM transaksi_m WHERE NO_INDUK = ? AND DATE(TANGGAL) = DATE(?)");
-        $stmt_del_log->bind_param('ss', $old_bayar['NO_INDUK'], $old_bayar['TGL_BYR']);
-        $stmt_del_log->execute();
-        $stmt_del_log->close();
+        // 1. Balikkan setoran milik pembayaran ini. Jika saldo tidak cukup,
+        // seluruh penghapusan akan di-rollback.
+        reverse_linked_savings($koneksi, $id);
 
-        // 3. Hapus data daftar ulang
-        $stmt_del_du = $koneksi->prepare("DELETE FROM bayar_du WHERE no_induk = ? AND th_ajaran = ?");
-        $stmt_del_du->bind_param('ss', $old_bayar['NO_INDUK'], $old_bayar['th_ajaran']);
-        $stmt_del_du->execute();
-        $stmt_del_du->close();
-
-        // 4. Hapus data utama di bayar
+        // 2. Hapus header; FK cascade hanya akan menghapus child dengan bayar_id ini.
         $stmt_del = $koneksi->prepare("DELETE FROM bayar WHERE id = ?");
         $stmt_del->bind_param('i', $id);
         $stmt_del->execute();

@@ -21,7 +21,7 @@ $bayar_bulan_ini = $koneksi->query(
 
 // Transaksi terbaru
 $recent = $koneksi->query("
-    SELECT p.id, s.NO_INDUK, s.NAMA, s.KELAS, p.BULAN, p.TAHUN, p.total_jumlah, p.TGL_BYR
+    SELECT p.id, p.payment_link_version, s.NO_INDUK, s.NAMA, s.KELAS, p.BULAN, p.TAHUN, p.total_jumlah, p.TGL_BYR
     FROM bayar p
     JOIN siswa s ON s.NO_INDUK = p.NO_INDUK
     ORDER BY p.created_at DESC
@@ -157,6 +157,7 @@ $recent = $koneksi->query("
                    <td data-label="Total Bayar" class="nominal">Rp <?= number_format($row['total_jumlah'], 0, ',', '.') ?></td>
                    <td data-label="Tanggal"><?= date('d/m/Y', strtotime($row['TGL_BYR'])) ?></td>
                    <td data-label="Aksi">
+                     <?php if ((int)($row['payment_link_version'] ?? 0) === 1): ?>
                      <a href="pembayaran/edit.php?id=<?= $row['id'] ?>" class="btn-tbl btn-tbl-edit" title="Edit">
                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                      </a>
@@ -164,6 +165,9 @@ $recent = $koneksi->query("
                         title="Hapus" onclick="return confirm('Yakin hapus data ini?')">
                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
                      </a>
+                     <?php else: ?>
+                     <span class="master-status is-inactive" title="Transaksi lama tanpa relasi eksplisit">Legacy</span>
+                     <?php endif; ?>
                    </td>
                  </tr>
                 <?php endwhile; ?>

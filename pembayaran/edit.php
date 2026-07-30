@@ -18,18 +18,23 @@ $d = $stmt->get_result()->fetch_assoc();
 $stmt->close();
 
 if (!$d) { $_SESSION['flash'] = ['type'=>'error','msg'=>'Data tidak ditemukan!']; header('Location: lihat.php'); exit; }
+if ((int)($d['payment_link_version'] ?? 0) !== 1) {
+    $_SESSION['flash'] = ['type'=>'error','msg'=>'Pembayaran legacy tidak dapat diedit. Rekonsiliasi manual diperlukan terlebih dahulu.'];
+    header('Location: lihat.php');
+    exit;
+}
 
-// Ambil uang daftar ulang dari bayar_du jika ada
-$stmt_du = $koneksi->prepare("SELECT jumlah FROM bayar_du WHERE no_induk = ? AND th_ajaran = ? LIMIT 1");
-$stmt_du->bind_param('ss', $d['NO_INDUK'], $d['th_ajaran']);
+// Ambil Daftar Ulang dan tabungan wajib yang secara eksplisit milik pembayaran ini.
+$stmt_du = $koneksi->prepare("SELECT jumlah FROM bayar_du WHERE bayar_id = ? LIMIT 1");
+$stmt_du->bind_param('i', $id);
 $stmt_du->execute();
 $res_du = $stmt_du->get_result()->fetch_assoc();
 $d['uang_du'] = $res_du ? (float)$res_du['jumlah'] : 0.0;
 $stmt_du->close();
 
-// Ambil tabungan wajib dari transaksi_m jika ada
-$stmt_tab = $koneksi->prepare("SELECT MASUK FROM transaksi_m WHERE NO_INDUK = ? AND DATE(TANGGAL) = DATE(?) LIMIT 1");
-$stmt_tab->bind_param('ss', $d['NO_INDUK'], $d['TGL_BYR']);
+// Ambil tabungan wajib dari jurnal yang terhubung ke pembayaran ini.
+$stmt_tab = $koneksi->prepare("SELECT MASUK FROM transaksi_m WHERE bayar_id = ? LIMIT 1");
+$stmt_tab->bind_param('i', $id);
 $stmt_tab->execute();
 $res_tab = $stmt_tab->get_result()->fetch_assoc();
 $d['tabungan_wajib'] = $res_tab ? (float)$res_tab['MASUK'] : 0.0;

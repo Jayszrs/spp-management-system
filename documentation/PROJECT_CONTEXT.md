@@ -32,13 +32,13 @@ Aplikasi ini merupakan aplikasi PHP tradisional tanpa framework. Halaman merende
 Lokasi kerja standar pada mesin pengembangan saat ini:
 
 ```text
-C:\xampp\htdocs\Project PHP
+C:\xampp\htdocs\spp-management-system
 ```
 
 URL lokal:
 
 ```text
-http://localhost/Project%20PHP/
+http://localhost/spp-management-system/
 ```
 
 Konfigurasi koneksi berada di `koneksi.php`. Default lokal menggunakan host `localhost`, user MySQL `root`, password kosong, dan database `db_spp`. Jangan menyalin konfigurasi lokal ini ke produksi tanpa secret management dan kredensial baru.
@@ -122,6 +122,8 @@ Menyimpan aksi, admin, waktu, nomor induk snapshot, serta JSON sebelum dan sesud
 
 Header dan komponen utama transaksi pembayaran. `NO_INDUK` berelasi ke siswa dengan `ON UPDATE CASCADE` dan `ON DELETE CASCADE`. Kolom `U_KOMITE` menyimpan pembayaran Komite untuk kombinasi siswa, bulan, dan tahun.
 
+`payment_link_version` adalah kontrak integritas child pembayaran: `0` berarti transaksi legacy yang relasinya tidak dapat diverifikasi dan tidak boleh diubah/dihapus dari aplikasi; `1` berarti seluruh child yang dibuat oleh alur baru menggunakan relasi `bayar_id` aman.
+
 Kolom lama `U_LAIN`, `LAIN_LAIN1-4`, dan `JUMLAH1-4` masih dipertahankan untuk kompatibilitas data. Transaksi baru memakai tabel detail biaya lain dan mengisi kolom lama dengan nilai netral.
 
 ### `master_biaya_lain`
@@ -134,11 +136,11 @@ Detail biaya tambahan per transaksi. Nama dan nominal disimpan sebagai snapshot 
 
 ### `bayar_du` dan `Daftar_ulang`
 
-`bayar_du` menyimpan pembayaran daftar ulang per siswa dan tahun ajaran. Tabel `Daftar_ulang` masih tersedia sebagai struktur tarif lama; alur aktif mengambil tarif dasar daftar ulang dari data siswa.
+`bayar_du` menyimpan pembayaran daftar ulang per siswa dan tahun ajaran. Child yang dibuat oleh pembayaran versi aman menyimpan `bayar_id` unik dengan foreign key `ON DELETE CASCADE` ke `bayar`. Tabel `Daftar_ulang` masih tersedia sebagai struktur tarif lama; alur aktif mengambil tarif dasar daftar ulang dari data siswa.
 
 ### `tabungan`, `transaksi_m`, dan `transaksi_k`
 
-`tabungan` menyimpan saldo berjalan per siswa. `transaksi_m` dan `transaksi_k` menyimpan jurnal masuk dan keluar. Semua foreign key nomor induk mengikuti perubahan nomor induk melalui `ON UPDATE CASCADE`.
+`tabungan` menyimpan saldo berjalan per siswa. `transaksi_m` dan `transaksi_k` menyimpan jurnal masuk dan keluar. Setoran Tabungan Wajib dari pembayaran aman menyimpan `transaksi_m.bayar_id` unik dengan foreign key `ON DELETE CASCADE`; setoran manual bernilai `NULL`, sedangkan seluruh `transaksi_k` tetap tidak berelasi ke pembayaran. Semua foreign key nomor induk mengikuti perubahan nomor induk melalui `ON UPDATE CASCADE`.
 
 ## 7. Alur dan Aturan Bisnis
 
@@ -164,6 +166,9 @@ Detail biaya tambahan per transaksi. Nama dan nominal disimpan sebagai snapshot 
 - `total_jumlah` dihitung ulang di backend dari komponen pembayaran, daftar ulang, biaya lain, dan potongan SPP. Hidden total dari browser bukan sumber kebenaran.
 - Nominal negatif, periode tidak valid, dan pembayaran Komite melebihi sisa periode harus ditolak.
 - Simpan, edit, dan hapus transaksi utama, daftar ulang, tabungan terkait, serta detail biaya lain dijalankan dalam transaction.
+- Pembayaran baru menyimpan relasi eksplisit ke Daftar Ulang dan setoran Tabungan Wajib melalui `bayar_id`. Edit atau hapus hanya boleh mengubah child dengan `bayar_id` yang sama, bukan child dengan NIS, tanggal, atau tahun ajaran yang kebetulan sama.
+- Pembayaran `payment_link_version=0` adalah legacy. Sistem menandainya di daftar dan menolak edit/hapus, termasuk akses endpoint langsung; rekonsiliasi harus dilakukan manual tanpa pencocokan otomatis.
+- Sebelum edit/hapus membalikkan setoran Tabungan Wajib, baris saldo dikunci. Bila pembalikan membuat saldo negatif, seluruh transaction ditolak dan di-rollback.
 
 ### Uang Komite
 
@@ -215,16 +220,19 @@ Schema ini bersifat destruktif untuk sebagian tabel karena memakai `DROP TABLE`.
 2. Pastikan seluruh nilai `siswa.KELAS` sudah berupa `1` sampai `6`.
 3. Jalankan `sql/add_master_biaya_lain.sql`.
 4. Jalankan `sql/add_student_advanced.sql`.
-5. Jalankan ulang verifikasi schema dan aplikasi.
+5. Jalankan `sql/add_payment_references.sql`.
+6. Jalankan `sql/verify_schema.sql` dan uji aplikasi.
 
 Contoh PowerShell:
 
 ```powershell
 Get-Content sql\add_master_biaya_lain.sql -Raw | C:\xampp\mysql\bin\mysql.exe -u root
 Get-Content sql\add_student_advanced.sql -Raw | C:\xampp\mysql\bin\mysql.exe -u root
+Get-Content sql\add_payment_references.sql -Raw | C:\xampp\mysql\bin\mysql.exe -u root
+Get-Content sql\verify_schema.sql -Raw | C:\xampp\mysql\bin\mysql.exe -u root
 ```
 
-Kedua migrasi dirancang idempotent. Migrasi siswa melakukan preflight dan berhenti bila menemukan kelas selain `1` sampai `6`. Migrasi biaya lain menyalin data legacy secara idempotent melalui `legacy_key` dan tidak mengubah `bayar.total_jumlah`.
+Seluruh migrasi bertahap dirancang idempotent. Migrasi siswa melakukan preflight dan berhenti bila menemukan kelas selain `1` sampai `6`. Migrasi biaya lain menyalin data legacy secara idempotent melalui `legacy_key` dan tidak mengubah `bayar.total_jumlah`. Migrasi relasi pembayaran menambahkan kolom, index, dan foreign key tanpa menghubungkan histori lama: data lama tetap `payment_link_version=0` dan `bayar_id=NULL` sampai direkonsiliasi manual.
 
 ## 9. Konvensi Keamanan
 
@@ -266,6 +274,8 @@ git diff --check
 
 - Uji CRUD dasar dan Advance siswa, preservasi field, audit, arsip, perubahan nomor induk, dan cascade.
 - Uji pembayaran Komite sebagian, penuh, berlebih, dan pada dua periode berbeda.
+- Uji satu siswa dengan dua pembayaran pada tanggal sama: edit/hapus salah satunya hanya boleh memengaruhi `bayar_du` dan `transaksi_m` yang memiliki `bayar_id` miliknya; setoran manual pada tanggal sama harus tetap utuh.
+- Uji penolakan update/hapus ketika pembalikan setoran Tabungan Wajib membuat saldo negatif, serta penolakan edit/hapus pembayaran legacy.
 - Uji biaya lain aktif/nonaktif, snapshot, edit, penghapusan master terpakai, dan cascade detail.
 - Uji tabungan masuk, keluar, saldo tidak cukup, dan siswa arsip.
 - Bandingkan total web, PDF, Excel, dan data database.

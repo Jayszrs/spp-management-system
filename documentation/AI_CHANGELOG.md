@@ -13,6 +13,41 @@ File ini mencatat perubahan proyek secara reverse chronological. Baca [PROJECT_C
 - Jangan menghapus atau menulis ulang entri lama. Tambahkan entri koreksi bila diperlukan.
 - Perubahan implementasi dan entri changelog wajib masuk commit yang sama.
 
+## 2026-07-30 - Integritas Child Pembayaran dan Kesiapan Schema
+
+**AI/Aktor:** Codex berbasis GPT-5, bersama pemilik proyek
+
+**Tujuan:** Menghilangkan pencocokan child pembayaran yang ambigu dan menyiapkan migrasi aman untuk database berhistori.
+
+**Perubahan fitur dan perilaku:**
+
+- Pembayaran baru menandai header dengan `payment_link_version=1` dan menyimpan `bayar_id` pada Daftar Ulang serta setoran Tabungan Wajib miliknya.
+- Edit/hapus pembayaran sekarang hanya membaca atau mengubah child dengan `bayar_id` yang sama; transaksi tabungan manual dan penarikan tidak disentuh.
+- Pembalikan setoran Tabungan Wajib mengunci saldo. Jika pembalikan akan membuat saldo negatif, operasi ditolak dan seluruh transaction di-rollback.
+- Pembayaran legacy ditandai di daftar/dashboard serta tidak dapat diedit atau dihapus, termasuk dengan akses langsung ke endpoint.
+- Menambahkan `documentation/PROGRESS.md` sebagai register temuan, status, bukti, dan aturan pembaruan progres.
+
+**Database dan migrasi:**
+
+- Menambahkan `sql/add_payment_references.sql` yang idempoten untuk `bayar.payment_link_version`, `bayar_du.bayar_id`, `transaksi_m.bayar_id`, index unik, dan foreign key cascade.
+- Menyelaraskan `sql/schema.sql` untuk instalasi baru dan menambahkan `sql/verify_schema.sql` berbasis `information_schema`.
+
+**Kompatibilitas dan data lama:**
+
+- Tidak ada backfill atau pencocokan otomatis berdasarkan NIS, tanggal, maupun tahun ajaran.
+- Histori yang telah ada tetap legacy (`payment_link_version=0` dan child `bayar_id=NULL`) dan membutuhkan rekonsiliasi manual sebelum dapat diubah.
+
+**Verifikasi:**
+
+- Sebelum migrasi, jumlah transaksi pada database lokal diperiksa dan bernilai nol.
+- `add_payment_references.sql` dijalankan dua kali pada database lokal tanpa error; `verify_schema.sql` mengembalikan `OK` untuk tabel, kolom, index unik, dan foreign key cascade wajib.
+- Lint seluruh 22 file PHP dan `git diff --check` berhasil. Peringatan normalisasi akhir baris Git tidak mengubah hasil pemeriksaan.
+- Uji HTTP/database terisolasi membuat dua pembayaran pada tanggal sama serta satu setoran manual. Edit dan hapus salah satunya hanya mengubah child ber-`bayar_id` miliknya; jurnal manual tetap ada. Pembalikan yang akan membuat saldo negatif dan edit/hapus pembayaran legacy sama-sama ditolak. Semua data uji dibersihkan hingga jumlah transaksi kembali nol.
+
+**Catatan tindak lanjut:**
+
+- Perbaikan SQL injection, CSRF, XSS, dan temuan keamanan lain tidak termasuk ruang lingkup perubahan ini.
+
 ## 2026-07-28 - Master Biaya Lain, Master Siswa Advance, dan Uang Komite
 
 **AI/Aktor:** Codex berbasis GPT-5, bersama pemilik proyek
