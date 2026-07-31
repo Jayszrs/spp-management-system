@@ -75,6 +75,12 @@ $shortLabels = [
 // Role label
 $roleLabels = ['admin' => 'Administrator', 'bendahara' => 'Bendahara TU', 'kasir' => 'Kasir'];
 $roleLabel  = $roleLabels[$role] ?? 'Pengguna';
+$roleAvatars = [
+  'admin' => 'AD',
+  'bendahara' => 'BD',
+  'kasir' => 'KS',
+];
+$roleAvatar = $roleAvatars[$role] ?? 'US';
 ?>
 <!-- Early theme init to prevent flash -->
 <script>(function(){var t=localStorage.getItem('spp_theme')||'dark';document.documentElement.setAttribute('data-theme',t);})();</script>
@@ -109,7 +115,10 @@ $roleLabel  = $roleLabels[$role] ?? 'Pengguna';
 
   <div class="sidebar-footer">
     <div class="admin-info">
-      <div class="admin-avatar"><?= strtoupper(substr($_SESSION['admin_nama'] ?? 'AD', 0, 2)) ?></div>
+      <div class="admin-avatar admin-avatar-<?= htmlspecialchars($role) ?>">
+        <img src="<?= $root ?>assets/img/profile-avatar.png?v=2" alt="<?= htmlspecialchars($roleLabel) ?>" class="admin-avatar-img" width="38" height="38" />
+        <span class="admin-avatar-badge"><?= htmlspecialchars($roleAvatar) ?></span>
+      </div>
       <div>
         <span class="admin-name"><?= htmlspecialchars($_SESSION['admin_nama'] ?? 'Admin') ?></span>
         <span class="admin-role"><?= $roleLabel ?></span>
@@ -117,6 +126,7 @@ $roleLabel  = $roleLabels[$role] ?? 'Pengguna';
     </div>
     <a href="<?= $root ?>logout.php" class="logout-btn" title="Logout">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+      <span class="logout-text">Logout</span>
     </a>
   </div>
 </aside>

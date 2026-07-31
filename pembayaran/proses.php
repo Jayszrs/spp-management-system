@@ -42,6 +42,15 @@ function validate_payment_context(string $tanggal, string $bulan, string $tahun,
     }
 }
 
+function normalize_payment_method($value): string {
+    $method = trim((string)$value);
+    $allowed = ['Tunai', 'VA', 'Qris'];
+    if (!in_array($method, $allowed, true)) {
+        throw new RuntimeException('Sistem pembayaran tidak valid.');
+    }
+    return $method;
+}
+
 function validate_student_and_komite(
     mysqli $db,
     string $noInduk,
@@ -276,6 +285,7 @@ if ($aksi === 'input') {
     }
     $bulan_bayar     = normalize_month_code($_POST['bulan_bayar'] ?? '');
     $tahun_bayar     = $_POST['tahun_bayar'] ?? date('Y');
+    $sistem_pembayaran = $_POST['sistem_pembayaran'] ?? 'VA';
     
     $uang_pangkal    = parse_amount($_POST['uang_pangkal'] ?? 0);
     $uang_bangunan   = parse_amount($_POST['uang_bangunan'] ?? 0);
@@ -307,6 +317,7 @@ if ($aksi === 'input') {
     $koneksi->begin_transaction();
 
     try {
+        $sistem_pembayaran = normalize_payment_method($sistem_pembayaran);
         validate_payment_amounts([
             'Pangkal' => $uang_pangkal, 'Bangunan' => $uang_bangunan,
             'Seragam' => $uang_seragam, 'Kegiatan' => $uang_kegiatan,
@@ -328,7 +339,7 @@ if ($aksi === 'input') {
         $sql = "INSERT INTO bayar (
             NO_INDUK, KELAS, U_PANGKAL, U_BANGUNAN, U_SERAGAM, U_KEGIATAN,
             U_SPP, U_MAKAN, U_SORGA, U_INFAQ, U_KOMITE, U_LAIN, KETERANGAN,
-            TGL_BYR, BULAN, TAHUN, user_id,
+            TGL_BYR, BULAN, TAHUN, user_id, sistem_pembayaran,
             LAIN_LAIN1, JUMLAH1, LAIN_LAIN2, JUMLAH2, LAIN_LAIN3, JUMLAH3, LAIN_LAIN4, JUMLAH4,
             th_ajaran, kelas_du, potong_spp, total_jumlah, payment_link_version
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)";
@@ -337,10 +348,10 @@ if ($aksi === 'input') {
         $user_id = $_SESSION['admin_nama'] ?? 'admin';
         
         $stmt->bind_param(
-            'ssddddddddddssssssdsdsdsdssdd',
+            'ssddddddddddsssssssdsdsdsdssdd',
             $no_induk, $kelas_siswa, $uang_pangkal, $uang_bangunan, $uang_seragam, $uang_kegiatan,
             $uang_spp, $uang_makan, $uang_sorga, $uang_infaq, $uang_komite, $uang_lain, $catatan,
-            $tanggal_bayar, $bulan_bayar, $tahun_bayar, $user_id,
+            $tanggal_bayar, $bulan_bayar, $tahun_bayar, $user_id, $sistem_pembayaran,
             $ll_1_ket, $ll_1_nom, $ll_2_ket, $ll_2_nom, $ll_3_ket, $ll_3_nom, $ll_4_ket, $ll_4_nom,
             $tahun_ajaran_du, $kelas_du, $potongan_spp, $total_jumlah
         );
@@ -385,6 +396,7 @@ if ($aksi === 'update') {
     }
     $bulan_bayar     = normalize_month_code($_POST['bulan_bayar'] ?? '');
     $tahun_bayar     = $_POST['tahun_bayar'] ?? date('Y');
+    $sistem_pembayaran = $_POST['sistem_pembayaran'] ?? 'VA';
     
     $uang_pangkal    = parse_amount($_POST['uang_pangkal'] ?? 0);
     $uang_bangunan   = parse_amount($_POST['uang_bangunan'] ?? 0);
@@ -416,6 +428,7 @@ if ($aksi === 'update') {
     $koneksi->begin_transaction();
     try {
         $old_bayar = find_linked_payment($koneksi, $id);
+        $sistem_pembayaran = normalize_payment_method($sistem_pembayaran);
         validate_payment_amounts([
             'Pangkal' => $uang_pangkal, 'Bangunan' => $uang_bangunan,
             'Seragam' => $uang_seragam, 'Kegiatan' => $uang_kegiatan,
@@ -438,7 +451,7 @@ if ($aksi === 'update') {
         $sql = "UPDATE bayar SET
             NO_INDUK=?, KELAS=?, U_PANGKAL=?, U_BANGUNAN=?, U_SERAGAM=?, U_KEGIATAN=?,
             U_SPP=?, U_MAKAN=?, U_SORGA=?, U_INFAQ=?, U_KOMITE=?, U_LAIN=?, KETERANGAN=?,
-            TGL_BYR=?, BULAN=?, TAHUN=?, user_id=?,
+            TGL_BYR=?, BULAN=?, TAHUN=?, user_id=?, sistem_pembayaran=?,
             LAIN_LAIN1=?, JUMLAH1=?, LAIN_LAIN2=?, JUMLAH2=?, LAIN_LAIN3=?, JUMLAH3=?, LAIN_LAIN4=?, JUMLAH4=?,
             th_ajaran=?, kelas_du=?, potong_spp=?, total_jumlah=?, payment_link_version=1
             WHERE id=?";
@@ -447,10 +460,10 @@ if ($aksi === 'update') {
         $user_id = $_SESSION['admin_nama'] ?? 'admin';
         
         $stmt->bind_param(
-            'ssddddddddddssssssdsdsdsdssddi',
+            'ssddddddddddsssssssdsdsdsdssddi',
             $no_induk, $kelas_siswa, $uang_pangkal, $uang_bangunan, $uang_seragam, $uang_kegiatan,
             $uang_spp, $uang_makan, $uang_sorga, $uang_infaq, $uang_komite, $uang_lain, $catatan,
-            $tanggal_bayar, $bulan_bayar, $tahun_bayar, $user_id,
+            $tanggal_bayar, $bulan_bayar, $tahun_bayar, $user_id, $sistem_pembayaran,
             $ll_1_ket, $ll_1_nom, $ll_2_ket, $ll_2_nom, $ll_3_ket, $ll_3_nom, $ll_4_ket, $ll_4_nom,
             $tahun_ajaran_du, $kelas_du, $potongan_spp, $total_jumlah, $id
         );

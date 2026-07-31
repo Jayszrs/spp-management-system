@@ -11,6 +11,9 @@ if (isset($_SESSION['admin_id'])) {
 require_once 'koneksi.php';
 
 $error = '';
+$loginSuccess = false;
+$loginRedirect = '';
+$loginRole = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $username = trim($_POST['username'] ?? '');
     $password = $_POST['password'] ?? '';
@@ -53,15 +56,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $_SESSION['admin_nama'] = $admin['nama'];
             $_SESSION['admin_role'] = $admin['role'];
 
-            // Redirect sesuai role
+            // Beri waktu untuk animasi transisi sebelum masuk ke halaman role.
             if ($admin['role'] === 'kasir') {
-                header('Location: tabungan/masuk.php');
+                $loginRedirect = 'tabungan/masuk.php';
             } elseif ($admin['role'] === 'bendahara') {
-                header('Location: laporan/index.php');
+                $loginRedirect = 'laporan/index.php';
             } else {
-                header('Location: dashboard.php');
+                $loginRedirect = 'dashboard.php';
             }
-            exit;
+            $loginSuccess = true;
+            $loginRole = $admin['role'];
         } else {
             $error = 'Username atau password salah!';
         }
@@ -83,10 +87,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
   <!-- Prevent theme flash -->
   <script>(function(){var t=localStorage.getItem('spp_theme')||'dark';document.documentElement.setAttribute('data-theme',t);})();</script>
-  <link rel="stylesheet" href="assets/css/style.css?v=3.2" />
-  <link rel="stylesheet" href="assets/css/login.css?v=3.2" />
+  <link rel="stylesheet" href="assets/css/style.css?v=3.8" />
+  <link rel="stylesheet" href="assets/css/login.css?v=3.4" />
 </head>
-<body class="login-split-body">
+<body class="login-split-body<?= $loginSuccess ? ' login-authenticated' : '' ?>">
 
   <!-- ── FLOATING CARD ─────────────────── -->
   <div class="login-card-wrap">
@@ -247,6 +251,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
   </div><!-- /login-card-wrap -->
 
+  <div class="login-transition-screen" aria-hidden="true">
+    <div class="login-transition-copy">
+      <span class="login-transition-pill">Masuk sebagai <?= htmlspecialchars($loginRole ?: 'user') ?></span>
+      <strong>Menyiapkan halaman</strong>
+    </div>
+  </div>
+
   <script src="assets/js/app.js?v=2.8"></script>
   <script>
     // Override togglePw for split layout
@@ -275,6 +286,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       toast.className  = 'toast toast-info show';
       setTimeout(() => toast.classList.remove('show'), 3000);
     }
+
+    <?php if ($loginSuccess): ?>
+    document.addEventListener('DOMContentLoaded', () => {
+      const redirectTarget = <?= json_encode($loginRedirect) ?>;
+      const loginButton = document.getElementById('btn-login');
+
+      document.body.classList.add('login-entering');
+      if (loginButton) {
+        loginButton.disabled = true;
+        loginButton.querySelector('span').textContent = 'Masuk...';
+      }
+
+      window.setTimeout(() => {
+        window.location.href = redirectTarget;
+      }, 1050);
+    });
+    <?php endif; ?>
   </script>
 
   <!-- Toast (standalone) -->

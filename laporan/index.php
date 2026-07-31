@@ -67,7 +67,7 @@ $stmt4 = $koneksi->prepare("
     SELECT b.id, s.NO_INDUK, s.NAMA, s.KELAS, b.BULAN, b.TAHUN,
            b.U_PANGKAL, b.U_BANGUNAN, b.U_SERAGAM, b.U_KEGIATAN,
            b.U_SPP, b.U_MAKAN, b.U_SORGA, b.U_INFAQ, b.U_KOMITE,
-           b.total_jumlah, b.TGL_BYR
+           b.sistem_pembayaran, b.total_jumlah, b.TGL_BYR
     FROM bayar b
     JOIN siswa s ON s.NO_INDUK = b.NO_INDUK
     WHERE MONTH(b.TGL_BYR) = ? AND YEAR(b.TGL_BYR) = ?
@@ -95,7 +95,7 @@ $bulan_label = $bln_names[str_pad($filter_bulan, 2, '0', STR_PAD_LEFT)];
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
   <script>(function(){var t=localStorage.getItem('spp_theme')||'dark';document.documentElement.setAttribute('data-theme',t);})();</script>
-  <link rel="stylesheet" href="../assets/css/style.css?v=3.2" />
+  <link rel="stylesheet" href="../assets/css/style.css?v=3.8" />
 </head>
 <body>
 <div class="bg-orbs"><div class="orb orb-1"></div><div class="orb orb-2"></div><div class="orb orb-3"></div></div>
@@ -137,10 +137,10 @@ $bulan_label = $bln_names[str_pad($filter_bulan, 2, '0', STR_PAD_LEFT)];
             </select>
           </div>
           <button type="submit" class="btn btn-primary">Tampilkan</button>
-          <a href="export_excel.php?bulan=<?= $filter_bulan ?>&tahun=<?= $filter_tahun ?>" class="btn btn-success" style="background:linear-gradient(135deg,#16a34a,#15803d);" target="_blank">
+          <a href="export_excel.php?bulan=<?= $filter_bulan ?>&tahun=<?= $filter_tahun ?>" class="btn btn-success" style="background:linear-gradient(135deg,#16a34a,#15803d);">
             📊 Export Excel
           </a>
-          <a href="export_pdf.php?bulan=<?= $filter_bulan ?>&tahun=<?= $filter_tahun ?>" class="btn btn-warning" target="_blank">
+          <a href="export_pdf.php?bulan=<?= $filter_bulan ?>&tahun=<?= $filter_tahun ?>" class="btn btn-warning">
             📄 Export PDF
           </a>
         </form>
@@ -227,11 +227,11 @@ $bulan_label = $bln_names[str_pad($filter_bulan, 2, '0', STR_PAD_LEFT)];
         <div class="table-container">
           <table class="payment-table" id="tbl-laporan">
             <thead>
-              <tr><th>No</th><th>No. Induk</th><th>Nama</th><th>Kelas</th><th>Bulan Bayar</th><th>Total (Rp)</th><th>Tgl Bayar</th></tr>
+              <tr><th>No</th><th>No. Induk</th><th>Nama</th><th>Kelas</th><th>Bulan Bayar</th><th>Sistem</th><th>Total (Rp)</th><th>Tgl Bayar</th></tr>
             </thead>
             <tbody>
               <?php if (empty($bayar_detail)): ?>
-              <tr><td colspan="7" style="text-align:center;padding:40px;color:var(--text-muted);">Belum ada data pembayaran pada periode ini.</td></tr>
+              <tr><td colspan="8" style="text-align:center;padding:40px;color:var(--text-muted);">Belum ada data pembayaran pada periode ini.</td></tr>
               <?php else: ?>
               <?php foreach ($bayar_detail as $i => $b): ?>
               <tr class="<?= $i%2===0?'row-highlight':'' ?>">
@@ -240,6 +240,7 @@ $bulan_label = $bln_names[str_pad($filter_bulan, 2, '0', STR_PAD_LEFT)];
                 <td><?= htmlspecialchars($b['NAMA']) ?></td>
                 <td><?= htmlspecialchars($b['KELAS']) ?></td>
                 <td><?= htmlspecialchars($b['BULAN']) ?> <?= htmlspecialchars($b['TAHUN']) ?></td>
+                <td><?= htmlspecialchars($b['sistem_pembayaran'] ?? 'VA') ?></td>
                 <td class="nominal">Rp <?= number_format((float)$b['total_jumlah'],0,',','.') ?></td>
                 <td><?= date('d M Y', strtotime($b['TGL_BYR'])) ?></td>
               </tr>

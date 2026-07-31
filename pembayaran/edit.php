@@ -134,6 +134,8 @@ function month_code($value) {
     if (isset($map[$value])) return $map[$value];
     return str_pad((string)$value, 2, '0', STR_PAD_LEFT);
 }
+
+$selectedPaymentMethod = $d['sistem_pembayaran'] ?? 'VA';
 ?>
 <!DOCTYPE html>
 <html lang="id">
@@ -145,7 +147,7 @@ function month_code($value) {
   <meta name="description" content="Edit data transaksi pembayaran siswa." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="../assets/css/style.css?v=3.3" />
+  <link rel="stylesheet" href="../assets/css/style.css?v=3.8" />
   <!-- Prevent theme flash -->
   <script>(function(){var t=localStorage.getItem('spp_theme')||'dark';document.documentElement.setAttribute('data-theme',t);})();</script>
 </head>
@@ -213,6 +215,14 @@ function month_code($value) {
                     <?php endfor; ?>
                   </select>
                 </div>
+              </div>
+              <div class="field-row">
+                <label class="field-label" for="sistem-pembayaran">Sistem Pembayaran</label>
+                <select class="field-input field-select" id="sistem-pembayaran" name="sistem_pembayaran" required>
+                  <?php foreach (['Tunai', 'VA', 'Qris'] as $method): ?>
+                  <option value="<?= $method ?>" <?= $selectedPaymentMethod === $method ? 'selected' : '' ?>><?= $method ?></option>
+                  <?php endforeach; ?>
+                </select>
               </div>
             </div>
             <div class="jumlah-box">

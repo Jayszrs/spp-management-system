@@ -73,7 +73,7 @@ $bln_names = ['01'=>'Januari','02'=>'Februari','03'=>'Maret','04'=>'April','05'=
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
   <script>(function(){var t=localStorage.getItem('spp_theme')||'dark';document.documentElement.setAttribute('data-theme',t);})();</script>
-  <link rel="stylesheet" href="../assets/css/style.css?v=3.2" />
+  <link rel="stylesheet" href="../assets/css/style.css?v=3.8" />
 </head>
 <body>
 <div class="bg-orbs"><div class="orb orb-1"></div><div class="orb orb-2"></div><div class="orb orb-3"></div></div>
@@ -127,8 +127,8 @@ $bln_names = ['01'=>'Januari','02'=>'Februari','03'=>'Maret','04'=>'April','05'=
 
       <!-- Filter -->
       <div class="main-card" style="margin-bottom:16px;">
-        <form method="GET" style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;">
-          <div class="field-row" style="flex:1;min-width:160px;">
+        <form method="GET" class="tabungan-filter-form">
+          <div class="field-row tabungan-filter-month">
             <label class="field-label">Bulan</label>
             <select class="field-input field-select" name="bulan">
               <?php foreach ($bln_names as $num => $nama): ?>
@@ -136,7 +136,7 @@ $bln_names = ['01'=>'Januari','02'=>'Februari','03'=>'Maret','04'=>'April','05'=
               <?php endforeach; ?>
             </select>
           </div>
-          <div class="field-row" style="flex:0;min-width:100px;">
+          <div class="field-row tabungan-filter-year">
             <label class="field-label">Tahun</label>
             <select class="field-input field-select" name="tahun">
               <?php for ($y = date('Y')-1; $y <= date('Y')+1; $y++): ?>
@@ -144,32 +144,34 @@ $bln_names = ['01'=>'Januari','02'=>'Februari','03'=>'Maret','04'=>'April','05'=
               <?php endfor; ?>
             </select>
           </div>
-          <div class="field-row" style="flex:1;min-width:160px;">
+          <div class="field-row tabungan-filter-nis">
             <label class="field-label">No. Induk (opsional)</label>
             <div class="search-box">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
               <input type="text" name="nis" placeholder="Kosongkan = semua" value="<?= htmlspecialchars($filter_nis) ?>" />
             </div>
           </div>
-          <button type="submit" class="btn btn-primary">Filter</button>
-          <a href="riwayat.php" class="btn btn-ghost">Reset</a>
+          <div class="tabungan-filter-actions">
+            <button type="submit" class="btn btn-primary">Filter</button>
+            <a href="riwayat.php" class="btn btn-ghost">Reset</a>
+          </div>
         </form>
       </div>
 
       <!-- Tabel Transaksi -->
       <div class="main-card">
-        <div class="card-header">
+        <div class="card-header tabungan-card-header">
           <h3 class="card-title">Daftar Transaksi — <?= $bln_names[str_pad($filter_bulan,2,'0',STR_PAD_LEFT)] ?> <?= $filter_tahun ?></h3>
           <?php if (hasRole(['admin','kasir'])): ?>
-          <div style="display:flex;gap:8px;">
-            <a href="masuk.php" class="btn btn-primary" style="font-size:13px;padding:8px 16px;">+ Tabungan Masuk</a>
-            <a href="keluar.php" class="btn btn-warning" style="font-size:13px;padding:8px 16px;">- Tabungan Keluar</a>
+          <div class="tabungan-card-actions">
+            <a href="masuk.php" class="btn btn-primary">+ Tabungan Masuk</a>
+            <a href="keluar.php" class="btn btn-warning">- Tabungan Keluar</a>
           </div>
           <?php endif; ?>
         </div>
 
         <div class="table-container">
-          <table class="payment-table" id="tbl-riwayat">
+          <table class="payment-table responsive-table" id="tbl-riwayat">
             <thead>
               <tr>
                 <th>No</th><th>No. Induk</th><th>Nama</th><th>Kelas</th>
@@ -182,12 +184,12 @@ $bln_names = ['01'=>'Januari','02'=>'Februari','03'=>'Maret','04'=>'April','05'=
               <?php else: ?>
               <?php foreach ($rows as $i => $r): ?>
               <tr class="<?= $i % 2 === 0 ? 'row-highlight' : '' ?>">
-                <td><?= $i + 1 ?></td>
-                <td><span class="badge-nis"><?= htmlspecialchars($r['NO_INDUK']) ?></span></td>
-                <td><?= htmlspecialchars($r['NAMA']) ?></td>
-                <td><?= htmlspecialchars($r['KELAS']) ?></td>
-                <td><?= date('d M Y H:i', strtotime($r['TANGGAL'])) ?></td>
-                <td>
+                <td data-label="No"><?= $i + 1 ?></td>
+                <td data-label="No. Induk"><span class="badge-nis"><?= htmlspecialchars($r['NO_INDUK']) ?></span></td>
+                <td data-label="Nama"><?= htmlspecialchars($r['NAMA']) ?></td>
+                <td data-label="Kelas"><?= htmlspecialchars($r['KELAS']) ?></td>
+                <td data-label="Tanggal"><?= date('d M Y H:i', strtotime($r['TANGGAL'])) ?></td>
+                <td data-label="Jenis">
                   <?php if ($r['jenis'] === 'masuk'): ?>
                   <span style="background:rgba(34,197,94,0.15);color:#16a34a;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:600;">↑ Masuk</span>
                   <?php else: ?>
@@ -210,7 +212,7 @@ $bln_names = ['01'=>'Januari','02'=>'Februari','03'=>'Maret','04'=>'April','05'=
           <h3 class="card-title">Rekap Saldo Tabungan Per Siswa</h3>
         </div>
         <div class="table-container">
-          <table class="payment-table">
+          <table class="payment-table responsive-table">
             <thead><tr><th>No</th><th>No. Induk</th><th>Nama</th><th>Saldo Tabungan (Rp)</th></tr></thead>
             <tbody>
               <?php if (empty($saldo_list)): ?>
@@ -218,10 +220,10 @@ $bln_names = ['01'=>'Januari','02'=>'Februari','03'=>'Maret','04'=>'April','05'=
               <?php else: ?>
               <?php foreach ($saldo_list as $i => $sl): ?>
               <tr class="<?= $i%2===0?'row-highlight':'' ?>">
-                <td><?= $i+1 ?></td>
-                <td><span class="badge-nis"><?= htmlspecialchars($sl['NO_INDUK']) ?></span></td>
-                <td><?= htmlspecialchars($sl['NAMA']) ?></td>
-                <td class="nominal" style="font-weight:700;color:var(--accent);">Rp <?= number_format($sl['SALDO'],0,',','.') ?></td>
+                <td data-label="No"><?= $i+1 ?></td>
+                <td data-label="No. Induk"><span class="badge-nis"><?= htmlspecialchars($sl['NO_INDUK']) ?></span></td>
+                <td data-label="Nama"><?= htmlspecialchars($sl['NAMA']) ?></td>
+                <td data-label="Saldo" class="nominal" style="font-weight:700;color:var(--accent);">Rp <?= number_format($sl['SALDO'],0,',','.') ?></td>
               </tr>
               <?php endforeach; ?>
               <?php endif; ?>

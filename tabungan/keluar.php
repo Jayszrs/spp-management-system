@@ -23,7 +23,7 @@ $siswa_list = $koneksi->query("SELECT id, NO_INDUK, NAMA, KELAS FROM siswa WHERE
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
   <script>(function(){var t=localStorage.getItem('spp_theme')||'dark';document.documentElement.setAttribute('data-theme',t);})();</script>
-  <link rel="stylesheet" href="../assets/css/style.css?v=3.2" />
+  <link rel="stylesheet" href="../assets/css/style.css?v=3.8" />
 </head>
 <body>
   <div class="bg-orbs">

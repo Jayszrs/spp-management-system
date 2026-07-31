@@ -1,4 +1,4 @@
-# Riwayat Perubahan AI SistemSPP
+﻿# Riwayat Perubahan AI SistemSPP
 
 File ini mencatat perubahan proyek secara reverse chronological. Baca [PROJECT_CONTEXT.md](./PROJECT_CONTEXT.md) terlebih dahulu untuk memahami arsitektur, aturan bisnis, dan kewajiban dokumentasi.
 
@@ -12,6 +12,480 @@ File ini mencatat perubahan proyek secara reverse chronological. Baca [PROJECT_C
 - Jangan mencantumkan data siswa nyata, password, token, cookie, atau secret.
 - Jangan menghapus atau menulis ulang entri lama. Tambahkan entri koreksi bila diperlukan.
 - Perubahan implementasi dan entri changelog wajib masuk commit yang sama.
+
+## 2026-07-31 - Perapihan Mobile Preview Excel
+
+**AI/Aktor:** Codex berbasis GPT-5, bersama pemilik proyek
+
+**Tujuan:** Merapikan tampilan preview export Excel pada layar mobile agar tombol, ringkasan, dan tabel lebih nyaman dibaca.
+
+**Perubahan fitur dan perilaku:**
+
+- Mengubah area preview Excel mobile menjadi full-width tanpa shadow/card besar yang membuat ruang terasa sempit.
+- Merapikan tombol `Download Excel` dan `Kembali` pada mobile agar tinggi dan jaraknya konsisten.
+- Membungkus setiap tabel laporan dalam container scroll tersendiri, sehingga tabel tidak dipaksa mengecil dan kolom tetap terbaca.
+- Mempertahankan tabel komponen pembayaran sebagai tabel compact agar tetap pas di layar mobile.
+
+**Database dan migrasi:**
+
+- Tidak ada.
+
+**Kompatibilitas dan data lama:**
+
+- Tidak ada perubahan data. Download Excel tetap memakai URL dan format `.xls` yang sama.
+
+**Verifikasi:**
+
+- `php -l laporan/export_excel.php` berhasil.
+- Test HTTP lokal preview Excel berhasil status `200` dan memuat wrapper tabel mobile.
+- Test HTTP lokal download Excel berhasil status `200` dengan `Content-Type: application/vnd.ms-excel; charset=UTF-8` dan attachment `Laporan_SPP_Juli_2026.xls`.
+
+**Catatan tindak lanjut:**
+
+- Uji visual langsung di viewport mobile browser untuk memastikan scroll horizontal per tabel terasa nyaman.
+
+## 2026-07-31 - Perapihan Layout Slip PDF
+
+**AI/Aktor:** Codex berbasis GPT-5, bersama pemilik proyek
+
+**Tujuan:** Merapikan konsep slip PDF server-side agar tetap memakai format baru tetapi tidak berantakan atau terpecah halaman.
+
+**Perubahan fitur dan perilaku:**
+
+- Mengubah template slip PDF dari layout berbasis `div/grid` menjadi layout tabel HTML yang lebih stabil untuk Dompdf.
+- Menyesuaikan ukuran konten slip agar total halaman pas pada kertas landscape `210mm x 148mm`.
+- Menghapus sisa toolbar/aksi cetak HTML dari output slip PDF.
+- Mempertahankan contoh slip otomatis ketika periode belum memiliki transaksi.
+
+**Database dan migrasi:**
+
+- Tidak ada.
+
+**Kompatibilitas dan data lama:**
+
+- Tidak ada perubahan data maupun URL export. Endpoint `laporan/export_pdf.php` tetap mengembalikan PDF server-side.
+
+**Verifikasi:**
+
+- `php -l laporan/export_pdf.php` berhasil.
+- Test HTTP lokal export PDF berhasil mengembalikan `Content-Type: application/pdf`, file berawalan `%PDF`, satu page object, dan MediaBox `595.276 x 419.528` pt.
+- `composer validate --strict` berhasil; `composer audit` tidak menemukan security advisory, dengan peringatan sebagian metadata Packagist memakai cache lokal karena timeout koneksi.
+- `git diff --check` berhasil, dengan warning line ending CRLF dari Git.
+
+**Catatan tindak lanjut:**
+
+- Uji visual langsung di Chrome PDF viewer setelah refresh tab export.
+
+## 2026-07-31 - Perbaikan Mobile Riwayat dan Preview Export
+
+**AI/Aktor:** Codex berbasis GPT-5, bersama pemilik proyek
+
+**Tujuan:** Merapikan tampilan mobile riwayat tabungan dan preview Excel, serta mengembalikan konsep slip saat periode belum memiliki transaksi.
+
+**Perubahan fitur dan perilaku:**
+
+- Merapikan form filter riwayat tabungan mobile agar field dan tombol tidak saling menekan.
+- Merapikan tombol `Tabungan Masuk` dan `Tabungan Keluar` pada card riwayat tabungan mobile.
+- Mengubah tabel riwayat tabungan dan rekap saldo menjadi responsive card pada mobile.
+- Merapikan toolbar dan tabel preview Excel mobile agar tidak membuat halaman melebar.
+- Export PDF kini otomatis menampilkan slip contoh saat periode belum memiliki transaksi, sehingga konsep slip tidak berubah menjadi halaman kosong.
+- Membump versi `style.css` ke `v=3.8` agar browser mengambil styling mobile terbaru.
+
+**Database dan migrasi:**
+
+- Tidak ada.
+
+**Kompatibilitas dan data lama:**
+
+- Tidak ada perubahan data maupun isi transaksi. Slip contoh hanya tampil sebagai preview PDF saat periode kosong dan tidak menyimpan data.
+
+**Verifikasi:**
+
+- Lint PHP berhasil untuk `tabungan/riwayat.php`, `laporan/export_excel.php`, `laporan/export_pdf.php`, dan halaman yang memakai `style.css`.
+- Pencarian versi lama `style.css?v=3.0` sampai `v=3.7` tidak menemukan sisa pada file PHP.
+- Test HTTP lokal export PDF periode kosong berhasil mengembalikan file `%PDF` dengan MediaBox `595.276 x 419.528` pt atau `210mm x 148mm`.
+- `git diff --check` berhasil, dengan warning line ending CRLF dari Git.
+
+**Catatan tindak lanjut:**
+
+- Uji visual mobile pada Riwayat Tabungan dan Preview Excel di browser.
+
+## 2026-07-31 - Ukuran Cetak Slip Landscape
+
+**AI/Aktor:** Codex berbasis GPT-5, bersama pemilik proyek
+
+**Tujuan:** Menyesuaikan hasil cetak slip pembayaran agar tidak memakai A4 portrait penuh, menghapus logo dari slip, dan menghilangkan header/footer bawaan Chrome.
+
+**Perubahan fitur dan perilaku:**
+
+- Menghapus logo dari header slip pembayaran.
+- Mengubah ukuran print slip menjadi landscape `210mm x 148mm`.
+- Mengubah export slip dari HTML print browser menjadi PDF asli yang dirender server-side dengan Dompdf.
+- Menghapus toolbar print HTML dari template PDF agar file hanya berisi isi slip.
+- Menyederhanakan judul browser menjadi `Slip Pembayaran`.
+- Menambahkan `vendor/` ke `.gitignore`; dependency dipulihkan lewat `composer install`.
+
+**Database dan migrasi:**
+
+- Tidak ada perubahan database.
+- Menambahkan dependency Composer `dompdf/dompdf` versi `3.1.6`.
+
+**Kompatibilitas dan data lama:**
+
+- Tidak ada perubahan data maupun isi transaksi. URL export PDF lama tetap sama, tetapi response kini berupa `application/pdf` dari server.
+
+**Verifikasi:**
+
+- `C:\xampp\php\php.exe -l laporan\export_pdf.php` berhasil.
+- `composer audit` berhasil tanpa security advisory setelah Dompdf diperbarui ke `3.1.6`.
+- Test HTTP lokal setelah login berhasil mengembalikan `Content-Type: application/pdf` dan file berawalan `%PDF`.
+- Pencarian di `laporan/export_pdf.php` memastikan ukuran `210mm x 148mm` sudah dipakai, referensi logo slip sudah tidak ada, dan toolbar print HTML sudah dihapus.
+- `git diff --check` berhasil, dengan warning line ending CRLF dari Git.
+
+**Catatan tindak lanjut:**
+
+- Uji visual file PDF di browser untuk memastikan posisi slip sesuai contoh cetak.
+
+## 2026-07-31 - Logo pada Slip Pembayaran
+
+**AI/Aktor:** Codex berbasis GPT-5, bersama pemilik proyek
+
+**Tujuan:** Menambahkan logo sekolah pada slip pembayaran agar header slip tidak hanya berisi teks.
+
+**Perubahan fitur dan perilaku:**
+
+- Menambahkan favicon pada halaman preview/cetak slip PDF.
+- Menambahkan logo `assets/img/school-logo.png` pada header slip pembayaran.
+- Menyesuaikan layout header slip agar logo berada di kiri dan judul sekolah tetap rata tengah.
+
+**Database dan migrasi:**
+
+- Tidak ada.
+
+**Kompatibilitas dan data lama:**
+
+- Tidak ada perubahan data maupun isi transaksi. Perubahan hanya pada tampilan slip.
+
+**Verifikasi:**
+
+- `C:\xampp\php\php.exe -l laporan\export_pdf.php` berhasil.
+- Asset `assets/img/school-logo.png` dan `assets/img/favicon.png` tersedia.
+- Pencarian di `laporan/export_pdf.php` memastikan path logo dan favicon sudah dipasang.
+- `git diff --check` berhasil, dengan warning line ending CRLF dari Git.
+
+**Catatan tindak lanjut:**
+
+- Uji cetak/save PDF di browser untuk memastikan logo tampil pada hasil cetak.
+
+## 2026-07-31 - Palet Dark Mode Lebih Ramah
+
+**AI/Aktor:** Codex berbasis GPT-5, bersama pemilik proyek
+
+**Tujuan:** Mengubah palet dark mode agar tampilan tidak terlalu hijau pekat dan lebih nyaman dibaca.
+
+**Perubahan fitur dan perilaku:**
+
+- Mengubah variable dark mode dari palet hijau pekat menjadi dasar neutral charcoal/slate dengan aksen emerald.
+- Mengurangi intensitas glow dan orb background agar area dashboard terasa lebih bersih.
+- Menyesuaikan sidebar, topbar, active menu, kartu statistik, tabel, badge, search box, tab, dan bottom navigation agar kontras lebih ramah mata.
+- Menyesuaikan dark mode halaman login agar selaras dengan palet baru.
+- Membump versi `style.css` ke `v=3.7` dan `login.css` ke `v=3.4` agar browser mengambil styling terbaru.
+
+**Database dan migrasi:**
+
+- Tidak ada.
+
+**Kompatibilitas dan data lama:**
+
+- Tidak ada perubahan data, role, maupun alur fitur. Perubahan hanya pada tampilan dark mode.
+
+**Verifikasi:**
+
+- Lint PHP berhasil untuk halaman yang memuat stylesheet utama: dashboard, login, master biaya lain, role management, sidebar, laporan, pembayaran, siswa, dan tabungan.
+- Pencarian versi lama `style.css?v=3.0` sampai `v=3.6` dan `login.css?v=3.0` sampai `v=3.3` tidak menemukan sisa pada file PHP.
+- Pencarian warna dark mode lama hanya menyisakan override light mode yang memang terpisah.
+- `git diff --check` berhasil, dengan warning line ending CRLF dari Git.
+
+**Catatan tindak lanjut:**
+
+- Uji visual dark mode di dashboard, form pembayaran, tabel laporan, dan halaman login.
+
+## 2026-07-31 - Logout Mobile Sidebar
+
+**AI/Aktor:** Codex berbasis GPT-5, bersama pemilik proyek
+
+**Tujuan:** Memastikan tombol logout bisa diakses dengan nyaman pada tampilan mobile.
+
+**Perubahan fitur dan perilaku:**
+
+- Menambahkan label `Logout` pada tombol logout sidebar agar lebih jelas di mobile.
+- Menyembunyikan bottom navigation saat sidebar mobile terbuka supaya tidak menutupi footer sidebar.
+- Menaikkan prioritas tampilan sidebar mobile dan menambahkan safe-area padding pada footer.
+- Membump versi `style.css` ke `v=3.6` pada halaman utama agar browser mengambil styling mobile terbaru.
+
+**Database dan migrasi:**
+
+- Tidak ada.
+
+**Kompatibilitas dan data lama:**
+
+- Tidak ada perubahan data maupun hak akses. Logout tetap memakai `logout.php`.
+
+**Verifikasi:**
+
+- `C:\xampp\php\php.exe -l includes\sidebar.php` berhasil.
+- `C:\xampp\php\php.exe -l login.php` berhasil.
+- Pencarian `style.css?v=3.0` sampai `v=3.5` tidak menemukan sisa pada file PHP.
+- `git diff --check` berhasil, dengan warning line ending CRLF dari Git.
+
+**Catatan tindak lanjut:**
+
+- Uji visual di mobile: buka sidebar, pastikan bottom nav hilang dan tombol logout terlihat di footer.
+
+## 2026-07-31 - Animasi Transisi Login Per Role
+
+**AI/Aktor:** Codex berbasis GPT-5, bersama pemilik proyek
+
+**Tujuan:** Menambahkan animasi masuk setelah login berhasil agar perpindahan ke halaman sesuai role terasa lebih halus.
+
+**Perubahan fitur dan perilaku:**
+
+- Mengubah redirect login valid dari redirect server instan menjadi render transisi singkat lalu redirect via JavaScript.
+- Menambahkan overlay transisi kiri-kanan dengan panel hijau dan oranye sebelum pengguna diarahkan ke halaman role.
+- Menonaktifkan tombol login saat transisi berjalan dan menampilkan status `Masuk...`.
+- Membump versi `login.css` ke `v=3.3` agar browser mengambil animasi terbaru.
+
+**Database dan migrasi:**
+
+- Tidak ada.
+
+**Kompatibilitas dan data lama:**
+
+- Tidak ada perubahan data atau hak akses role. Tujuan redirect tetap sama: kasir ke tabungan masuk, bendahara ke laporan, role lain ke dashboard.
+
+**Verifikasi:**
+
+- `C:\xampp\php\php.exe -l login.php` berhasil.
+- `git diff --check` berhasil, dengan warning line ending CRLF dari Git.
+
+**Catatan tindak lanjut:**
+
+- Uji visual login untuk role admin, bendahara, dan kasir di browser.
+
+## 2026-07-31 - Avatar Sidebar Per Role
+
+**AI/Aktor:** Codex berbasis GPT-5, bersama pemilik proyek
+
+**Tujuan:** Menyesuaikan tampilan profile role di sidebar agar lebih mirip avatar profile pada contoh.
+
+**Perubahan fitur dan perilaku:**
+
+- Menambahkan asset `assets/img/profile-avatar.png` untuk avatar profile sidebar.
+- Mengubah avatar footer sidebar menjadi gambar profile dengan badge inisial role: `AD` untuk admin, `BD` untuk bendahara, dan `KS` untuk kasir.
+- Menambahkan warna badge berbeda per role serta styling border dan shadow agar tampil seperti profile badge.
+- Menyesuaikan styling light mode agar avatar tetap terlihat rapi.
+- Mengunci ukuran avatar lewat atribut gambar dan CSS agar gambar tidak tampil pada ukuran asli saat cache CSS lama masih tersisa.
+- Membump versi `style.css` ke `v=3.5` pada halaman utama agar browser mengambil styling avatar terbaru.
+
+**Database dan migrasi:**
+
+- Tidak ada.
+
+**Kompatibilitas dan data lama:**
+
+- Tidak ada perubahan struktur data maupun hak akses.
+
+**Verifikasi:**
+
+- Lint seluruh file PHP berhasil.
+- Pencarian versi lama `style.css?v=3.2`, `v=3.3`, dan `v=3.4` tidak menemukan sisa pada file PHP.
+- `git diff --check` berhasil, dengan warning line ending CRLF dari Git.
+
+**Catatan tindak lanjut:**
+
+- Uji visual sebagai admin, bendahara, dan kasir untuk memastikan avatar role sesuai.
+
+## 2026-07-31 - Sistem Pembayaran Tunai VA Qris
+
+**AI/Aktor:** Codex berbasis GPT-5, bersama pemilik proyek
+
+**Tujuan:** Menambahkan pilihan sistem pembayaran pada transaksi pembayaran sekolah.
+
+**Perubahan fitur dan perilaku:**
+
+- Menambahkan pilihan `Tunai`, `VA`, dan `Qris` pada form input dan edit pembayaran.
+- Menambahkan validasi backend agar hanya tiga metode pembayaran tersebut yang dapat disimpan.
+- Menampilkan sistem pembayaran pada daftar pembayaran, laporan web, export Excel, dan slip PDF.
+- Slip PDF tidak lagi hardcoded `VA`, tetapi memakai metode dari transaksi.
+
+**Database dan migrasi:**
+
+- Menambahkan kolom `bayar.sistem_pembayaran` melalui `sql/add_payment_method.sql`.
+- Memperbarui `sql/schema.sql` agar instalasi baru langsung memiliki kolom sistem pembayaran.
+
+**Kompatibilitas dan data lama:**
+
+- Data transaksi lama memakai default `VA`.
+- Tidak ada perubahan struktur tabel selain penambahan kolom baru pada `bayar`.
+
+**Verifikasi:**
+
+- Migrasi `sql/add_payment_method.sql` berhasil dijalankan pada database lokal dan dijalankan ulang tanpa error.
+- Verifikasi schema lokal menunjukkan `bayar.sistem_pembayaran` bertipe `enum('Tunai','VA','Qris')`, `NOT NULL`, default `VA`.
+- Lint seluruh file PHP berhasil.
+- `git diff --check` berhasil, dengan warning line ending CRLF dari Git.
+
+**Catatan tindak lanjut:**
+
+- Uji input dan edit transaksi dengan metode `Tunai`, `VA`, dan `Qris`.
+
+## 2026-07-31 - Penyempurnaan Tampilan Preview Excel
+
+**AI/Aktor:** Codex berbasis GPT-5, bersama pemilik proyek
+
+**Tujuan:** Merapikan halaman preview Excel agar tidak banyak area kosong dan paletnya sesuai tema hijau-oranye.
+
+**Perubahan fitur dan perilaku:**
+
+- Mengubah palet preview Excel dari ungu menjadi hijau dengan aksen oranye.
+- Membuat tabel preview melebar penuh di dalam lembar preview agar area kosong berkurang.
+- Menambahkan header laporan yang lebih ringkas dan kartu ringkasan total pembayaran, tabungan masuk, dan tabungan keluar.
+- Mengurangi jarak kosong antar section tabel dan memperbaiki `colspan` header tabel.
+
+**Database dan migrasi:**
+
+- Tidak ada.
+
+**Kompatibilitas dan data lama:**
+
+- Tidak ada perubahan struktur data. Perubahan hanya memengaruhi tampilan preview dan gaya HTML export.
+
+**Verifikasi:**
+
+- `C:\xampp\php\php.exe -l laporan\export_excel.php` berhasil.
+- `git diff --check` berhasil, dengan warning line ending CRLF dari Git.
+- Pencarian warna ungu lama dan `colspan` tabel yang tidak sesuai tidak menemukan sisa di `laporan/export_excel.php`.
+
+**Catatan tindak lanjut:**
+
+- Uji visual di browser pada periode kosong dan periode berisi data.
+
+## 2026-07-31 - Preview Sebelum Download Excel
+
+**AI/Aktor:** Codex berbasis GPT-5, bersama pemilik proyek
+
+**Tujuan:** Mengubah alur Export Excel agar pengguna dapat melihat preview sebelum mengunduh file.
+
+**Perubahan fitur dan perilaku:**
+
+- Menambahkan mode preview default pada `laporan/export_excel.php`.
+- Download file `.xls` hanya dilakukan saat URL memakai parameter `download=1`.
+- Menambahkan tombol `Download Excel` dan `Kembali` pada halaman preview.
+- Menambahkan empty state untuk komponen pembayaran, transaksi pembayaran, dan transaksi tabungan saat periode belum memiliki data.
+
+**Database dan migrasi:**
+
+- Tidak ada.
+
+**Kompatibilitas dan data lama:**
+
+- Tidak ada perubahan struktur data. URL export lama kini menampilkan preview terlebih dahulu, sedangkan format download tetap `.xls`.
+
+**Verifikasi:**
+
+- `C:\xampp\php\php.exe -l laporan\export_excel.php` berhasil.
+- `git diff --check` berhasil, dengan warning line ending CRLF dari Git.
+
+**Catatan tindak lanjut:**
+
+- Uji manual download dari preview untuk memastikan browser menerima file `.xls` sesuai periode yang dipilih.
+
+## 2026-07-31 - Export Laporan Tetap di Tab yang Sama
+
+**AI/Aktor:** Codex berbasis GPT-5, bersama pemilik proyek
+
+**Tujuan:** Mencegah tab browser menumpuk saat pengguna membuka export laporan.
+
+**Perubahan fitur dan perilaku:**
+
+- Menghapus `target="_blank"` pada tombol Export Excel dan Export PDF di `laporan/index.php`.
+- Export laporan kini dibuka dari tab yang sama agar alur navigasi lebih rapi.
+
+**Database dan migrasi:**
+
+- Tidak ada.
+
+**Kompatibilitas dan data lama:**
+
+- Tidak ada perubahan struktur data. Perubahan hanya memengaruhi perilaku navigasi link export.
+
+**Verifikasi:**
+
+- `C:\xampp\php\php.exe -l laporan\index.php` berhasil.
+- Pencarian `target="_blank"` tidak menemukan penggunaan tersisa di kode aplikasi.
+- `git diff --check` berhasil, dengan warning line ending CRLF dari Git.
+
+**Catatan tindak lanjut:**
+
+- Uji manual dari halaman Laporan di browser untuk memastikan tombol Export Excel dan Export PDF terasa sesuai alur kerja pengguna.
+
+## 2026-07-31 - Template Slip Pembayaran Sekolah
+
+**AI/Aktor:** Codex berbasis GPT-5, bersama pemilik proyek
+
+**Tujuan:** Mengganti tampilan cetak/PDF laporan pembayaran agar mengikuti contoh slip pembayaran sekolah yang diberikan pemilik proyek.
+
+**Perubahan fitur dan perilaku:**
+
+- Mengubah `laporan/export_pdf.php` dari kwitansi rekap bulanan menjadi slip pembayaran per transaksi.
+- Menyesuaikan layout slip dengan header SD Al-Qur'an Mutiara Hikmah, data siswa dua kolom, rincian pembayaran, sisa pembayaran, pembayaran lain-lain, jumlah total, terbilang, sistem pembayaran, dan tanda tangan bagian keuangan.
+- Menambahkan fungsi terbilang rupiah untuk menampilkan total pembayaran dalam bentuk teks.
+- Menampilkan biaya lain, tabungan wajib, uang daftar ulang, dan sisa PSB/DU berdasarkan data transaksi yang tersedia.
+- Menambahkan mode preview `contoh=1` saat periode belum memiliki transaksi agar template slip tetap dapat dilihat tanpa membuat data pembayaran palsu di database.
+
+**Database dan migrasi:**
+
+- Tidak ada.
+
+**Kompatibilitas dan data lama:**
+
+- Tidak ada perubahan struktur data. Output PDF kini berisi slip per transaksi pada periode yang dipilih, bukan rekap tabel bulanan.
+
+**Verifikasi:**
+
+- `C:\xampp\php\php.exe -l laporan\export_pdf.php` berhasil.
+- Query lokal menunjukkan tabel `bayar` masih kosong sehingga mode preview diperlukan untuk melihat template.
+- `git diff --check` berhasil, dengan warning line ending CRLF dari Git.
+
+**Catatan tindak lanjut:**
+
+- Uji cetak dari browser dengan data transaksi nyata untuk memastikan hasil visual sesuai format laporan yang diinginkan.
+
+## 2026-07-30 - Dokumen Minutes of Meeting Project
+
+**AI/Aktor:** Codex berbasis GPT-5, bersama pemilik proyek
+
+**Tujuan:** Menyusun dokumen Minutes of Meeting untuk kebutuhan laporan project SistemSPP.
+
+**Perubahan fitur dan perilaku:**
+
+- Menambahkan dokumen `documentation/MOM_SistemSPP.md` berisi informasi rapat, agenda, ringkasan pembahasan fitur, keputusan, action items, risiko, kesimpulan, dan lampiran modul project.
+
+**Database dan migrasi:**
+
+- Tidak ada.
+
+**Kompatibilitas dan data lama:**
+
+- Tidak ada perubahan perilaku aplikasi maupun struktur data.
+
+**Verifikasi:**
+
+- Review manual isi dokumen berdasarkan `documentation/PROJECT_CONTEXT.md`, `documentation/AI_CHANGELOG.md`, schema database, dan file modul utama.
+
+**Catatan tindak lanjut:**
+
+- Lengkapi placeholder peserta, waktu, tempat, PIC, dan target tanggal sesuai kebutuhan laporan.
 
 ## 2026-07-30 - Perbaikan SQL Injection Riwayat Tabungan
 

@@ -25,9 +25,9 @@ Aplikasi ini merupakan aplikasi PHP tradisional tanpa framework. Halaman merende
 | Database | MySQL/MariaDB, database `db_spp` |
 | Frontend | HTML, CSS, JavaScript tanpa framework |
 | Web server lokal | Apache dari XAMPP |
-| Export PDF | Halaman HTML khusus cetak melalui browser |
+| Export PDF | Dompdf server-side dari template HTML slip |
 | Export Excel | HTML table dengan response `.xls` |
-| Dependency manager | Tidak ada Composer atau npm runtime dependency |
+| Dependency manager | Composer untuk dependency PHP (`dompdf/dompdf`) |
 
 Lokasi kerja standar pada mesin pengembangan saat ini:
 
@@ -47,13 +47,15 @@ Konfigurasi koneksi berada di `koneksi.php`. Default lokal menggunakan host `loc
 
 1. Aktifkan Apache dan MySQL dari XAMPP.
 2. Pastikan repository berada di document root Apache.
-3. Untuk instalasi database baru, jalankan `sql/schema.sql`.
-4. Buka URL lokal dan login menggunakan akun seed pengembangan.
-5. Segera ganti password seed pada lingkungan selain pengembangan lokal.
+3. Jalankan `composer install` bila folder `vendor/` belum tersedia.
+4. Untuk instalasi database baru, jalankan `sql/schema.sql`.
+5. Buka URL lokal dan login menggunakan akun seed pengembangan.
+6. Segera ganti password seed pada lingkungan selain pengembangan lokal.
 
 Contoh impor schema baru melalui PowerShell:
 
 ```powershell
+composer install
 Get-Content sql\schema.sql -Raw | C:\xampp\mysql\bin\mysql.exe -u root
 ```
 
@@ -76,7 +78,7 @@ Get-Content sql\schema.sql -Raw | C:\xampp\mysql\bin\mysql.exe -u root
 | `assets/css/` | Tema, layout, dan responsive design |
 | `assets/js/app.js` | Interaksi UI dan kalkulasi tampilan pembayaran |
 | `sql/schema.sql` | Schema lengkap untuk instalasi baru |
-| `sql/add_*.sql` | Migrasi bertahap untuk database lama |
+| `sql/add_*.sql` | Migrasi bertahap untuk database lama, termasuk sistem pembayaran |
 | `documentation/` | Konteks stabil proyek dan riwayat perubahan AI |
 
 ## 5. Role dan Hak Akses
@@ -124,6 +126,8 @@ Header dan komponen utama transaksi pembayaran. `NO_INDUK` berelasi ke siswa den
 
 `payment_link_version` adalah kontrak integritas child pembayaran: `0` berarti transaksi legacy yang relasinya tidak dapat diverifikasi dan tidak boleh diubah/dihapus dari aplikasi; `1` berarti seluruh child yang dibuat oleh alur baru menggunakan relasi `bayar_id` aman.
 
+Kolom `sistem_pembayaran` menyimpan metode pembayaran transaksi. Nilai yang valid hanya `Tunai`, `VA`, dan `Qris`. Data lama menggunakan default `VA`.
+
 Kolom lama `U_LAIN`, `LAIN_LAIN1-4`, dan `JUMLAH1-4` masih dipertahankan untuk kompatibilitas data. Transaksi baru memakai tabel detail biaya lain dan mengisi kolom lama dengan nilai netral.
 
 ### `master_biaya_lain`
@@ -164,6 +168,7 @@ Detail biaya tambahan per transaksi. Nama dan nominal disimpan sebagai snapshot 
 - Edit transaksi lama tetap mengizinkan siswa arsip yang memang menjadi pemilik transaksi; siswa arsip lain tidak dapat dipilih.
 - Backend mengambil kelas, tarif Komite, dan nominal biaya lain langsung dari database.
 - `total_jumlah` dihitung ulang di backend dari komponen pembayaran, daftar ulang, biaya lain, dan potongan SPP. Hidden total dari browser bukan sumber kebenaran.
+- Sistem pembayaran dipilih dari opsi `Tunai`, `VA`, atau `Qris` dan divalidasi ulang di backend.
 - Nominal negatif, periode tidak valid, dan pembayaran Komite melebihi sisa periode harus ditolak.
 - Simpan, edit, dan hapus transaksi utama, daftar ulang, tabungan terkait, serta detail biaya lain dijalankan dalam transaction.
 - Pembayaran baru menyimpan relasi eksplisit ke Daftar Ulang dan setoran Tabungan Wajib melalui `bayar_id`. Edit atau hapus hanya boleh mengubah child dengan `bayar_id` yang sama, bukan child dengan NIS, tanggal, atau tahun ajaran yang kebetulan sama.
@@ -201,7 +206,7 @@ Detail biaya tambahan per transaksi. Nama dan nominal disimpan sebagai snapshot 
 - Biaya lain diagregasi berdasarkan `nama_biaya_snapshot`, bukan nama master saat ini.
 - Siswa arsip tidak dikeluarkan dari histori laporan.
 - Filter laporan yang menerima input pengguna, termasuk filter NIS riwayat tabungan, wajib menggunakan prepared statement; input tidak boleh dirangkai ke SQL.
-- Halaman PDF adalah dokumen HTML bergaya kwitansi yang dicetak atau disimpan melalui fitur print browser.
+- Export PDF memakai Dompdf server-side sehingga hasil PDF tidak memuat header/footer bawaan print browser.
 
 ## 8. Instalasi dan Migrasi Database
 
@@ -222,7 +227,8 @@ Schema ini bersifat destruktif untuk sebagian tabel karena memakai `DROP TABLE`.
 3. Jalankan `sql/add_master_biaya_lain.sql`.
 4. Jalankan `sql/add_student_advanced.sql`.
 5. Jalankan `sql/add_payment_references.sql`.
-6. Jalankan `sql/verify_schema.sql` dan uji aplikasi.
+6. Jalankan `sql/add_payment_method.sql`.
+7. Jalankan `sql/verify_schema.sql` dan uji aplikasi.
 
 Contoh PowerShell:
 
@@ -230,10 +236,11 @@ Contoh PowerShell:
 Get-Content sql\add_master_biaya_lain.sql -Raw | C:\xampp\mysql\bin\mysql.exe -u root
 Get-Content sql\add_student_advanced.sql -Raw | C:\xampp\mysql\bin\mysql.exe -u root
 Get-Content sql\add_payment_references.sql -Raw | C:\xampp\mysql\bin\mysql.exe -u root
+Get-Content sql\add_payment_method.sql -Raw | C:\xampp\mysql\bin\mysql.exe -u root
 Get-Content sql\verify_schema.sql -Raw | C:\xampp\mysql\bin\mysql.exe -u root
 ```
 
-Seluruh migrasi bertahap dirancang idempotent. Migrasi siswa melakukan preflight dan berhenti bila menemukan kelas selain `1` sampai `6`. Migrasi biaya lain menyalin data legacy secara idempotent melalui `legacy_key` dan tidak mengubah `bayar.total_jumlah`. Migrasi relasi pembayaran menambahkan kolom, index, dan foreign key tanpa menghubungkan histori lama: data lama tetap `payment_link_version=0` dan `bayar_id=NULL` sampai direkonsiliasi manual.
+Seluruh migrasi bertahap dirancang idempotent. Migrasi siswa melakukan preflight dan berhenti bila menemukan kelas selain `1` sampai `6`. Migrasi biaya lain menyalin data legacy secara idempotent melalui `legacy_key` dan tidak mengubah `bayar.total_jumlah`. Migrasi relasi pembayaran menambahkan kolom, index, dan foreign key tanpa menghubungkan histori lama: data lama tetap `payment_link_version=0` dan `bayar_id=NULL` sampai direkonsiliasi manual. Migrasi sistem pembayaran menambahkan default `VA` untuk transaksi lama.
 
 ## 9. Konvensi Keamanan
 
@@ -291,7 +298,7 @@ git diff --check
 
 - Belum ada automated test suite; pengujian saat ini memakai lint, HTTP request, query database, dan screenshot manual/headless.
 - Export Excel masih berupa HTML table dengan ekstensi `.xls`, bukan file XLSX native.
-- PDF bergantung pada print/save-as-PDF browser, bukan library pembuat PDF server-side.
+- Export PDF memakai Dompdf; validasi visual tetap perlu dilakukan pada viewer PDF/browser karena engine PDF berbeda dari rendering HTML browser.
 - CSRF belum diterapkan pada seluruh endpoint mutasi.
 - Beberapa kolom transaksi legacy masih memakai `DOUBLE` dan struktur lama tetap dipertahankan untuk kompatibilitas.
 - Penamaan `user_id` pada tabel legacy belum konsisten antara ID dan nama pengguna serta belum semuanya menjadi foreign key.

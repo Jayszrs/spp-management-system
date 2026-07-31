@@ -143,7 +143,7 @@ $roleLabels = ['admin' => 'Admin', 'bendahara' => 'Bendahara', 'kasir' => 'Kasir
   <meta name="description" content="Manajemen akun admin, bendahara, dan kasir SistemSPP." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="assets/css/style.css?v=3.2" />
+  <link rel="stylesheet" href="assets/css/style.css?v=3.8" />
   <script>(function(){var t=localStorage.getItem('spp_theme')||'dark';document.documentElement.setAttribute('data-theme',t);})();</script>
 </head>
 <body>

@@ -76,7 +76,7 @@ $bln_list = [
   <meta name="description" content="Lihat semua data transaksi pembayaran siswa." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="../assets/css/style.css?v=3.2" />
+  <link rel="stylesheet" href="../assets/css/style.css?v=3.8" />
   <!-- Prevent theme flash -->
   <script>(function(){var t=localStorage.getItem('spp_theme')||'dark';document.documentElement.setAttribute('data-theme',t);})();</script>
 </head>
@@ -158,6 +158,7 @@ $bln_list = [
                 <th>Kelas</th>
                 <th>Bulan / Tahun</th>
                 <th>SPP</th>
+                <th>Sistem</th>
                 <th>Total Bayar</th>
                 <th>Tanggal</th>
                 <th>Aksi</th>
@@ -174,6 +175,7 @@ $bln_list = [
                 <td data-label="Kelas"><?= htmlspecialchars($row['KELAS']) ?></td>
                 <td data-label="Bulan / Tahun"><?= htmlspecialchars(month_code($row['BULAN'])) ?> <?= $row['TAHUN'] ?></td>
                 <td data-label="SPP" class="nominal">Rp <?= number_format($row['U_SPP'], 0, ',', '.') ?></td>
+                <td data-label="Sistem"><?= htmlspecialchars($row['sistem_pembayaran'] ?? 'VA') ?></td>
                 <td data-label="Total Bayar" class="nominal">Rp <?= number_format($row['total_jumlah'], 0, ',', '.') ?></td>
                 <td data-label="Tanggal"><?= date('d/m/Y', strtotime($row['TGL_BYR'])) ?></td>
                 <td data-label="Aksi" class="aksi-col">
@@ -195,7 +197,7 @@ $bln_list = [
               </tr>
               <?php endwhile;
               else: ?>
-              <tr><td colspan="9">
+              <tr><td colspan="10">
                 <div class="empty-state">
                   <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg>
                   <p>Belum ada data pembayaran</p>
