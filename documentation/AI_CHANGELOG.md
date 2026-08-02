@@ -13,6 +13,38 @@ File ini mencatat perubahan proyek secara reverse chronological. Baca [PROJECT_C
 - Jangan menghapus atau menulis ulang entri lama. Tambahkan entri koreksi bila diperlukan.
 - Perubahan implementasi dan entri changelog wajib masuk commit yang sama.
 
+## 2026-08-02 - Sinkronisasi Database Lama dan Kompatibilitas Kelas
+
+**AI/Aktor:** Codex berbasis GPT-5, bersama pemilik proyek
+
+**Tujuan:** Memperbaiki fatal error dashboard dan menyelaraskan database lokal lama dengan kebutuhan schema aplikasi saat ini tanpa menghapus data siswa.
+
+**Perubahan fitur dan perilaku:**
+
+- Master siswa tetap membatasi data baru ke kelas 1 sampai 6.
+- Label kelas legacy pada siswa yang sudah ada dapat dipertahankan saat diedit dan tersedia pada filter daftar siswa.
+- Pengurutan daftar siswa menempatkan kelas SD sebelum label kelas legacy.
+
+**Database dan migrasi:**
+
+- Memperbarui `sql/add_student_advanced.sql` agar migrasi tetap menambahkan kolom, tipe nominal, audit, dan Uang Komite saat database memuat label kelas legacy maksimal 5 karakter.
+- Constraint kelas SD hanya ditambahkan bila seluruh kelas existing sudah bernilai 1 sampai 6.
+- Memperluas `sql/verify_schema.sql` agar memeriksa seluruh tabel, kolom, dan index utama dari paket migrasi saat ini.
+- Menjalankan seluruh migrasi upgrade pada `db_spp` setelah backup.
+
+**Kompatibilitas dan data lama:**
+
+- Data siswa, akun, dan transaksi lama dipertahankan. Label kelas legacy tidak dipetakan atau diubah otomatis.
+
+**Verifikasi:**
+
+- Migrasi dijalankan dua kali untuk memeriksa idempotensi.
+- Verifikasi schema, lint seluruh file PHP, query dashboard, dan smoke test HTTP lokal dijalankan.
+
+**Catatan tindak lanjut:**
+
+- Label kelas legacy dapat dikonversi manual ke kelas 1 sampai 6 bila sekolah tidak lagi membutuhkannya.
+
 ## 2026-07-31 - Perapihan Mobile Preview Excel
 
 **AI/Aktor:** Codex berbasis GPT-5, bersama pemilik proyek

@@ -81,7 +81,7 @@ function fail_student(string $message, array $oldInput, string $location): void 
     student_redirect($location);
 }
 
-function validate_student_identity(array $source): array {
+function validate_student_identity(array $source, ?string $legacyClass = null): array {
     $noInduk = trim((string)($source['no_induk'] ?? ''));
     $name = trim((string)($source['nama'] ?? ''));
     $class = trim((string)($source['kelas'] ?? ''));
@@ -91,8 +91,9 @@ function validate_student_identity(array $source): array {
     if ($name === '' || mb_strlen($name) > 100) {
         throw new RuntimeException('Nama siswa wajib diisi dan maksimal 100 karakter.');
     }
-    if (!in_array($class, ['1','2','3','4','5','6'], true)) {
-        throw new RuntimeException('Kelas siswa hanya boleh 1 sampai 6.');
+    $isExistingLegacyClass = $legacyClass !== null && $class === $legacyClass;
+    if (!in_array($class, ['1','2','3','4','5','6'], true) && !$isExistingLegacyClass) {
+        throw new RuntimeException('Kelas siswa hanya boleh 1 sampai 6. Label kelas lama hanya dapat dipertahankan pada data yang sudah ada.');
     }
     return [$noInduk, $name, $class];
 }
@@ -114,10 +115,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($action === 'tambah' || $action === 'update') {
             $id = (int)($_POST['id'] ?? 0);
             if ($action === 'update') $returnLocation .= '?edit=' . $id;
-            [$noInduk, $name, $class] = validate_student_identity($_POST);
             $koneksi->begin_transaction();
             $oldStudent = $action === 'update' ? find_student($koneksi, $id, true) : null;
             if ($action === 'update' && !$oldStudent) throw new RuntimeException('Data siswa tidak ditemukan.');
+            [$noInduk, $name, $class] = validate_student_identity($_POST, $oldStudent['KELAS'] ?? null);
 
             $stmtDuplicate = $koneksi->prepare('SELECT id FROM siswa WHERE NO_INDUK = ? AND id <> ? LIMIT 1');
             $stmtDuplicate->bind_param('si', $noInduk, $id);
@@ -283,7 +284,10 @@ if ($editId > 0 && !$editStudent) {
 
 $query = trim((string)($_GET['q'] ?? ''));
 $filterClass = (string)($_GET['kelas'] ?? '');
-if (!in_array($filterClass, ['', '1','2','3','4','5','6'], true)) $filterClass = '';
+$classOptions = [];
+$classResult = $koneksi->query("SELECT DISTINCT KELAS FROM siswa WHERE KELAS <> '' ORDER BY KELAS");
+while ($classRow = $classResult->fetch_assoc()) $classOptions[] = (string)$classRow['KELAS'];
+if ($filterClass !== '' && !in_array($filterClass, $classOptions, true)) $filterClass = '';
 $filterStatus = (string)($_GET['status'] ?? 'active');
 if (!in_array($filterStatus, ['active', 'archived', 'all'], true)) $filterStatus = 'active';
 
@@ -298,7 +302,9 @@ $stmtList = $koneksi->prepare("
     WHERE (? = '' OR s.NO_INDUK LIKE CONCAT('%', ?, '%') OR s.NAMA LIKE CONCAT('%', ?, '%'))
       AND (? = '' OR s.KELAS = ?)
       AND (? = 'all' OR s.is_active = IF(? = 'archived', 0, 1))
-    ORDER BY s.is_active DESC, CAST(s.KELAS AS UNSIGNED), s.NAMA ASC
+    ORDER BY s.is_active DESC,
+      CASE WHEN s.KELAS REGEXP '^[1-6]$' THEN 0 ELSE 1 END,
+      CAST(s.KELAS AS UNSIGNED), s.KELAS, s.NAMA ASC
 ");
 $stmtList->bind_param('sssssss', $query, $query, $query, $filterClass, $filterClass, $filterStatus, $filterStatus);
 $stmtList->execute();
@@ -379,7 +385,13 @@ $canEditOpening = !$editStudent || (int)($editStudent['history_count'] ?? 0) ===
               <label class="field-label" for="kelas-baru">Kelas</label>
               <select class="field-input field-select" id="kelas-baru" name="kelas" required>
                 <option value="">-- Pilih Kelas --</option>
-                <?php $selectedClass = (string)form_student_value('kelas', $oldInput, $formStudent, $fieldMap); for ($class = 1; $class <= 6; $class++): ?>
+                <?php
+                $selectedClass = (string)form_student_value('kelas', $oldInput, $formStudent, $fieldMap);
+                $isLegacySelectedClass = $selectedClass !== '' && !in_array($selectedClass, ['1','2','3','4','5','6'], true);
+                if ($isLegacySelectedClass):
+                ?>
+                <option value="<?= htmlspecialchars($selectedClass) ?>" selected>Kelas <?= htmlspecialchars($selectedClass) ?> (data lama)</option>
+                <?php endif; for ($class = 1; $class <= 6; $class++): ?>
                 <option value="<?= $class ?>" <?= $selectedClass === (string)$class ? 'selected' : '' ?>>Kelas <?= $class ?></option>
                 <?php endfor; ?>
               </select>
@@ -477,7 +489,7 @@ $canEditOpening = !$editStudent || (int)($editStudent['history_count'] ?? 0) ===
           </div>
           <select class="field-input field-select filter-sel" name="kelas">
             <option value="">Semua Kelas</option>
-            <?php for ($class = 1; $class <= 6; $class++): ?><option value="<?= $class ?>" <?= $filterClass === (string)$class ? 'selected' : '' ?>>Kelas <?= $class ?></option><?php endfor; ?>
+            <?php foreach ($classOptions as $class): ?><option value="<?= htmlspecialchars($class) ?>" <?= $filterClass === $class ? 'selected' : '' ?>>Kelas <?= htmlspecialchars($class) ?></option><?php endforeach; ?>
           </select>
           <select class="field-input field-select filter-sel" name="status">
             <option value="active" <?= $filterStatus === 'active' ? 'selected' : '' ?>>Aktif</option>

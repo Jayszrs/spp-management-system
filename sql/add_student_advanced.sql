@@ -9,17 +9,23 @@ DELIMITER $$
 DROP PROCEDURE IF EXISTS `migrate_student_advanced`$$
 CREATE PROCEDURE `migrate_student_advanced`()
 BEGIN
+  DECLARE non_sd_class_count INT DEFAULT 0;
+
   IF EXISTS (
     SELECT 1 FROM `siswa`
-    WHERE `KELAS` IS NULL OR TRIM(`KELAS`) NOT IN ('1','2','3','4','5','6')
+    WHERE `KELAS` IS NULL OR TRIM(`KELAS`) = '' OR CHAR_LENGTH(TRIM(`KELAS`)) > 5
   ) THEN
     SIGNAL SQLSTATE '45000'
-      SET MESSAGE_TEXT = 'Migrasi dibatalkan: masih ada kelas siswa di luar 1 sampai 6.';
+      SET MESSAGE_TEXT = 'Migrasi dibatalkan: kelas siswa kosong atau lebih dari 5 karakter.';
   END IF;
+
+  SELECT COUNT(*) INTO non_sd_class_count
+  FROM `siswa`
+  WHERE TRIM(`KELAS`) NOT IN ('1','2','3','4','5','6');
 
   ALTER TABLE `siswa`
     MODIFY `NAMA` VARCHAR(100) NOT NULL,
-    MODIFY `KELAS` CHAR(1) NOT NULL,
+    MODIFY `KELAS` VARCHAR(5) NOT NULL,
     MODIFY `SPP_PERBULAN` DECIMAL(15,2) NOT NULL DEFAULT 0,
     MODIFY `PANGKAL` DECIMAL(15,2) NOT NULL DEFAULT 0,
     MODIFY `BANGUNAN` DECIMAL(15,2) NOT NULL DEFAULT 0,
@@ -48,7 +54,9 @@ BEGIN
       ADD INDEX `idx_siswa_status_kelas_nama` (`is_active`, `KELAS`, `NAMA`);
   END IF;
 
-  IF NOT EXISTS (
+  -- Upgrade dapat memuat label kelas legacy. Data tersebut dipertahankan,
+  -- sedangkan database yang sudah bersih tetap memperoleh constraint kelas SD.
+  IF non_sd_class_count = 0 AND NOT EXISTS (
     SELECT 1 FROM information_schema.TABLE_CONSTRAINTS
     WHERE CONSTRAINT_SCHEMA = DATABASE() AND TABLE_NAME = 'siswa'
       AND CONSTRAINT_NAME = 'chk_siswa_kelas_sd'

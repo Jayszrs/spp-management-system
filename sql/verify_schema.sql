@@ -26,6 +26,52 @@ FROM (
            WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'transaksi_m'
          )
   UNION ALL
+  SELECT 'table.master_biaya_lain',
+         EXISTS(
+           SELECT 1 FROM information_schema.TABLES
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'master_biaya_lain'
+         )
+  UNION ALL
+  SELECT 'table.bayar_biaya_lain',
+         EXISTS(
+           SELECT 1 FROM information_schema.TABLES
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'bayar_biaya_lain'
+         )
+  UNION ALL
+  SELECT 'table.siswa_audit_log',
+         EXISTS(
+           SELECT 1 FROM information_schema.TABLES
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'siswa_audit_log'
+         )
+  UNION ALL
+  SELECT 'admin.role',
+         EXISTS(
+           SELECT 1 FROM information_schema.COLUMNS
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'admin'
+             AND COLUMN_NAME = 'role'
+         )
+  UNION ALL
+  SELECT 'siswa.is_active',
+         EXISTS(
+           SELECT 1 FROM information_schema.COLUMNS
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'siswa'
+             AND COLUMN_NAME = 'is_active'
+         )
+  UNION ALL
+  SELECT 'bayar.U_KOMITE',
+         EXISTS(
+           SELECT 1 FROM information_schema.COLUMNS
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'bayar'
+             AND COLUMN_NAME = 'U_KOMITE'
+         )
+  UNION ALL
+  SELECT 'bayar.sistem_pembayaran',
+         EXISTS(
+           SELECT 1 FROM information_schema.COLUMNS
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'bayar'
+             AND COLUMN_NAME = 'sistem_pembayaran'
+         )
+  UNION ALL
   SELECT 'bayar.payment_link_version' AS requirement,
          EXISTS(
            SELECT 1 FROM information_schema.COLUMNS
@@ -59,6 +105,13 @@ FROM (
            SELECT 1 FROM information_schema.STATISTICS
            WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'transaksi_m'
              AND INDEX_NAME = 'uk_transaksi_m_bayar_id' AND NON_UNIQUE = 0
+         )
+  UNION ALL
+  SELECT 'idx_siswa_status_kelas_nama',
+         EXISTS(
+           SELECT 1 FROM information_schema.STATISTICS
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'siswa'
+             AND INDEX_NAME = 'idx_siswa_status_kelas_nama'
          )
   UNION ALL
   SELECT 'fk_bayar_du_bayar',

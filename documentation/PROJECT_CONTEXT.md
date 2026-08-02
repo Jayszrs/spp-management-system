@@ -223,7 +223,7 @@ Schema ini bersifat destruktif untuk sebagian tabel karena memakai `DROP TABLE`.
 ### Upgrade database lama
 
 1. Buat backup database.
-2. Pastikan seluruh nilai `siswa.KELAS` sudah berupa `1` sampai `6`.
+2. Periksa nilai `siswa.KELAS`. Label lama maksimal 5 karakter akan dipertahankan untuk kompatibilitas; siswa baru tetap dibatasi kelas `1` sampai `6`.
 3. Jalankan `sql/add_master_biaya_lain.sql`.
 4. Jalankan `sql/add_student_advanced.sql`.
 5. Jalankan `sql/add_payment_references.sql`.
@@ -240,7 +240,7 @@ Get-Content sql\add_payment_method.sql -Raw | C:\xampp\mysql\bin\mysql.exe -u ro
 Get-Content sql\verify_schema.sql -Raw | C:\xampp\mysql\bin\mysql.exe -u root
 ```
 
-Seluruh migrasi bertahap dirancang idempotent. Migrasi siswa melakukan preflight dan berhenti bila menemukan kelas selain `1` sampai `6`. Migrasi biaya lain menyalin data legacy secara idempotent melalui `legacy_key` dan tidak mengubah `bayar.total_jumlah`. Migrasi relasi pembayaran menambahkan kolom, index, dan foreign key tanpa menghubungkan histori lama: data lama tetap `payment_link_version=0` dan `bayar_id=NULL` sampai direkonsiliasi manual. Migrasi sistem pembayaran menambahkan default `VA` untuk transaksi lama.
+Seluruh migrasi bertahap dirancang idempotent. Migrasi siswa melakukan preflight dan berhenti bila menemukan kelas kosong atau lebih dari 5 karakter. Label kelas legacy dipertahankan pada upgrade, tetapi siswa baru tetap dibatasi kelas `1` sampai `6`; constraint kelas SD hanya ditambahkan bila seluruh data sudah sesuai. Migrasi biaya lain menyalin data legacy secara idempotent melalui `legacy_key` dan tidak mengubah `bayar.total_jumlah`. Migrasi relasi pembayaran menambahkan kolom, index, dan foreign key tanpa menghubungkan histori lama: data lama tetap `payment_link_version=0` dan `bayar_id=NULL` sampai direkonsiliasi manual. Migrasi sistem pembayaran menambahkan default `VA` untuk transaksi lama.
 
 ## 9. Konvensi Keamanan
 
