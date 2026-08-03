@@ -86,7 +86,7 @@ $bln_list = [
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Lihat Pembayaran | SistemSPP</title>
+  <title>Riwayat Pembayaran | SistemSPP</title>
   <link rel="icon" type="image/png" href="../assets/img/favicon.png" />
   <meta name="description" content="Lihat semua data transaksi pembayaran siswa." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -110,8 +110,8 @@ $bln_list = [
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
         </button>
         <div class="topbar-title">
-          <h2>Lihat Pembayaran Siswa</h2>
-          <span class="breadcrumb">SistemSPP / Pembayaran / Lihat</span>
+          <h2>Riwayat Pembayaran Siswa</h2>
+          <span class="breadcrumb">SistemSPP / Pembayaran / Riwayat</span>
         </div>
         <div class="clock-badge" id="liveClock">--:--:--</div>
       </div>

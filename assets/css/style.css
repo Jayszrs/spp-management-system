@@ -899,6 +899,9 @@ h1, h2, h3, h4, h5, h6, .card-title, .topbar-title h2, .sidebar-brand-name {
   font-variant-numeric: tabular-nums;
 }
 .badge-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   background: var(--green-bg);
   color: var(--green);
   border: 1px solid rgba(34,197,94,0.2);
@@ -906,6 +909,8 @@ h1, h2, h3, h4, h5, h6, .card-title, .topbar-title h2, .sidebar-brand-name {
   border-radius: 20px;
   font-size: 12px;
   font-weight: 600;
+  min-width: 38px;
+  line-height: 1.35;
 }
 .badge-role {
   display: inline-flex;
@@ -990,6 +995,11 @@ h1, h2, h3, h4, h5, h6, .card-title, .topbar-title h2, .sidebar-brand-name {
 
 /* Table action buttons */
 .aksi-col { white-space: nowrap; }
+.student-history-col {
+  width: 150px;
+  min-width: 150px;
+  text-align: center !important;
+}
 .btn-tbl {
   display: inline-flex;
   align-items: center;

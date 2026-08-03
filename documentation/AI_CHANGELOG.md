@@ -13,6 +13,36 @@ File ini mencatat perubahan proyek secara reverse chronological. Baca [PROJECT_C
 - Jangan menghapus atau menulis ulang entri lama. Tambahkan entri koreksi bila diperlukan.
 - Perubahan implementasi dan entri changelog wajib masuk commit yang sama.
 
+## 2026-08-03 - Penyesuaian Label Riwayat Pembayaran
+
+**AI/Aktor:** Codex berbasis GPT-5, bersama pemilik proyek
+
+**Tujuan:** Menyesuaikan istilah tampilan agar lebih jelas sebagai riwayat transaksi.
+
+**Perubahan fitur dan perilaku:**
+
+- Mengganti label menu dan halaman `Lihat Pembayaran` menjadi `Riwayat Pembayaran`.
+- Mengganti breadcrumb halaman pembayaran dari `Lihat` menjadi `Riwayat`.
+- Mengganti kolom `Transaksi` pada daftar siswa menjadi `Riwayat Transaksi`, termasuk label responsif mobile.
+- Merapikan alignment kolom `Riwayat Transaksi` pada daftar siswa dan membump `style.css` halaman siswa ke `v=4.5`.
+
+**Database dan migrasi:**
+
+- Tidak ada.
+
+**Kompatibilitas dan data lama:**
+
+- Tidak mengubah route, file, atau data. Perubahan hanya teks UI.
+
+**Verifikasi:**
+
+- `php -l includes/sidebar.php`, `php -l pembayaran/lihat.php`, dan `php -l siswa/daftar.php` berhasil.
+- `git diff --check -- assets/css/style.css includes/sidebar.php pembayaran/lihat.php siswa/daftar.php documentation/AI_CHANGELOG.md` berhasil, dengan warning line ending CRLF dari Git.
+
+**Catatan tindak lanjut:**
+
+- Tidak ada.
+
 ## 2026-08-02 - Sinkronisasi Database Lama dan Kompatibilitas Kelas
 
 **AI/Aktor:** Codex berbasis GPT-5, bersama pemilik proyek

@@ -341,7 +341,7 @@ $canEditOpening = !$editStudent || (int)($editStudent['history_count'] ?? 0) ===
   <link rel="icon" type="image/png" href="../assets/img/favicon.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="../assets/css/style.css?v=4.3" />
+  <link rel="stylesheet" href="../assets/css/style.css?v=4.5" />
   <script>(function(){var t=localStorage.getItem('spp_theme')||'dark';document.documentElement.setAttribute('data-theme',t);})();</script>
 </head>
 <body>
@@ -500,7 +500,7 @@ $canEditOpening = !$editStudent || (int)($editStudent['history_count'] ?? 0) ===
         </form>
         <div class="table-container">
           <table class="payment-table responsive-table">
-            <thead><tr><th>No</th><th>No. Induk</th><th>Nama Siswa</th><th>Kelas</th><th>SPP/Bulan</th><th>Status</th><th>Transaksi</th><th>Aksi</th></tr></thead>
+            <thead><tr><th>No</th><th>No. Induk</th><th>Nama Siswa</th><th>Kelas</th><th>SPP/Bulan</th><th>Status</th><th class="student-history-col">Riwayat Transaksi</th><th>Aksi</th></tr></thead>
             <tbody>
               <?php if (!$studentRows): ?>
               <tr><td colspan="8"><div class="empty-state"><p>Data siswa tidak ditemukan</p></div></td></tr>
@@ -514,7 +514,7 @@ $canEditOpening = !$editStudent || (int)($editStudent['history_count'] ?? 0) ===
                 <td data-label="Kelas">Kelas <?= htmlspecialchars($student['KELAS']) ?></td>
                 <td data-label="SPP/Bulan" class="nominal">Rp <?= number_format((float)$student['SPP_PERBULAN'], 0, ',', '.') ?></td>
                 <td data-label="Status"><span class="master-status <?= $student['is_active'] ? 'is-active' : 'is-inactive' ?>"><?= $student['is_active'] ? 'Aktif' : 'Diarsipkan' ?></span></td>
-                <td data-label="Transaksi"><span class="badge-count"><?= (int)$student['history_count'] ?>x</span></td>
+                <td data-label="Riwayat Transaksi" class="student-history-col"><span class="badge-count"><?= (int)$student['history_count'] ?>x</span></td>
                 <td data-label="Aksi" class="aksi-col">
                   <a class="btn-tbl btn-tbl-edit" href="<?= htmlspecialchars($editUrl) ?>">Edit</a>
                   <form method="POST" action="daftar.php" style="display:inline" onsubmit="return confirm('<?= $student['is_active'] ? 'Arsipkan' : 'Pulihkan' ?> siswa <?= htmlspecialchars(addslashes($student['NAMA'])) ?>?')">

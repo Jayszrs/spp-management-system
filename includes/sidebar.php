@@ -22,7 +22,7 @@ $allNavItems = [
    '<rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/>',
    ['admin']],
 
-  ['pembayaran/lihat.php', 'Lihat Pembayaran',
+  ['pembayaran/lihat.php', 'Riwayat Pembayaran',
    '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>',
    ['admin']],
 
@@ -62,7 +62,7 @@ $navItems = array_values($navItems);
 // Short label untuk bottom nav
 $shortLabels = [
   'Input Pembayaran'  => 'Input',
-  'Lihat Pembayaran'  => 'Lihat',
+  'Riwayat Pembayaran' => 'Riwayat',
   'Data Siswa'        => 'Siswa',
   'Master Biaya Lain' => 'Biaya',
   'Role Management'   => 'Akun',
