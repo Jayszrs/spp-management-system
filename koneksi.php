@@ -8,6 +8,8 @@ define('DB_USER', 'root');
 define('DB_PASS', '');
 define('DB_NAME', 'db_spp');
 
+date_default_timezone_set('Asia/Jakarta');
+
 $koneksi = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME);
 
 if ($koneksi->connect_error) {
@@ -18,3 +20,4 @@ if ($koneksi->connect_error) {
 }
 
 $koneksi->set_charset('utf8mb4');
+$koneksi->query("SET time_zone = '+07:00'");

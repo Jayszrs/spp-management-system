@@ -85,6 +85,106 @@ function validate_student_and_komite(
     return $student;
 }
 
+function payable_total(float $total, float $discount = 0, float $derivedTotal = 0): float {
+    return $derivedTotal > 0 ? $derivedTotal : max(0, $total - $discount);
+}
+
+function daftar_ulang_total(mysqli $db, array $student, string $kelasDu, string $tahunAjaran): float {
+    if ($kelasDu !== '' && $tahunAjaran !== '') {
+        $stmt = $db->prepare('
+            SELECT Jumlah
+            FROM Daftar_ulang
+            WHERE kelas = ? AND th_ajaran = ? AND Jumlah > 0
+            ORDER BY id DESC
+            LIMIT 1
+        ');
+        $stmt->bind_param('ss', $kelasDu, $tahunAjaran);
+        $stmt->execute();
+        $master = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+        if ($master) return (float)$master['Jumlah'];
+    }
+
+    return payable_total((float)$student['DAFTAR_ULANG'], (float)$student['potong_du'], (float)$student['tot_du']);
+}
+
+function validate_component_remaining(
+    mysqli $db,
+    string $noInduk,
+    string $bulan,
+    string $tahun,
+    array $components,
+    float $uangDu,
+    string $kelasDu = '',
+    string $tahunAjaran = '',
+    int $excludePaymentId = 0
+): void {
+    $stmt = $db->prepare('
+        SELECT PANGKAL, potong_pangkal, tot_pangkal, BANGUNAN, SERAGAM, KEGIATAN,
+               SPP_PERBULAN, POMG, DAFTAR_ULANG, potong_du, tot_du
+        FROM siswa
+        WHERE NO_INDUK = ?
+        FOR UPDATE
+    ');
+    $stmt->bind_param('s', $noInduk);
+    $stmt->execute();
+    $student = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+    if (!$student) throw new RuntimeException('Data siswa tidak ditemukan.');
+
+    $stmtPaid = $db->prepare('
+        SELECT
+            COALESCE(SUM(U_PANGKAL), 0) AS pangkal,
+            COALESCE(SUM(U_BANGUNAN), 0) AS bangunan,
+            COALESCE(SUM(U_SERAGAM), 0) AS seragam,
+            COALESCE(SUM(U_KEGIATAN), 0) AS kegiatan,
+            COALESCE(SUM(CASE WHEN BULAN = ? AND TAHUN = ? THEN U_SPP ELSE 0 END), 0) AS spp,
+            COALESCE(SUM(CASE WHEN BULAN = ? AND TAHUN = ? THEN U_KOMITE ELSE 0 END), 0) AS komite,
+            COALESCE(SUM(U_MAKAN), 0) AS makan,
+            COALESCE(SUM(U_SORGA), 0) AS sorga,
+            COALESCE(SUM(U_INFAQ), 0) AS infaq
+        FROM bayar
+        WHERE NO_INDUK = ? AND id <> ?
+    ');
+    $stmtPaid->bind_param('sssssi', $bulan, $tahun, $bulan, $tahun, $noInduk, $excludePaymentId);
+    $stmtPaid->execute();
+    $paid = $stmtPaid->get_result()->fetch_assoc() ?: [];
+    $stmtPaid->close();
+
+    $stmtDu = $db->prepare('
+        SELECT COALESCE(SUM(jumlah), 0) AS du
+        FROM bayar_du
+        WHERE no_induk = ? AND kelas = ? AND th_ajaran = ? AND (bayar_id IS NULL OR bayar_id <> ?)
+    ');
+    $stmtDu->bind_param('sssi', $noInduk, $kelasDu, $tahunAjaran, $excludePaymentId);
+    $stmtDu->execute();
+    $paid['du'] = (float)($stmtDu->get_result()->fetch_assoc()['du'] ?? 0);
+    $stmtDu->close();
+
+    $duTotal = daftar_ulang_total($db, $student, $kelasDu, $tahunAjaran);
+
+    $limits = [
+        'pangkal' => ['label' => 'Uang Pangkal', 'total' => payable_total((float)$student['PANGKAL'], (float)$student['potong_pangkal'], (float)$student['tot_pangkal']), 'paid' => (float)($paid['pangkal'] ?? 0), 'input' => (float)($components['pangkal'] ?? 0)],
+        'bangunan' => ['label' => 'Uang Bangunan', 'total' => (float)$student['BANGUNAN'], 'paid' => (float)($paid['bangunan'] ?? 0), 'input' => (float)($components['bangunan'] ?? 0)],
+        'seragam' => ['label' => 'Uang Seragam', 'total' => (float)$student['SERAGAM'], 'paid' => (float)($paid['seragam'] ?? 0), 'input' => (float)($components['seragam'] ?? 0)],
+        'kegiatan' => ['label' => 'Uang Kegiatan', 'total' => (float)$student['KEGIATAN'], 'paid' => (float)($paid['kegiatan'] ?? 0), 'input' => (float)($components['kegiatan'] ?? 0)],
+        'spp' => ['label' => 'Uang SPP', 'total' => (float)$student['SPP_PERBULAN'], 'paid' => (float)($paid['spp'] ?? 0), 'input' => (float)($components['spp'] ?? 0)],
+        'komite' => ['label' => 'Uang Komite', 'total' => (float)$student['POMG'], 'paid' => (float)($paid['komite'] ?? 0), 'input' => (float)($components['komite'] ?? 0)],
+        'du' => ['label' => 'Uang Daftar Ulang', 'total' => $duTotal, 'paid' => (float)($paid['du'] ?? 0), 'input' => $uangDu],
+    ];
+
+    foreach ($limits as $limit) {
+        if ($limit['total'] <= 0 || $limit['input'] <= 0) continue;
+        $remaining = max(0, $limit['total'] - $limit['paid']);
+        if ($limit['paid'] > $limit['total'] + 0.001) {
+            throw new RuntimeException($limit['label'] . ' sudah melebihi total tagihan. Total: Rp ' . number_format($limit['total'], 0, ',', '.') . ', sudah terbayar: Rp ' . number_format($limit['paid'], 0, ',', '.') . '. Cek ulang transaksi sebelumnya.');
+        }
+        if ($limit['input'] > $remaining + 0.001) {
+            throw new RuntimeException('Pembayaran ' . $limit['label'] . ' melebihi sisa tagihan. Sisa: Rp ' . number_format($remaining, 0, ',', '.') . '.');
+        }
+    }
+}
+
 function normalize_month_code($value) {
     $map = [
         'Januari' => '01', 'Februari' => '02', 'Maret' => '03', 'April' => '04',
@@ -95,11 +195,39 @@ function normalize_month_code($value) {
     return str_pad((string)$value, 2, '0', STR_PAD_LEFT);
 }
 
-function collect_biaya_lain(mysqli $koneksi, int $bayarId = 0): array {
+function get_biaya_lain_master(mysqli $koneksi, int $masterId, bool $requireActive): ?array {
+    $sql = 'SELECT id, nama, nominal, is_active FROM master_biaya_lain WHERE id = ? AND nominal > 0';
+    if ($requireActive) $sql .= ' AND is_active = 1';
+    $sql .= ' LIMIT 1';
+
+    $stmt = $koneksi->prepare($sql);
+    $stmt->bind_param('i', $masterId);
+    $stmt->execute();
+    $master = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+    return $master ?: null;
+}
+
+function paid_biaya_lain_total(mysqli $koneksi, string $noInduk, int $masterId, int $excludePaymentId = 0): float {
+    $stmt = $koneksi->prepare('
+        SELECT COALESCE(SUM(d.nominal_snapshot), 0) AS paid
+        FROM bayar_biaya_lain d
+        JOIN bayar b ON b.id = d.bayar_id
+        WHERE b.NO_INDUK = ? AND d.master_biaya_lain_id = ? AND b.id <> ?
+    ');
+    $stmt->bind_param('sii', $noInduk, $masterId, $excludePaymentId);
+    $stmt->execute();
+    $paid = (float)($stmt->get_result()->fetch_assoc()['paid'] ?? 0);
+    $stmt->close();
+    return $paid;
+}
+
+function collect_biaya_lain(mysqli $koneksi, string $noInduk, int $bayarId = 0): array {
     $detailIds = $_POST['biaya_lain_detail_id'] ?? [];
     $masterIds = $_POST['biaya_lain_master_id'] ?? [];
+    $nominals = $_POST['biaya_lain_nominal'] ?? [];
     $notes = $_POST['biaya_lain_keterangan'] ?? [];
-    if (!is_array($detailIds) || !is_array($masterIds) || !is_array($notes)) {
+    if (!is_array($detailIds) || !is_array($masterIds) || !is_array($nominals) || !is_array($notes)) {
         throw new RuntimeException('Format biaya lain tidak valid.');
     }
 
@@ -114,48 +242,57 @@ function collect_biaya_lain(mysqli $koneksi, int $bayarId = 0): array {
     }
 
     $lines = [];
-    $rowCount = max(count($detailIds), count($masterIds), count($notes));
+    $submittedByMaster = [];
+    $rowCount = max(count($detailIds), count($masterIds), count($nominals), count($notes));
     for ($index = 0; $index < $rowCount; $index++) {
         $detailId = (int)($detailIds[$index] ?? 0);
         $masterId = (int)($masterIds[$index] ?? 0);
+        $nominalInput = parse_amount($nominals[$index] ?? null);
         $note = trim((string)($notes[$index] ?? ''));
         if (mb_strlen($note) > 255) $note = mb_substr($note, 0, 255);
 
         $oldLine = $detailId > 0 && isset($existing[$detailId]) ? $existing[$detailId] : null;
+        if (!is_finite($nominalInput) || $nominalInput < 0) {
+            throw new RuntimeException('Nominal biaya lain harus berupa angka positif atau nol.');
+        }
+
         if ($masterId <= 0) {
             // Detail hasil migrasi tidak memiliki master, tetapi snapshot-nya tetap sah.
             if ($oldLine && $oldLine['master_biaya_lain_id'] === null) {
+                if ($nominalInput <= 0) continue;
                 $lines[] = [
                     'master_id' => null,
                     'nama' => $oldLine['nama_biaya_snapshot'],
-                    'nominal' => (float)$oldLine['nominal_snapshot'],
+                    'nominal' => $nominalInput,
                     'keterangan' => $note,
                 ];
             }
             continue;
         }
 
-        if ($oldLine && (int)$oldLine['master_biaya_lain_id'] === $masterId) {
-            $lines[] = [
-                'master_id' => $masterId,
-                'nama' => $oldLine['nama_biaya_snapshot'],
-                'nominal' => (float)$oldLine['nominal_snapshot'],
-                'keterangan' => $note,
-            ];
-            continue;
+        if ($nominalInput <= 0) continue;
+
+        $sameMasterAsOldLine = $oldLine && (int)$oldLine['master_biaya_lain_id'] === $masterId;
+        $master = get_biaya_lain_master($koneksi, $masterId, !$sameMasterAsOldLine);
+        if (!$master) throw new RuntimeException('Pilihan master biaya lain tidak tersedia atau sudah nonaktif.');
+
+        $masterTotal = (float)$master['nominal'];
+        $paidBefore = paid_biaya_lain_total($koneksi, $noInduk, $masterId, $bayarId);
+        if ($paidBefore > $masterTotal + 0.001) {
+            throw new RuntimeException($master['nama'] . ' sudah melebihi total tagihan. Total: Rp ' . number_format($masterTotal, 0, ',', '.') . ', sudah terbayar: Rp ' . number_format($paidBefore, 0, ',', '.') . '. Cek ulang transaksi sebelumnya.');
         }
 
-        $stmt = $koneksi->prepare('SELECT id, nama, nominal FROM master_biaya_lain WHERE id = ? AND is_active = 1 AND nominal > 0 LIMIT 1');
-        $stmt->bind_param('i', $masterId);
-        $stmt->execute();
-        $master = $stmt->get_result()->fetch_assoc();
-        $stmt->close();
-        if (!$master) throw new RuntimeException('Pilihan master biaya lain tidak tersedia atau sudah nonaktif.');
+        $submittedBefore = (float)($submittedByMaster[$masterId] ?? 0);
+        $remaining = max(0, $masterTotal - $paidBefore - $submittedBefore);
+        if ($nominalInput > $remaining + 0.001) {
+            throw new RuntimeException('Pembayaran ' . $master['nama'] . ' melebihi sisa tagihan. Sisa: Rp ' . number_format($remaining, 0, ',', '.') . '.');
+        }
+        $submittedByMaster[$masterId] = $submittedBefore + $nominalInput;
 
         $lines[] = [
             'master_id' => (int)$master['id'],
-            'nama' => $master['nama'],
-            'nominal' => (float)$master['nominal'],
+            'nama' => $sameMasterAsOldLine ? $oldLine['nama_biaya_snapshot'] : $master['nama'],
+            'nominal' => $nominalInput,
             'keterangan' => $note,
         ];
     }
@@ -328,8 +465,16 @@ if ($aksi === 'input') {
         validate_payment_context($tanggal_bayar, $bulan_bayar, (string)$tahun_bayar, $uang_du, $kelas_du, $tahun_ajaran_du);
         if ($potongan_spp > $uang_spp) throw new RuntimeException('Potongan SPP tidak boleh melebihi pembayaran SPP.');
         $siswa_data = validate_student_and_komite($koneksi, $no_induk, $bulan_bayar, $tahun_bayar, $uang_komite);
+        validate_component_remaining($koneksi, $no_induk, $bulan_bayar, (string)$tahun_bayar, [
+            'pangkal' => $uang_pangkal,
+            'bangunan' => $uang_bangunan,
+            'seragam' => $uang_seragam,
+            'kegiatan' => $uang_kegiatan,
+            'spp' => $uang_spp,
+            'komite' => $uang_komite,
+        ], $uang_du, $kelas_du, $tahun_ajaran_du);
         $kelas_siswa = $siswa_data['KELAS'];
-        $biaya_lain = collect_biaya_lain($koneksi);
+        $biaya_lain = collect_biaya_lain($koneksi, $no_induk);
         $total_jumlah = calculate_payment_total([
             $uang_pangkal, $uang_bangunan, $uang_seragam, $uang_kegiatan,
             $uang_spp, $uang_komite, $uang_makan, $uang_sorga, $uang_infaq
@@ -342,7 +487,7 @@ if ($aksi === 'input') {
             TGL_BYR, BULAN, TAHUN, user_id, sistem_pembayaran,
             LAIN_LAIN1, JUMLAH1, LAIN_LAIN2, JUMLAH2, LAIN_LAIN3, JUMLAH3, LAIN_LAIN4, JUMLAH4,
             th_ajaran, kelas_du, potong_spp, total_jumlah, payment_link_version
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)";
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)";
 
         $stmt = $koneksi->prepare($sql);
         $user_id = $_SESSION['admin_nama'] ?? 'admin';
@@ -440,8 +585,16 @@ if ($aksi === 'update') {
         if ($potongan_spp > $uang_spp) throw new RuntimeException('Potongan SPP tidak boleh melebihi pembayaran SPP.');
         $allowedArchived = $no_induk === $old_bayar['NO_INDUK'] ? $old_bayar['NO_INDUK'] : null;
         $siswa_data = validate_student_and_komite($koneksi, $no_induk, $bulan_bayar, $tahun_bayar, $uang_komite, $id, $allowedArchived);
+        validate_component_remaining($koneksi, $no_induk, $bulan_bayar, (string)$tahun_bayar, [
+            'pangkal' => $uang_pangkal,
+            'bangunan' => $uang_bangunan,
+            'seragam' => $uang_seragam,
+            'kegiatan' => $uang_kegiatan,
+            'spp' => $uang_spp,
+            'komite' => $uang_komite,
+        ], $uang_du, $kelas_du, $tahun_ajaran_du, $id);
         $kelas_siswa = $siswa_data['KELAS'];
-        $biaya_lain = collect_biaya_lain($koneksi, $id);
+        $biaya_lain = collect_biaya_lain($koneksi, $no_induk, $id);
         $total_jumlah = calculate_payment_total([
             $uang_pangkal, $uang_bangunan, $uang_seragam, $uang_kegiatan,
             $uang_spp, $uang_komite, $uang_makan, $uang_sorga, $uang_infaq

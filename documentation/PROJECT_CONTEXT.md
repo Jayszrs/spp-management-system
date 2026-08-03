@@ -43,6 +43,8 @@ http://localhost/spp-management-system/
 
 Konfigurasi koneksi berada di `koneksi.php`. Default lokal menggunakan host `localhost`, user MySQL `root`, password kosong, dan database `db_spp`. Jangan menyalin konfigurasi lokal ini ke produksi tanpa secret management dan kredensial baru.
 
+Aplikasi menetapkan timezone PHP ke `Asia/Jakarta` dan session MySQL ke `+07:00` dari `koneksi.php`, sehingga timestamp transaksi tampil konsisten dengan WIB.
+
 ## 3. Menjalankan Proyek
 
 1. Aktifkan Apache dan MySQL dari XAMPP.
@@ -128,6 +130,8 @@ Header dan komponen utama transaksi pembayaran. `NO_INDUK` berelasi ke siswa den
 
 Kolom `sistem_pembayaran` menyimpan metode pembayaran transaksi. Nilai yang valid hanya `Tunai`, `VA`, dan `Qris`. Data lama menggunakan default `VA`.
 
+Kolom `created_at` menyimpan waktu data pembayaran dibuat, sedangkan `updated_at` menyimpan waktu terakhir transaksi diubah. Halaman lihat pembayaran menampilkan waktu bayar dari `TGL_BYR` dan keterangan `Diubah` bila `updated_at` lebih baru dari `created_at`.
+
 Kolom lama `U_LAIN`, `LAIN_LAIN1-4`, dan `JUMLAH1-4` masih dipertahankan untuk kompatibilitas data. Transaksi baru memakai tabel detail biaya lain dan mengisi kolom lama dengan nilai netral.
 
 ### `master_biaya_lain`
@@ -140,7 +144,9 @@ Detail biaya tambahan per transaksi. Nama dan nominal disimpan sebagai snapshot 
 
 ### `bayar_du` dan `Daftar_ulang`
 
-`bayar_du` menyimpan pembayaran daftar ulang per siswa dan tahun ajaran. Child yang dibuat oleh pembayaran versi aman menyimpan `bayar_id` unik dengan foreign key `ON DELETE CASCADE` ke `bayar`. Tabel `Daftar_ulang` masih tersedia sebagai struktur tarif lama; alur aktif mengambil tarif dasar daftar ulang dari data siswa.
+`bayar_du` menyimpan pembayaran daftar ulang per siswa, kelas daftar ulang, dan tahun ajaran. Child yang dibuat oleh pembayaran versi aman menyimpan `bayar_id` unik dengan foreign key `ON DELETE CASCADE` ke `bayar`.
+
+Tabel `Daftar_ulang` dipakai sebagai master nominal daftar ulang per kombinasi `kelas + th_ajaran` bila datanya tersedia. Jika master belum diisi, alur pembayaran memakai fallback dari data siswa (`DAFTAR_ULANG`, `potong_du`, `tot_du`) supaya transaksi lama tetap bisa berjalan. Sisa daftar ulang dihitung per `NO_INDUK + kelas + th_ajaran`, bukan total global siswa.
 
 ### `tabungan`, `transaksi_m`, dan `transaksi_k`
 
@@ -166,10 +172,11 @@ Detail biaya tambahan per transaksi. Nama dan nominal disimpan sebagai snapshot 
 - Dropdown bulan menampilkan nama bulan saat dibuka dan menampilkan kode `01` sampai `12` setelah dipilih.
 - Hanya siswa aktif yang muncul pada transaksi baru.
 - Edit transaksi lama tetap mengizinkan siswa arsip yang memang menjadi pemilik transaksi; siswa arsip lain tidak dapat dipilih.
-- Backend mengambil kelas, tarif Komite, dan nominal biaya lain langsung dari database.
+- Backend mengambil kelas, tarif Komite, dan total tagihan master biaya lain langsung dari database.
 - `total_jumlah` dihitung ulang di backend dari komponen pembayaran, daftar ulang, biaya lain, dan potongan SPP. Hidden total dari browser bukan sumber kebenaran.
 - Sistem pembayaran dipilih dari opsi `Tunai`, `VA`, atau `Qris` dan divalidasi ulang di backend.
-- Nominal negatif, periode tidak valid, dan pembayaran Komite melebihi sisa periode harus ditolak.
+- Nominal negatif, periode tidak valid, pembayaran Komite melebihi sisa periode, dan input komponen yang melebihi sisa tagihan harus ditolak.
+- Form pembayaran menampilkan alert bila `Sudah Terbayar` lebih besar dari `Total Sebelum`; sisa ditampilkan sebagai nol dan input bayar pada komponen tersebut dikunci.
 - Simpan, edit, dan hapus transaksi utama, daftar ulang, tabungan terkait, serta detail biaya lain dijalankan dalam transaction.
 - Pembayaran baru menyimpan relasi eksplisit ke Daftar Ulang dan setoran Tabungan Wajib melalui `bayar_id`. Edit atau hapus hanya boleh mengubah child dengan `bayar_id` yang sama, bukan child dengan NIS, tanggal, atau tahun ajaran yang kebetulan sama.
 - Pembayaran `payment_link_version=0` adalah legacy. Sistem menandainya di daftar dan menolak edit/hapus, termasuk akses endpoint langsung; rekonsiliasi harus dilakukan manual tanpa pencocokan otomatis.
@@ -188,8 +195,9 @@ Detail biaya tambahan per transaksi. Nama dan nominal disimpan sebagai snapshot 
 - Admin dapat menambah, mengubah, mengaktifkan, atau menonaktifkan master.
 - Penghapusan permanen hanya boleh jika master belum pernah digunakan.
 - Form pembayaran mendukung beberapa baris biaya lain dan master yang sama dapat dipakai lebih dari sekali dengan keterangan berbeda.
-- Nominal di browser hanya untuk tampilan; backend memakai nominal master aktif.
-- Bila master pada detail lama tidak berubah, nama dan nominal snapshot lama dipertahankan.
+- Nominal master biaya lain menjadi total tagihan, sedangkan `bayar_biaya_lain.nominal_snapshot` menyimpan nominal cicilan yang benar-benar dibayar pada transaksi.
+- Form pembayaran menampilkan total tagihan, sudah dibayar, sisa, dan input bayar untuk biaya lain. Input bayar boleh lebih kecil dari sisa, tetapi tidak boleh melebihi sisa akumulasi siswa untuk master tersebut.
+- Bila master pada detail lama tidak berubah, nama snapshot lama dipertahankan; nominal snapshot dapat diedit sebagai nominal cicilan selama tidak melebihi sisa tagihan.
 - Master nonaktif tetap dapat ditampilkan pada edit transaksi lama, tetapi tidak untuk pilihan baru.
 
 ### Tabungan
@@ -207,6 +215,7 @@ Detail biaya tambahan per transaksi. Nama dan nominal disimpan sebagai snapshot 
 - Siswa arsip tidak dikeluarkan dari histori laporan.
 - Filter laporan yang menerima input pengguna, termasuk filter NIS riwayat tabungan, wajib menggunakan prepared statement; input tidak boleh dirangkai ke SQL.
 - Export PDF memakai Dompdf server-side sehingga hasil PDF tidak memuat header/footer bawaan print browser.
+- Tombol `Export PDF` pada laporan mencetak seluruh transaksi periode, sedangkan detail transaksi pembayaran menyediakan `Cetak Dipilih` dan cetak per baris untuk slip transaksi tertentu.
 
 ## 8. Instalasi dan Migrasi Database
 

@@ -45,6 +45,326 @@ File ini mencatat perubahan proyek secara reverse chronological. Baca [PROJECT_C
 
 - Label kelas legacy dapat dikonversi manual ke kelas 1 sampai 6 bila sekolah tidak lagi membutuhkannya.
 
+## 2026-08-02 - Dokumentasi Progress Flow Sistem
+
+**AI/Aktor:** Codex berbasis GPT-5, bersama pemilik proyek
+
+**Tujuan:** Mencatat progres tiap flow aplikasi dan alur yang sudah berubah agar mudah dipakai untuk laporan.
+
+**Perubahan fitur dan perilaku:**
+
+- Memperluas `documentation/PROGRESS.md` dengan register temuan terbaru dan log perubahan alur aplikasi.
+- Mencatat perubahan flow login, dashboard, data siswa, pembayaran, daftar ulang, master biaya lain, lihat pembayaran, tabungan, laporan/export, mobile, dan tema.
+- Memperbarui MoM agar perubahan daftar ulang, biaya lain cicilan, dan klik baris untuk edit ikut tercatat pada laporan.
+
+**Database dan migrasi:**
+
+- Tidak ada.
+
+**Kompatibilitas dan data lama:**
+
+- Tidak mengubah kode aplikasi atau data; perubahan hanya dokumentasi.
+
+**Verifikasi:**
+
+- `git diff --check -- documentation/PROGRESS.md documentation/MOM_SistemSPP.md documentation/AI_CHANGELOG.md` berhasil, dengan warning line ending CRLF dari Git.
+
+**Catatan tindak lanjut:**
+
+- Gunakan `PROGRESS.md` sebagai catatan flow teknis dan `MOM_SistemSPP.md` sebagai bahan laporan rapat/project.
+
+## 2026-08-02 - Perbaikan Master Daftar Ulang Pada Pembayaran
+
+**AI/Aktor:** Codex berbasis GPT-5, bersama pemilik proyek
+
+**Tujuan:** Memastikan pencatatan pembayaran daftar ulang memakai konteks master kelas dan tahun ajaran dengan benar.
+
+**Perubahan fitur dan perilaku:**
+
+- Form input dan edit pembayaran memuat master `Daftar_ulang` sebagai sumber nominal daftar ulang per `kelas + tahun ajaran` saat data master tersedia.
+- Jika master daftar ulang belum diisi, sistem tetap memakai fallback nominal daftar ulang dari data siswa agar transaksi lama tidak putus.
+- Hitungan `sudah terbayar` daftar ulang kini dipisah per `NO_INDUK + kelas + tahun ajaran`, sehingga pembayaran daftar ulang tahun/kelas lain tidak mengurangi sisa periode yang sedang dipilih.
+- Validasi backend simpan dan update pembayaran memakai konteks `kelas_du` dan `tahun_ajaran_du`; jika ada duplikat master, data terbaru berdasarkan `id` dipakai.
+- Membump `app.js` pada form pembayaran ke `v=3.9`.
+
+**Database dan migrasi:**
+
+- Tidak ada migrasi baru. Pemeriksaan lokal menunjukkan tabel `Daftar_ulang` ada tetapi belum berisi data.
+
+**Kompatibilitas dan data lama:**
+
+- Data lama tetap kompatibel lewat fallback ke nominal daftar ulang pada tabel `siswa`.
+- Transaksi `bayar_du` lama tetap dibaca, tetapi perhitungan sisa hanya memakai transaksi yang punya `kelas` dan `th_ajaran`.
+
+**Verifikasi:**
+
+- `php -l pembayaran/form.php`, `php -l pembayaran/edit.php`, dan `php -l pembayaran/proses.php` berhasil.
+- `node --check assets/js/app.js` berhasil.
+- `git diff --check` berhasil, dengan warning line ending CRLF dari Git.
+
+**Catatan tindak lanjut:**
+
+- Isi/import master `Daftar_ulang` untuk setiap kelas dan tahun ajaran agar nominal daftar ulang benar-benar berasal dari master.
+
+## 2026-08-02 - Klik Baris Untuk Edit Siswa
+
+**AI/Aktor:** Codex berbasis GPT-5, bersama pemilik proyek
+
+**Tujuan:** Mempercepat akses edit data siswa tanpa harus menekan tombol `Edit`.
+
+**Perubahan fitur dan perilaku:**
+
+- Baris siswa pada `siswa/daftar.php` dapat diklik untuk membuka mode edit siswa.
+- Klik pada tombol `Edit`, form `Arsipkan/Pulihkan`, dan elemen interaktif lain tetap menjalankan aksi masing-masing tanpa ikut terkena navigasi baris.
+- Reuse handler row-click global dengan dukungan keyboard `Enter`/`Space`.
+- Membump `style.css` halaman data siswa ke `v=4.3` dan `app.js` ke `v=3.8`.
+
+**Database dan migrasi:**
+
+- Tidak ada.
+
+**Kompatibilitas dan data lama:**
+
+- Tidak mengubah data siswa. Perubahan hanya pada navigasi tabel.
+
+**Verifikasi:**
+
+- `php -l siswa/daftar.php` berhasil.
+- `node --check assets/js/app.js` berhasil.
+- `git diff --check` berhasil, dengan warning line ending CRLF dari Git.
+
+**Catatan tindak lanjut:**
+
+- Uji browser: klik area nama/NIS siswa untuk edit, lalu klik `Arsipkan/Pulihkan` untuk memastikan confirm status tetap muncul.
+
+## 2026-08-02 - Klik Baris Untuk Edit Pembayaran
+
+**AI/Aktor:** Codex berbasis GPT-5, bersama pemilik proyek
+
+**Tujuan:** Mempercepat akses edit pembayaran dari halaman lihat pembayaran dan dashboard tanpa harus menekan tombol `Edit`.
+
+**Perubahan fitur dan perilaku:**
+
+- Baris transaksi pada `pembayaran/lihat.php` dapat diklik untuk membuka halaman edit.
+- Baris `Transaksi Terbaru` pada `dashboard.php` dapat diklik untuk membuka halaman edit.
+- Klik pada tombol `Edit`, `Hapus`, dan elemen interaktif lain tetap menjalankan aksi masing-masing tanpa ikut terkena navigasi baris.
+- Baris clickable diberi cursor pointer, hover state, dan dukungan keyboard `Enter`/`Space`.
+- Membump `style.css` halaman lihat pembayaran dan dashboard ke `v=4.3`, serta `app.js` ke `v=3.8`.
+
+**Database dan migrasi:**
+
+- Tidak ada.
+
+**Kompatibilitas dan data lama:**
+
+- Hanya transaksi dengan `payment_link_version=1` yang bisa diklik untuk edit. Transaksi legacy tetap tidak bisa diedit dari row click.
+
+**Verifikasi:**
+
+- `php -l pembayaran/lihat.php` dan `php -l dashboard.php` berhasil.
+- `node --check assets/js/app.js` berhasil.
+- `git diff --check` berhasil, dengan warning line ending CRLF dari Git.
+
+**Catatan tindak lanjut:**
+
+- Uji browser: klik area nama/NIS/total untuk edit, lalu klik `Hapus` untuk memastikan confirm hapus tetap muncul.
+
+## 2026-08-02 - Jam Update Pada Lihat Pembayaran
+
+**AI/Aktor:** Codex berbasis GPT-5, bersama pemilik proyek
+
+**Tujuan:** Menampilkan keterangan jam bayar dan jam update pada rekap pembayaran siswa agar perubahan transaksi lebih mudah dilacak.
+
+**Perubahan fitur dan perilaku:**
+
+- Menetapkan timezone aplikasi PHP ke `Asia/Jakarta` dan session MySQL ke `+07:00` melalui `koneksi.php`.
+- Kolom `Tanggal` pada `pembayaran/lihat.php` diubah menjadi `Bayar / Update`.
+- Nilai tanggal bayar ditampilkan bersama jam `HH:mm WIB` dari `TGL_BYR`.
+- Menampilkan label `Diubah` saat `bayar.updated_at` lebih baru dari `created_at`.
+- Menambahkan styling `date-time-cell` agar tanggal dan jam tetap rapi di tabel desktop maupun mobile.
+- Membump asset `style.css` pada halaman lihat pembayaran ke `v=4.2` dan `app.js` ke `v=3.6`.
+
+**Database dan migrasi:**
+
+- Menambahkan `sql/add_payment_updated_at.sql`.
+- Menambahkan kolom `bayar.updated_at TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP`.
+- Migrasi sudah dijalankan pada database lokal `db_spp`.
+
+**Kompatibilitas dan data lama:**
+
+- Data lama tetap tampil. Migrasi menginisialisasi `updated_at` dari `created_at`; label `Diubah` hanya tampil setelah transaksi benar-benar diedit lagi.
+- Jika waktu historinya kosong atau tidak valid, sistem menampilkan tanda `-`.
+
+**Verifikasi:**
+
+- `php -l pembayaran/lihat.php` berhasil.
+- `php -l koneksi.php` berhasil.
+- `SHOW COLUMNS FROM bayar LIKE 'updated_at'` berhasil.
+- `git diff --check` berhasil, dengan warning line ending CRLF dari Git.
+
+**Catatan tindak lanjut:**
+
+- Bila membutuhkan audit edit yang lebih detail, tambahkan tabel audit pembayaran agar setiap perubahan historis tersimpan, bukan hanya waktu update terakhir.
+
+## 2026-08-02 - Cicilan Biaya Lain
+
+**AI/Aktor:** Codex berbasis GPT-5, bersama pemilik proyek
+
+**Tujuan:** Mengubah konsep biaya lain agar tidak wajib dibayar penuh dalam satu transaksi.
+
+**Perubahan fitur dan perilaku:**
+
+- Form input dan edit pembayaran menampilkan `Total`, `Sudah`, `Sisa`, dan `Input Bayar` pada setiap baris biaya lain.
+- Setiap field biaya lain diberi label kecil agar fungsi kolom `Total`, `Sudah`, `Sisa`, `Bayar`, dan `Keterangan` tidak membingungkan.
+- `Input Bayar` biaya lain dibuat editable sehingga master seperti `Buku Rp 500.000` dapat dibayar bertahap.
+- Frontend menghitung sisa biaya lain berdasarkan siswa terpilih dan pembayaran sebelumnya.
+- Menambahkan alert visual khusus biaya lain saat `Bayar` melebihi `Sisa`.
+- Merapikan alignment nomor baris dan tombol hapus pada grid biaya lain agar sejajar dengan input.
+- Backend menyimpan nominal cicilan aktual ke `bayar_biaya_lain.nominal_snapshot`.
+- Backend menolak nominal biaya lain yang negatif atau melebihi sisa tagihan siswa untuk master biaya tersebut.
+- Reset form pembayaran membersihkan alert overpaid, highlight baris, disabled state, dan validasi custom yang tersisa.
+- Membump versi `style.css` pada form input/edit pembayaran ke `v=4.4` dan `app.js` ke `v=3.7`.
+- Memperbarui MoM dan konteks proyek terkait konsep cicilan biaya lain.
+
+**Database dan migrasi:**
+
+- Tidak ada. Struktur `master_biaya_lain` dan `bayar_biaya_lain` yang sudah ada cukup untuk menyimpan total master dan nominal cicilan transaksi.
+
+**Kompatibilitas dan data lama:**
+
+- Histori tetap memakai snapshot nama dan nominal bayar yang sudah tersimpan.
+- Master nonaktif tetap bisa tampil saat mengedit transaksi lama yang sudah memakai master tersebut.
+
+**Verifikasi:**
+
+- `php -l pembayaran/form.php`, `php -l pembayaran/edit.php`, dan `php -l pembayaran/proses.php` berhasil.
+- `node --check assets/js/app.js` berhasil.
+- `git diff --check` berhasil, dengan warning line ending CRLF dari Git.
+
+**Catatan tindak lanjut:**
+
+- Uji visual di browser: pilih siswa, pilih biaya lain, ubah `Input Bayar` menjadi cicilan, lalu coba input melebihi sisa untuk memastikan validasi muncul.
+
+## 2026-08-02 - Alert Pembayaran Melebihi Tagihan
+
+**AI/Aktor:** Codex berbasis GPT-5, bersama pemilik proyek
+
+**Tujuan:** Memberi peringatan saat nilai `Sudah Terbayar` lebih besar dari `Total Sebelum` pada form pembayaran.
+
+**Perubahan fitur dan perilaku:**
+
+- Menambahkan alert overpaid pada form input dan edit pembayaran.
+- Menandai baris komponen yang sudah overpaid dan mengunci `Input Bayar` komponen tersebut ke `0`.
+- Menambahkan validasi backend agar input komponen baru tidak boleh melebihi sisa tagihan.
+- Membump versi `app.js` pada form input dan edit pembayaran ke `v=3.4`.
+
+**Database dan migrasi:**
+
+- Tidak ada.
+
+**Kompatibilitas dan data lama:**
+
+- Tidak mengubah data lama. Jika data lama sudah overpaid, form akan memberi peringatan dan mencegah penambahan pembayaran pada komponen tersebut.
+
+**Verifikasi:**
+
+- `php -l pembayaran/proses.php`, `php -l pembayaran/form.php`, dan `php -l pembayaran/edit.php` berhasil.
+- `node --check assets/js/app.js` berhasil.
+- `git diff --check` berhasil, dengan warning line ending CRLF dari Git.
+
+**Catatan tindak lanjut:**
+
+- Uji visual di browser dengan kondisi contoh: `Total Sebelum Rp 100.000` dan `Sudah Terbayar Rp 200.000`.
+
+## 2026-08-02 - Cetak Slip PDF Per Transaksi Terpilih
+
+**AI/Aktor:** Codex berbasis GPT-5, bersama pemilik proyek
+
+**Tujuan:** Menambahkan konsep cetak slip selektif dari detail transaksi pembayaran tanpa mengubah fungsi export PDF semua transaksi.
+
+**Perubahan fitur dan perilaku:**
+
+- Menambahkan checkbox pada tabel detail transaksi pembayaran di `laporan/index.php`.
+- Menambahkan tombol `Cetak Dipilih` yang aktif setelah minimal satu transaksi dipilih.
+- Menambahkan tombol `Cetak` per baris transaksi untuk membuat slip satu transaksi.
+- Menambahkan dukungan parameter `mode=selected` dan `ids[]` pada `laporan/export_pdf.php`.
+- Mempertahankan tombol `Export PDF` periode sebagai cetak semua transaksi.
+- Membump versi `style.css` ke `v=3.9` agar styling tombol dan checkbox terbaru terambil browser.
+
+**Database dan migrasi:**
+
+- Tidak ada.
+
+**Kompatibilitas dan data lama:**
+
+- URL export PDF lama tetap berlaku untuk mencetak seluruh transaksi periode. Parameter baru hanya mempersempit hasil PDF bila dipakai.
+
+**Verifikasi:**
+
+- `php -l laporan/index.php` dan `php -l laporan/export_pdf.php` berhasil.
+- Pemeriksaan manual memastikan form filter, form cetak terpilih, checkbox, dan tombol per baris berada pada struktur HTML yang sesuai.
+
+**Catatan tindak lanjut:**
+
+- Uji visual di browser: pilih beberapa transaksi, klik `Cetak Dipilih`, dan pastikan PDF hanya berisi slip yang dipilih.
+
+## 2026-08-02 - Perbaikan Insert Pembayaran Baru
+
+**AI/Aktor:** Codex berbasis GPT-5, bersama pemilik proyek
+
+**Tujuan:** Memperbaiki error penyimpanan pembayaran baru setelah penambahan kolom relasi pembayaran dan metode pembayaran.
+
+**Perubahan fitur dan perilaku:**
+
+- Menambahkan satu placeholder pada query `INSERT INTO bayar` di `pembayaran/proses.php` agar jumlah value sesuai dengan jumlah kolom.
+- Mempertahankan `payment_link_version=1` sebagai nilai literal untuk transaksi baru.
+
+**Database dan migrasi:**
+
+- Tidak ada perubahan schema baru. Database lokal sebelumnya sudah menjalankan `add_payment_references.sql` dan `add_payment_method.sql`.
+
+**Kompatibilitas dan data lama:**
+
+- Tidak ada perubahan data lama. Perbaikan hanya memulihkan proses simpan pembayaran baru.
+
+**Verifikasi:**
+
+- `php -l pembayaran/proses.php` berhasil.
+- Kolom `bayar.payment_link_version` dan `bayar.sistem_pembayaran` tersedia pada database lokal.
+
+**Catatan tindak lanjut:**
+
+- Uji simpan pembayaran baru melalui browser menggunakan data siswa uji.
+
+## 2026-07-31 - Pembaruan Dokumen MoM
+
+**AI/Aktor:** Codex berbasis GPT-5, bersama pemilik proyek
+
+**Tujuan:** Memperbarui Minutes of Meeting agar sesuai dengan kondisi terbaru project setelah revisi UI, export, pembayaran, dan push repository.
+
+**Perubahan fitur dan perilaku:**
+
+- Memperbarui `documentation/MOM_SistemSPP.md` dengan tanggal rapat terbaru, repository, commit terakhir yang sudah dipush, ringkasan fitur, hasil revisi, keputusan, action items, risiko, dan lampiran modul.
+- Menambahkan pembahasan sistem pembayaran `Tunai`, `VA`, dan `Qris`.
+- Menyesuaikan bagian laporan agar menyebut PDF server-side Dompdf dan preview Excel sebelum download.
+- Menambahkan catatan revisi mobile, avatar role, dark mode, dan riwayat tabungan.
+
+**Database dan migrasi:**
+
+- Tidak ada.
+
+**Kompatibilitas dan data lama:**
+
+- Tidak ada perubahan perilaku aplikasi. Perubahan hanya pada dokumentasi project.
+
+**Verifikasi:**
+
+- Review manual isi MoM berdasarkan changelog dan konteks project terbaru.
+
+**Catatan tindak lanjut:**
+
+- Lengkapi placeholder waktu, tempat, pemimpin rapat, notulis, peserta, PIC, dan target tanggal sesuai kebutuhan laporan.
+
 ## 2026-07-31 - Perapihan Mobile Preview Excel
 
 **AI/Aktor:** Codex berbasis GPT-5, bersama pemilik proyek

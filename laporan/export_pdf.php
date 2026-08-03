@@ -11,6 +11,18 @@ requireRole(['admin', 'bendahara']);
 $filter_bulan = (int)($_GET['bulan'] ?? date('m'));
 $filter_tahun = (int)($_GET['tahun'] ?? date('Y'));
 $preview_mode = isset($_GET['contoh']) && $_GET['contoh'] === '1';
+$selected_mode = isset($_GET['mode']) && $_GET['mode'] === 'selected';
+$selected_ids_raw = $_GET['ids'] ?? [];
+if (!is_array($selected_ids_raw)) {
+    $selected_ids_raw = preg_split('/[,\s]+/', (string)$selected_ids_raw, -1, PREG_SPLIT_NO_EMPTY);
+}
+$selected_ids = array_values(array_unique(array_filter(array_map('intval', $selected_ids_raw), fn($id) => $id > 0)));
+
+if ($selected_mode && !$selected_ids) {
+    $_SESSION['flash'] = ['type' => 'error', 'msg' => 'Pilih minimal satu transaksi untuk dicetak.'];
+    header('Location: index.php?bulan=' . urlencode((string)$filter_bulan) . '&tahun=' . urlencode((string)$filter_tahun));
+    exit;
+}
 
 $bln_names = [
     1 => 'Januari', 2 => 'Februari', 3 => 'Maret', 4 => 'April',
@@ -71,6 +83,15 @@ function payment_line(string $label, $amount): array {
     return ['label' => $label, 'amount' => (float)$amount];
 }
 
+$where_sql = 'WHERE MONTH(b.TGL_BYR) = ? AND YEAR(b.TGL_BYR) = ?';
+$types = 'ii';
+$params = [$filter_bulan, $filter_tahun];
+if ($selected_ids) {
+    $where_sql .= ' AND b.id IN (' . implode(',', array_fill(0, count($selected_ids), '?')) . ')';
+    $types .= str_repeat('i', count($selected_ids));
+    array_push($params, ...$selected_ids);
+}
+
 $stmt = $koneksi->prepare("
     SELECT
         b.*,
@@ -113,13 +134,19 @@ $stmt = $koneksi->prepare("
         FROM bayar_du
         GROUP BY no_induk
     ) du_paid ON du_paid.no_induk = b.NO_INDUK
-    WHERE MONTH(b.TGL_BYR) = ? AND YEAR(b.TGL_BYR) = ?
+    $where_sql
     ORDER BY b.TGL_BYR DESC, b.id DESC
 ");
-$stmt->bind_param('ii', $filter_bulan, $filter_tahun);
+$stmt->bind_param($types, ...$params);
 $stmt->execute();
 $rows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
 $stmt->close();
+
+if ($selected_mode && !$rows) {
+    $_SESSION['flash'] = ['type' => 'error', 'msg' => 'Transaksi yang dipilih tidak ditemukan pada periode ini.'];
+    header('Location: index.php?bulan=' . urlencode((string)$filter_bulan) . '&tahun=' . urlencode((string)$filter_tahun));
+    exit;
+}
 
 $details_by_payment = [];
 if ($rows) {
@@ -141,7 +168,7 @@ if ($rows) {
     $stmt_details->close();
 }
 
-if (!$rows) {
+if (!$rows && !$selected_mode) {
     $preview_mode = true;
     $rows[] = [
         'id' => 0,

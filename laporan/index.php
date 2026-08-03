@@ -95,7 +95,7 @@ $bulan_label = $bln_names[str_pad($filter_bulan, 2, '0', STR_PAD_LEFT)];
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
   <script>(function(){var t=localStorage.getItem('spp_theme')||'dark';document.documentElement.setAttribute('data-theme',t);})();</script>
-  <link rel="stylesheet" href="../assets/css/style.css?v=3.8" />
+  <link rel="stylesheet" href="../assets/css/style.css?v=3.9" />
 </head>
 <body>
 <div class="bg-orbs"><div class="orb orb-1"></div><div class="orb orb-2"></div><div class="orb orb-3"></div></div>
@@ -116,6 +116,11 @@ $bulan_label = $bln_names[str_pad($filter_bulan, 2, '0', STR_PAD_LEFT)];
     </div>
 
     <div class="page-content">
+      <?php if ($flash): ?>
+      <div class="alert alert-<?= $flash['type'] === 'success' ? 'success' : 'error' ?>" id="flash-msg" style="margin-bottom:16px;">
+        <?= htmlspecialchars($flash['msg']) ?>
+      </div>
+      <?php endif; ?>
 
       <!-- Filter -->
       <div class="main-card" style="margin-bottom:16px;">
@@ -220,21 +225,36 @@ $bulan_label = $bln_names[str_pad($filter_bulan, 2, '0', STR_PAD_LEFT)];
 
       <!-- Detail Transaksi Pembayaran -->
       <div class="main-card">
-        <div class="card-header">
+        <div class="card-header laporan-detail-header">
+          <div>
           <h3 class="card-title">Detail Transaksi Pembayaran — <?= $bulan_label ?> <?= $filter_tahun ?></h3>
           <span class="badge-count"><?= count($bayar_detail) ?> transaksi</span>
+          </div>
+          <?php if (!empty($bayar_detail)): ?>
+          <button type="submit" form="print-selected-form" class="btn btn-warning btn-print-selected" id="btn-print-selected" disabled>
+            Cetak Dipilih
+          </button>
+          <?php endif; ?>
         </div>
+        <form method="GET" action="export_pdf.php" id="print-selected-form">
+          <input type="hidden" name="bulan" value="<?= htmlspecialchars((string)$filter_bulan) ?>">
+          <input type="hidden" name="tahun" value="<?= htmlspecialchars((string)$filter_tahun) ?>">
+          <input type="hidden" name="mode" value="selected">
         <div class="table-container">
           <table class="payment-table" id="tbl-laporan">
             <thead>
-              <tr><th>No</th><th>No. Induk</th><th>Nama</th><th>Kelas</th><th>Bulan Bayar</th><th>Sistem</th><th>Total (Rp)</th><th>Tgl Bayar</th></tr>
+              <tr>
+                <th class="select-col"><input type="checkbox" class="select-print-check" id="check-all-print" aria-label="Pilih semua transaksi"></th>
+                <th>No</th><th>No. Induk</th><th>Nama</th><th>Kelas</th><th>Bulan Bayar</th><th>Sistem</th><th>Total (Rp)</th><th>Tgl Bayar</th><th>Aksi</th>
+              </tr>
             </thead>
             <tbody>
               <?php if (empty($bayar_detail)): ?>
-              <tr><td colspan="8" style="text-align:center;padding:40px;color:var(--text-muted);">Belum ada data pembayaran pada periode ini.</td></tr>
+              <tr><td colspan="10" style="text-align:center;padding:40px;color:var(--text-muted);">Belum ada data pembayaran pada periode ini.</td></tr>
               <?php else: ?>
               <?php foreach ($bayar_detail as $i => $b): ?>
               <tr class="<?= $i%2===0?'row-highlight':'' ?>">
+                <td class="select-col"><input type="checkbox" class="select-print-check row-print-check" name="ids[]" value="<?= (int)$b['id'] ?>" aria-label="Pilih transaksi <?= htmlspecialchars($b['NAMA']) ?>"></td>
                 <td><?= $i+1 ?></td>
                 <td><span class="badge-nis"><?= htmlspecialchars($b['NO_INDUK']) ?></span></td>
                 <td><?= htmlspecialchars($b['NAMA']) ?></td>
@@ -243,12 +263,14 @@ $bulan_label = $bln_names[str_pad($filter_bulan, 2, '0', STR_PAD_LEFT)];
                 <td><?= htmlspecialchars($b['sistem_pembayaran'] ?? 'VA') ?></td>
                 <td class="nominal">Rp <?= number_format((float)$b['total_jumlah'],0,',','.') ?></td>
                 <td><?= date('d M Y', strtotime($b['TGL_BYR'])) ?></td>
+                <td class="aksi-col"><a class="btn-tbl btn-tbl-print" href="export_pdf.php?bulan=<?= urlencode((string)$filter_bulan) ?>&tahun=<?= urlencode((string)$filter_tahun) ?>&mode=selected&ids[]=<?= (int)$b['id'] ?>">Cetak</a></td>
               </tr>
               <?php endforeach; ?>
               <?php endif; ?>
             </tbody>
           </table>
         </div>
+        </form>
       </div>
     </div>
   </main>
@@ -256,6 +278,47 @@ $bulan_label = $bln_names[str_pad($filter_bulan, 2, '0', STR_PAD_LEFT)];
 
 <div class="toast" id="toast"><span id="toast-icon"></span><span id="toast-msg"></span></div>
   <script src="../assets/js/app.js?v=3.1"></script>
-<script>document.addEventListener('DOMContentLoaded', function(){ autoHideFlash(); });</script>
+<script>
+document.addEventListener('DOMContentLoaded', function(){
+  autoHideFlash();
+
+  const form = document.getElementById('print-selected-form');
+  const checkAll = document.getElementById('check-all-print');
+  const rowChecks = Array.from(document.querySelectorAll('.row-print-check'));
+  const printButton = document.getElementById('btn-print-selected');
+
+  function refreshPrintSelection() {
+    const selectedCount = rowChecks.filter(check => check.checked).length;
+    if (printButton) {
+      printButton.disabled = selectedCount === 0;
+      printButton.textContent = selectedCount > 0 ? 'Cetak Dipilih (' + selectedCount + ')' : 'Cetak Dipilih';
+    }
+    if (checkAll) {
+      checkAll.checked = selectedCount > 0 && selectedCount === rowChecks.length;
+      checkAll.indeterminate = selectedCount > 0 && selectedCount < rowChecks.length;
+    }
+  }
+
+  if (checkAll) {
+    checkAll.addEventListener('change', function(){
+      rowChecks.forEach(check => { check.checked = checkAll.checked; });
+      refreshPrintSelection();
+    });
+  }
+
+  rowChecks.forEach(check => check.addEventListener('change', refreshPrintSelection));
+
+  if (form) {
+    form.addEventListener('submit', function(event){
+      if (!rowChecks.some(check => check.checked)) {
+        event.preventDefault();
+        if (typeof showToast === 'function') {
+          showToast('!', 'Pilih minimal satu transaksi untuk dicetak.', 'error');
+        }
+      }
+    });
+  }
+});
+</script>
 </body>
 </html>

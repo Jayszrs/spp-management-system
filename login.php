@@ -87,7 +87,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
   <!-- Prevent theme flash -->
   <script>(function(){var t=localStorage.getItem('spp_theme')||'dark';document.documentElement.setAttribute('data-theme',t);})();</script>
-  <link rel="stylesheet" href="assets/css/style.css?v=3.8" />
+  <link rel="stylesheet" href="assets/css/style.css?v=3.9" />
   <link rel="stylesheet" href="assets/css/login.css?v=3.4" />
 </head>
 <body class="login-split-body<?= $loginSuccess ? ' login-authenticated' : '' ?>">

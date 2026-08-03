@@ -56,6 +56,42 @@ while ($paid = $spp_paid_result->fetch_assoc()) {
     $period_payments[$paid['NO_INDUK']]['komite'][$periodKey] = (float)$paid['paid_komite'];
 }
 
+$du_paid_periods = [];
+$du_paid_result = $koneksi->query("
+    SELECT no_induk, kelas, th_ajaran, COALESCE(SUM(jumlah), 0) AS paid_du
+    FROM bayar_du
+    WHERE kelas IS NOT NULL AND kelas <> '' AND th_ajaran IS NOT NULL AND th_ajaran <> ''
+    GROUP BY no_induk, kelas, th_ajaran
+");
+while ($paid = $du_paid_result->fetch_assoc()) {
+    $periodKey = trim((string)$paid['kelas']) . '|' . trim((string)$paid['th_ajaran']);
+    $du_paid_periods[$paid['no_induk']][$periodKey] = (float)$paid['paid_du'];
+}
+
+$master_daftar_ulang = [];
+$master_du_result = $koneksi->query("
+    SELECT kelas, th_ajaran, Jumlah
+    FROM Daftar_ulang
+    WHERE kelas IS NOT NULL AND kelas <> '' AND th_ajaran IS NOT NULL AND th_ajaran <> '' AND Jumlah > 0
+    ORDER BY th_ajaran ASC, kelas ASC, id ASC
+");
+while ($master = $master_du_result->fetch_assoc()) {
+    $periodKey = trim((string)$master['kelas']) . '|' . trim((string)$master['th_ajaran']);
+    $master_daftar_ulang[$periodKey] = (float)$master['Jumlah'];
+}
+
+$biaya_lain_paid = [];
+$biaya_lain_paid_result = $koneksi->query("
+    SELECT b.NO_INDUK, d.master_biaya_lain_id, COALESCE(SUM(d.nominal_snapshot), 0) AS paid
+    FROM bayar_biaya_lain d
+    JOIN bayar b ON b.id = d.bayar_id
+    WHERE d.master_biaya_lain_id IS NOT NULL
+    GROUP BY b.NO_INDUK, d.master_biaya_lain_id
+");
+while ($paid = $biaya_lain_paid_result->fetch_assoc()) {
+    $biaya_lain_paid[$paid['NO_INDUK']][(int)$paid['master_biaya_lain_id']] = (float)$paid['paid'];
+}
+
 $master_biaya_lain = $koneksi->query("
     SELECT id, nama, nominal
     FROM master_biaya_lain
@@ -97,7 +133,7 @@ unset($_SESSION['flash']);
   <meta name="description" content="Form input transaksi pembayaran siswa." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="../assets/css/style.css?v=3.8" />
+  <link rel="stylesheet" href="../assets/css/style.css?v=4.4" />
   <!-- Prevent theme flash -->
   <script>(function(){var t=localStorage.getItem('spp_theme')||'dark';document.documentElement.setAttribute('data-theme',t);})();</script>
 </head>
@@ -227,7 +263,8 @@ unset($_SESSION['flash']);
                   data-paid-makan="<?= money_attr($s['paid_makan']) ?>"
                   data-paid-sorga="<?= money_attr($s['paid_sorga']) ?>"
                   data-paid-infaq="<?= money_attr($s['paid_infaq']) ?>"
-                  data-paid-du="<?= money_attr($s['paid_du']) ?>">
+                  data-paid-du-periods="<?= htmlspecialchars(json_encode($du_paid_periods[$s['NO_INDUK']] ?? []), ENT_QUOTES, 'UTF-8') ?>"
+                  data-paid-biaya-lain="<?= htmlspecialchars(json_encode($biaya_lain_paid[$s['NO_INDUK']] ?? []), ENT_QUOTES, 'UTF-8') ?>">
                   <?= htmlspecialchars($s['NAMA']) ?> (Kelas <?= htmlspecialchars($s['KELAS']) ?>)
                 </option>
                 <?php endwhile; ?>
@@ -249,6 +286,7 @@ unset($_SESSION['flash']);
 
           <!-- Rincian Pembayaran -->
           <div class="section-divider"><span>Rincian Pembayaran</span></div>
+          <div class="alert alert-warning payment-overpaid-alert" id="payment-overpaid-alert" hidden></div>
           <div class="table-container">
             <table class="payment-table form-payment-table">
               <thead>
@@ -292,18 +330,25 @@ unset($_SESSION['flash']);
 
           <!-- Lain-lain -->
           <div class="section-divider"><span>Lain-lain</span></div>
+          <div class="alert alert-warning biaya-lain-overpaid-alert" id="biaya-lain-overpaid-alert" hidden></div>
           <div class="lainlain-grid" id="biaya-lain-list">
             <div class="lainlain-row biaya-lain-row">
               <span class="ll-num">1</span>
               <input type="hidden" name="biaya_lain_detail_id[]" value="" />
-              <select class="field-input field-select biaya-lain-select" name="biaya_lain_master_id[]">
-                <option value="">-- Pilih Biaya --</option>
-                <?php foreach ($master_biaya_lain as $biaya): ?>
-                <option value="<?= (int)$biaya['id'] ?>" data-nominal="<?= money_attr($biaya['nominal']) ?>"><?= htmlspecialchars($biaya['nama']) ?></option>
-                <?php endforeach; ?>
-              </select>
-              <input class="field-input biaya-lain-nominal" type="text" value="0" placeholder="Rp 0" readonly aria-label="Nominal biaya" />
-              <input class="field-input biaya-lain-keterangan" type="text" placeholder="Keterangan opsional..." name="biaya_lain_keterangan[]" maxlength="255" />
+              <label class="ll-field">
+                <span class="ll-field-label">Jenis</span>
+                <select class="field-input field-select biaya-lain-select" name="biaya_lain_master_id[]">
+                  <option value="">-- Pilih Biaya --</option>
+                  <?php foreach ($master_biaya_lain as $biaya): ?>
+                  <option value="<?= (int)$biaya['id'] ?>" data-nominal="<?= money_attr($biaya['nominal']) ?>"><?= htmlspecialchars($biaya['nama']) ?></option>
+                  <?php endforeach; ?>
+                </select>
+              </label>
+              <label class="ll-field"><span class="ll-field-label">Total</span><input class="field-input biaya-lain-total" type="text" value="0" placeholder="Total" readonly aria-label="Total biaya lain" /></label>
+              <label class="ll-field"><span class="ll-field-label">Sudah</span><input class="field-input biaya-lain-paid" type="text" value="0" placeholder="Sudah" readonly aria-label="Sudah dibayar biaya lain" /></label>
+              <label class="ll-field"><span class="ll-field-label">Sisa</span><input class="field-input biaya-lain-sisa" type="text" value="0" placeholder="Sisa" readonly aria-label="Sisa biaya lain" /></label>
+              <label class="ll-field"><span class="ll-field-label">Bayar</span><input class="field-input biaya-lain-nominal" type="text" value="0" placeholder="Input bayar" name="biaya_lain_nominal[]" aria-label="Input bayar biaya lain" /></label>
+              <label class="ll-field ll-field-note"><span class="ll-field-label">Keterangan</span><input class="field-input biaya-lain-keterangan" type="text" placeholder="Keterangan opsional..." name="biaya_lain_keterangan[]" maxlength="255" /></label>
               <button class="btn-icon-danger btn-remove-biaya-lain" type="button" title="Hapus baris" aria-label="Hapus baris">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/></svg>
               </button>
@@ -317,14 +362,20 @@ unset($_SESSION['flash']);
             <div class="lainlain-row biaya-lain-row">
               <span class="ll-num"></span>
               <input type="hidden" name="biaya_lain_detail_id[]" value="" />
-              <select class="field-input field-select biaya-lain-select" name="biaya_lain_master_id[]">
-                <option value="">-- Pilih Biaya --</option>
-                <?php foreach ($master_biaya_lain as $biaya): ?>
-                <option value="<?= (int)$biaya['id'] ?>" data-nominal="<?= money_attr($biaya['nominal']) ?>"><?= htmlspecialchars($biaya['nama']) ?></option>
-                <?php endforeach; ?>
-              </select>
-              <input class="field-input biaya-lain-nominal" type="text" value="0" readonly aria-label="Nominal biaya" />
-              <input class="field-input biaya-lain-keterangan" type="text" placeholder="Keterangan opsional..." name="biaya_lain_keterangan[]" maxlength="255" />
+              <label class="ll-field">
+                <span class="ll-field-label">Jenis</span>
+                <select class="field-input field-select biaya-lain-select" name="biaya_lain_master_id[]">
+                  <option value="">-- Pilih Biaya --</option>
+                  <?php foreach ($master_biaya_lain as $biaya): ?>
+                  <option value="<?= (int)$biaya['id'] ?>" data-nominal="<?= money_attr($biaya['nominal']) ?>"><?= htmlspecialchars($biaya['nama']) ?></option>
+                  <?php endforeach; ?>
+                </select>
+              </label>
+              <label class="ll-field"><span class="ll-field-label">Total</span><input class="field-input biaya-lain-total" type="text" value="0" placeholder="Total" readonly aria-label="Total biaya lain" /></label>
+              <label class="ll-field"><span class="ll-field-label">Sudah</span><input class="field-input biaya-lain-paid" type="text" value="0" placeholder="Sudah" readonly aria-label="Sudah dibayar biaya lain" /></label>
+              <label class="ll-field"><span class="ll-field-label">Sisa</span><input class="field-input biaya-lain-sisa" type="text" value="0" placeholder="Sisa" readonly aria-label="Sisa biaya lain" /></label>
+              <label class="ll-field"><span class="ll-field-label">Bayar</span><input class="field-input biaya-lain-nominal" type="text" value="0" placeholder="Input bayar" name="biaya_lain_nominal[]" aria-label="Input bayar biaya lain" /></label>
+              <label class="ll-field ll-field-note"><span class="ll-field-label">Keterangan</span><input class="field-input biaya-lain-keterangan" type="text" placeholder="Keterangan opsional..." name="biaya_lain_keterangan[]" maxlength="255" /></label>
               <button class="btn-icon-danger btn-remove-biaya-lain" type="button" title="Hapus baris" aria-label="Hapus baris">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/></svg>
               </button>
@@ -398,7 +449,10 @@ unset($_SESSION['flash']);
     </main>
   </div>
 
-  <script src="../assets/js/app.js?v=3.3"></script>
+  <script>
+    window.sppDaftarUlangMasters = <?= json_encode($master_daftar_ulang, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT) ?>;
+  </script>
+  <script src="../assets/js/app.js?v=3.9"></script>
 </body>
 </html>
 

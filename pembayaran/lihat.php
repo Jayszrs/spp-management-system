@@ -21,6 +21,21 @@ function month_code($value) {
     return str_pad((string)$value, 2, '0', STR_PAD_LEFT);
 }
 
+function format_payment_datetime($value): array {
+    $timestamp = strtotime((string)$value);
+    if (!$timestamp) return ['date' => '-', 'time' => '-'];
+    return [
+        'date' => date('d/m/Y', $timestamp),
+        'time' => date('H:i', $timestamp) . ' WIB'
+    ];
+}
+
+function payment_was_updated($createdAt, $updatedAt): bool {
+    $created = strtotime((string)$createdAt);
+    $updated = strtotime((string)$updatedAt);
+    return $created && $updated && $updated > ($created + 1);
+}
+
 // Filter
 $search     = trim($_GET['search'] ?? '');
 $filter_bln = $_GET['bulan']  ?? '';
@@ -76,7 +91,7 @@ $bln_list = [
   <meta name="description" content="Lihat semua data transaksi pembayaran siswa." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="../assets/css/style.css?v=3.8" />
+  <link rel="stylesheet" href="../assets/css/style.css?v=4.3" />
   <!-- Prevent theme flash -->
   <script>(function(){var t=localStorage.getItem('spp_theme')||'dark';document.documentElement.setAttribute('data-theme',t);})();</script>
 </head>
@@ -160,15 +175,24 @@ $bln_list = [
                 <th>SPP</th>
                 <th>Sistem</th>
                 <th>Total Bayar</th>
-                <th>Tanggal</th>
+                <th>Bayar / Update</th>
                 <th>Aksi</th>
               </tr>
             </thead>
             <tbody>
               <?php if ($result->num_rows > 0):
                 $no = 1;
-                while ($row = $result->fetch_assoc()): ?>
-              <tr>
+                while ($row = $result->fetch_assoc()):
+                  $paymentDateTime = format_payment_datetime($row['TGL_BYR']);
+                  $updatedDateTime = format_payment_datetime($row['updated_at'] ?? null);
+                  $wasUpdated = payment_was_updated($row['created_at'] ?? null, $row['updated_at'] ?? null);
+                  $canEdit = (int)($row['payment_link_version'] ?? 0) === 1;
+                  $editUrl = 'edit.php?id=' . (int)$row['id'];
+                  $rowAttrs = $canEdit
+                    ? ' class="clickable-payment-row" data-edit-url="' . htmlspecialchars($editUrl, ENT_QUOTES, 'UTF-8') . '" tabindex="0" role="link" aria-label="Edit pembayaran ' . htmlspecialchars($row['NAMA'], ENT_QUOTES, 'UTF-8') . '"'
+                    : '';
+                ?>
+              <tr<?= $rowAttrs ?>>
                 <td data-label="No"><?= $no++ ?></td>
                 <td data-label="NIS"><span class="badge-nis"><?= htmlspecialchars($row['NO_INDUK']) ?></span></td>
                 <td data-label="Nama Siswa"><?= htmlspecialchars($row['NAMA']) ?></td>
@@ -177,10 +201,18 @@ $bln_list = [
                 <td data-label="SPP" class="nominal">Rp <?= number_format($row['U_SPP'], 0, ',', '.') ?></td>
                 <td data-label="Sistem"><?= htmlspecialchars($row['sistem_pembayaran'] ?? 'VA') ?></td>
                 <td data-label="Total Bayar" class="nominal">Rp <?= number_format($row['total_jumlah'], 0, ',', '.') ?></td>
-                <td data-label="Tanggal"><?= date('d/m/Y', strtotime($row['TGL_BYR'])) ?></td>
+                <td data-label="Bayar / Update">
+                  <span class="date-time-cell">
+                    <strong>Bayar: <?= htmlspecialchars($paymentDateTime['date']) ?></strong>
+                    <small><?= htmlspecialchars($paymentDateTime['time']) ?></small>
+                    <?php if ($wasUpdated): ?>
+                    <small class="date-time-updated">Diubah: <?= htmlspecialchars($updatedDateTime['date']) ?> <?= htmlspecialchars($updatedDateTime['time']) ?></small>
+                    <?php endif; ?>
+                  </span>
+                </td>
                 <td data-label="Aksi" class="aksi-col">
-                  <?php if ((int)($row['payment_link_version'] ?? 0) === 1): ?>
-                  <a href="edit.php?id=<?= $row['id'] ?>" class="btn-tbl btn-tbl-edit" title="Edit">
+                  <?php if ($canEdit): ?>
+                  <a href="<?= htmlspecialchars($editUrl) ?>" class="btn-tbl btn-tbl-edit" title="Edit">
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                     Edit
                   </a>
@@ -212,7 +244,7 @@ $bln_list = [
     </main>
   </div>
 
-  <script src="../assets/js/app.js?v=3.0"></script>
+  <script src="../assets/js/app.js?v=3.8"></script>
 </body>
 </html>
 

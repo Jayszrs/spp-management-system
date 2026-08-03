@@ -38,7 +38,7 @@ $recent = $koneksi->query("
   <meta name="description" content="Dashboard admin sistem pembayaran SPP sekolah." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="assets/css/style.css?v=3.8" />
+  <link rel="stylesheet" href="assets/css/style.css?v=4.3" />
   <!-- Prevent theme flash -->
   <script>(function(){var t=localStorage.getItem('spp_theme')||'dark';document.documentElement.setAttribute('data-theme',t);})();</script>
 </head>
@@ -148,8 +148,14 @@ $recent = $koneksi->query("
             </thead>
             <tbody>
               <?php if ($recent->num_rows > 0): ?>
-                <?php while ($row = $recent->fetch_assoc()): ?>
-                 <tr>
+                <?php while ($row = $recent->fetch_assoc()):
+                  $canEdit = (int)($row['payment_link_version'] ?? 0) === 1;
+                  $editUrl = 'pembayaran/edit.php?id=' . (int)$row['id'];
+                  $rowAttrs = $canEdit
+                    ? ' class="clickable-payment-row" data-edit-url="' . htmlspecialchars($editUrl, ENT_QUOTES, 'UTF-8') . '" tabindex="0" role="link" aria-label="Edit pembayaran ' . htmlspecialchars($row['NAMA'], ENT_QUOTES, 'UTF-8') . '"'
+                    : '';
+                ?>
+                 <tr<?= $rowAttrs ?>>
                    <td data-label="NIS"><span class="badge-nis"><?= htmlspecialchars($row['NO_INDUK']) ?></span></td>
                    <td data-label="Nama Siswa"><?= htmlspecialchars($row['NAMA']) ?></td>
                    <td data-label="Kelas"><?= htmlspecialchars($row['KELAS']) ?></td>
@@ -157,8 +163,8 @@ $recent = $koneksi->query("
                    <td data-label="Total Bayar" class="nominal">Rp <?= number_format($row['total_jumlah'], 0, ',', '.') ?></td>
                    <td data-label="Tanggal"><?= date('d/m/Y', strtotime($row['TGL_BYR'])) ?></td>
                    <td data-label="Aksi">
-                     <?php if ((int)($row['payment_link_version'] ?? 0) === 1): ?>
-                     <a href="pembayaran/edit.php?id=<?= $row['id'] ?>" class="btn-tbl btn-tbl-edit" title="Edit">
+                     <?php if ($canEdit): ?>
+                     <a href="<?= htmlspecialchars($editUrl) ?>" class="btn-tbl btn-tbl-edit" title="Edit">
                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                      </a>
                      <a href="pembayaran/proses.php?aksi=hapus&id=<?= $row['id'] ?>" class="btn-tbl btn-tbl-del"
@@ -182,6 +188,6 @@ $recent = $koneksi->query("
     </main>
   </div><!-- /layout -->
 
-  <script src="assets/js/app.js?v=2.8"></script>
+  <script src="assets/js/app.js?v=3.8"></script>
 </body>
 </html>

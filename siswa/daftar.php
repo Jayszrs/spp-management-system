@@ -341,7 +341,7 @@ $canEditOpening = !$editStudent || (int)($editStudent['history_count'] ?? 0) ===
   <link rel="icon" type="image/png" href="../assets/img/favicon.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="../assets/css/style.css?v=3.8" />
+  <link rel="stylesheet" href="../assets/css/style.css?v=4.3" />
   <script>(function(){var t=localStorage.getItem('spp_theme')||'dark';document.documentElement.setAttribute('data-theme',t);})();</script>
 </head>
 <body>
@@ -504,8 +504,10 @@ $canEditOpening = !$editStudent || (int)($editStudent['history_count'] ?? 0) ===
             <tbody>
               <?php if (!$studentRows): ?>
               <tr><td colspan="8"><div class="empty-state"><p>Data siswa tidak ditemukan</p></div></td></tr>
-              <?php else: foreach ($studentRows as $index => $student): ?>
-              <tr>
+              <?php else: foreach ($studentRows as $index => $student):
+                $editUrl = 'daftar.php?edit=' . (int)$student['id'];
+              ?>
+              <tr class="clickable-payment-row" data-edit-url="<?= htmlspecialchars($editUrl, ENT_QUOTES, 'UTF-8') ?>" tabindex="0" role="link" aria-label="Edit siswa <?= htmlspecialchars($student['NAMA'], ENT_QUOTES, 'UTF-8') ?>">
                 <td data-label="No"><?= $index + 1 ?></td>
                 <td data-label="No. Induk"><span class="badge-nis"><?= htmlspecialchars($student['NO_INDUK']) ?></span></td>
                 <td data-label="Nama Siswa"><?= htmlspecialchars($student['NAMA']) ?></td>
@@ -514,7 +516,7 @@ $canEditOpening = !$editStudent || (int)($editStudent['history_count'] ?? 0) ===
                 <td data-label="Status"><span class="master-status <?= $student['is_active'] ? 'is-active' : 'is-inactive' ?>"><?= $student['is_active'] ? 'Aktif' : 'Diarsipkan' ?></span></td>
                 <td data-label="Transaksi"><span class="badge-count"><?= (int)$student['history_count'] ?>x</span></td>
                 <td data-label="Aksi" class="aksi-col">
-                  <a class="btn-tbl btn-tbl-edit" href="daftar.php?edit=<?= (int)$student['id'] ?>">Edit</a>
+                  <a class="btn-tbl btn-tbl-edit" href="<?= htmlspecialchars($editUrl) ?>">Edit</a>
                   <form method="POST" action="daftar.php" style="display:inline" onsubmit="return confirm('<?= $student['is_active'] ? 'Arsipkan' : 'Pulihkan' ?> siswa <?= htmlspecialchars(addslashes($student['NAMA'])) ?>?')">
                     <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_student']) ?>" />
                     <input type="hidden" name="aksi" value="toggle_status" /><input type="hidden" name="id" value="<?= (int)$student['id'] ?>" />
@@ -530,7 +532,7 @@ $canEditOpening = !$editStudent || (int)($editStudent['history_count'] ?? 0) ===
     </main>
   </div>
 
-  <script src="../assets/js/app.js?v=3.2"></script>
+  <script src="../assets/js/app.js?v=3.8"></script>
   <script>
     document.addEventListener('DOMContentLoaded', function () {
       const toggle = document.getElementById('advanced-enabled');
