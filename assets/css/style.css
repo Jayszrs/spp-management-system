@@ -2681,7 +2681,7 @@ input[list]::-webkit-calendar-picker-indicator { display: none !important; }
 .recap-report-shell .class-recap-table th.recap-identity-head {
   background: #143f31 !important;
   color: #fff !important;
-  text-align: left;
+  text-align: center;
   vertical-align: middle;
 }
 .recap-report-shell .class-recap-table th.recap-number-head {
