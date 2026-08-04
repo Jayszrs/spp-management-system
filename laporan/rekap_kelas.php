@@ -166,7 +166,7 @@ unset($row);
   <meta name="description" content="Rekap pembayaran siswa berdasarkan kelas dan periode." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="../assets/css/style.css?v=5.3" />
+  <link rel="stylesheet" href="../assets/css/style.css?v=5.4" />
   <script>(function(){var t=localStorage.getItem('spp_theme')||'dark';document.documentElement.setAttribute('data-theme',t);})();</script>
 </head>
 <body>
@@ -257,12 +257,13 @@ unset($row);
           <table class="payment-table class-recap-table">
             <thead>
               <tr>
-                <th rowspan="2" class="recap-identity-head recap-number-head">No</th>
-                <th rowspan="2" class="recap-identity-head">Nama Peserta Didik</th>
-                <th rowspan="2" class="recap-identity-head">Status SPP</th>
+                <th colspan="3" class="recap-identity-group-head">Data Siswa</th>
                 <th colspan="10" class="recap-group-head">Pembayaran <?= recap_e($monthNames[$filterMonth]) ?> <?= $filterYear ?></th>
               </tr>
               <tr>
+                <th class="recap-identity-head recap-number-head">No</th>
+                <th class="recap-identity-head">Nama Peserta Didik</th>
+                <th class="recap-identity-head">Status SPP</th>
                 <th class="recap-component-head">Pangkal</th>
                 <th class="recap-component-head">Bangunan</th>
                 <th class="recap-component-head">Seragam</th>

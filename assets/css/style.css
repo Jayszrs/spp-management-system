@@ -2678,17 +2678,22 @@ input[list]::-webkit-calendar-picker-indicator { display: none !important; }
   font-weight: 850;
   letter-spacing: 0.28px;
 }
+.recap-report-shell .class-recap-table th.recap-identity-group-head {
+  background: linear-gradient(180deg, #174b3a 0%, #123b2f 100%) !important;
+  color: #fff !important;
+  text-align: center;
+  font-size: 13px;
+  border-top-left-radius: 12px;
+  border-right: 1px solid rgba(255,255,255,0.18);
+}
 .recap-report-shell .class-recap-table th.recap-identity-head {
   background: linear-gradient(180deg, #174b3a 0%, #123b2f 100%) !important;
   color: #fff !important;
   text-align: center;
   vertical-align: middle;
   border-right: 1px solid rgba(255,255,255,0.18);
-  border-bottom: 0;
+  border-bottom: 1px solid rgba(255,255,255,0.18);
   box-shadow: none;
-}
-.recap-report-shell .class-recap-table thead tr:first-child th.recap-identity-head:first-child {
-  border-top-left-radius: 12px;
 }
 .recap-report-shell .class-recap-table th.recap-number-head {
   width: 64px;
