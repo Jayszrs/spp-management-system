@@ -585,6 +585,55 @@ function paidBiayaLainForSelectedStudent(masterId) {
   }
 }
 
+function refreshBiayaLainAvailability() {
+  const rows = Array.from(document.querySelectorAll('#biaya-lain-list .biaya-lain-row'));
+  const addButton = document.getElementById('btn-add-biaya-lain');
+
+  rows.forEach(row => {
+    const select = row.querySelector('.biaya-lain-select');
+    if (!select) return;
+    const selectedId = select.value;
+
+    Array.from(select.options).forEach(option => {
+      if (!option.value) return;
+      const baseLabel = option.dataset.baseLabel || option.textContent.replace(/\s+—\s+(Lunas|Sudah dipilih)$/u, '');
+      option.dataset.baseLabel = baseLabel;
+      const fullyPaid = paidBiayaLainForSelectedStudent(option.value) >= parseNumber(option.dataset.nominal || 0) - 0.001;
+      const usedByOtherRow = rows.some(otherRow => otherRow !== row
+        && otherRow.querySelector('.biaya-lain-select')?.value === option.value);
+      option.disabled = option.value !== selectedId && (fullyPaid || usedByOtherRow);
+      option.textContent = baseLabel + (fullyPaid ? ' — Lunas' : (usedByOtherRow ? ' — Sudah dipilih' : ''));
+    });
+
+    const selectedOption = select.options[select.selectedIndex];
+    const total = parseNumber(selectedOption?.dataset.nominal || 0);
+    const paid = selectedId ? paidBiayaLainForSelectedStudent(selectedId) : 0;
+    const duplicated = !!selectedId && rows.some(otherRow => otherRow !== row
+      && otherRow.querySelector('.biaya-lain-select')?.value === selectedId);
+    let message = '';
+    if (selectedId && paid >= total - 0.001) {
+      message = (selectedOption?.dataset.baseLabel || 'Biaya ini') + ' sudah lunas dan tidak dapat ditambahkan lagi.';
+    } else if (duplicated) {
+      message = (selectedOption?.dataset.baseLabel || 'Biaya ini') + ' hanya boleh dipilih satu kali dalam satu transaksi.';
+    }
+    select.setCustomValidity(message);
+    if (message) select.title = message;
+    else select.removeAttribute('title');
+    row.classList.toggle('row-unavailable', !!message);
+  });
+
+  if (!addButton) return;
+  const referenceSelect = rows[0]?.querySelector('.biaya-lain-select');
+  const hasAvailableMaster = referenceSelect && Array.from(referenceSelect.options).some(option => {
+    if (!option.value) return false;
+    const fullyPaid = paidBiayaLainForSelectedStudent(option.value) >= parseNumber(option.dataset.nominal || 0) - 0.001;
+    const alreadyUsed = rows.some(row => row.querySelector('.biaya-lain-select')?.value === option.value);
+    return !fullyPaid && !alreadyUsed;
+  });
+  addButton.disabled = !hasAvailableMaster;
+  addButton.title = hasAvailableMaster ? '' : 'Semua biaya tersedia sudah lunas atau sudah dipilih.';
+}
+
 function refreshBiayaLainRow(row, preserveInput) {
   const select = row?.querySelector('.biaya-lain-select');
   const totalEl = row?.querySelector('.biaya-lain-total');
@@ -643,6 +692,10 @@ function refreshBiayaLainWarnings() {
     const paid = parseNumber(row.querySelector('.biaya-lain-paid')?.value || 0);
     const inputValue = parseNumber(input?.value || 0);
     const remaining = Math.max(0, total - paid);
+    if (select?.validationMessage) {
+      warnings.push(select.validationMessage);
+      return;
+    }
     const isTooMuch = select?.value && inputValue > remaining + 0.001;
     if (!isTooMuch) return;
 
@@ -681,6 +734,7 @@ function addBiayaLainRow() {
   bindNumericInput(row?.querySelector('.biaya-lain-nominal'));
   refreshBiayaLainRow(row, false);
   renumberBiayaLainRows();
+  refreshBiayaLainAvailability();
   updateTotal();
 }
 
@@ -713,10 +767,12 @@ document.addEventListener('DOMContentLoaded', function () {
       row.remove();
     }
     renumberBiayaLainRows();
+    refreshBiayaLainAvailability();
     updateTotal();
   });
   renumberBiayaLainRows();
   document.querySelectorAll('.biaya-lain-row').forEach(row => refreshBiayaLainRow(row, true));
+  refreshBiayaLainAvailability();
 });
 
 /* ── Hitung Sisa ─────────────────────────── */
@@ -732,6 +788,7 @@ function hitungSisa(key) {
 function updateTotal() {
   refreshOverpaidWarnings();
   refreshPaymentInputOverlimitWarnings();
+  refreshBiayaLainAvailability();
   document.querySelectorAll('.biaya-lain-row').forEach(row => refreshBiayaLainRow(row, true));
   refreshBiayaLainWarnings();
   const ids = ['pangkal-input','bangunan-input','seragam-input','kegiatan-input','spp-input','komite-input','makan-input','sorga-input','infaq-input','du-input'];
@@ -792,6 +849,7 @@ function resetForm() {
     bindNumericInput(row?.querySelector('.biaya-lain-nominal'));
     refreshBiayaLainRow(row, false);
     renumberBiayaLainRows();
+    refreshBiayaLainAvailability();
   }
   clearOverpaidUiState();
   updateTotal();

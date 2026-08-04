@@ -3020,3 +3020,71 @@ input[list]::-webkit-calendar-picker-indicator { display: none !important; }
   .recap-report-shell .class-recap-scroll { display: block !important; }
 }
 
+/* Riwayat daftar ulang */
+.biaya-lain-row.row-unavailable {
+  border-color: rgba(239,68,68,.36);
+  background: rgba(239,68,68,.045);
+}
+.biaya-lain-select option:disabled { color: var(--text-muted); }
+.btn-add-biaya-lain:disabled { cursor: not-allowed; opacity: .48; transform: none; }
+.du-history-card { overflow: hidden; }
+.du-history-filter { align-items: stretch; }
+.du-history-filter .search-box { flex: 1 1 260px; min-width: 210px; }
+.du-history-filter .filter-sel { flex: 1 1 145px; max-width: 195px; }
+.du-history-summary { margin-top: 18px; }
+.du-history-table { min-width: 1120px; }
+.du-history-table td > strong { color: var(--text-primary); }
+.du-history-nis {
+  display: block;
+  margin-top: 4px;
+  color: var(--text-muted);
+  font-size: 10.5px;
+}
+.du-payment-details { min-width: 290px; }
+.du-payment-details summary {
+  width: fit-content;
+  cursor: pointer;
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 800;
+  list-style-position: inside;
+}
+.du-payment-timeline {
+  display: grid;
+  gap: 7px;
+  margin-top: 9px;
+}
+.du-payment-entry {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 9px 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: rgba(148,163,184,.045);
+}
+.du-payment-entry > div:first-child { display: grid; gap: 3px; }
+.du-payment-entry strong { color: var(--text-primary); font-size: 11px; }
+.du-payment-entry span { color: var(--text-muted); font-size: 9.5px; line-height: 1.4; }
+.du-payment-actions { display: flex; gap: 5px; flex: 0 0 auto; }
+
+@media (max-width: 768px) {
+  .du-history-card { padding: 14px; }
+  .du-history-card .card-title-row { align-items: flex-start; gap: 12px; }
+  .du-history-card .card-title-row .btn { width: auto; }
+  .du-history-filter { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .du-history-filter .search-box { grid-column: 1 / -1; min-width: 0; }
+  .du-history-filter .filter-sel { width: 100%; max-width: none; }
+  .du-history-table { min-width: 0; }
+  .du-payment-details { min-width: 0; }
+}
+
+@media (max-width: 480px) {
+  .du-history-card .card-title-row { flex-direction: column; }
+  .du-history-card .card-title-row .btn { width: 100%; }
+  .du-history-filter { grid-template-columns: 1fr; }
+  .du-history-filter .search-box { grid-column: auto; }
+  .du-payment-entry { align-items: flex-start; flex-direction: column; }
+}
+

@@ -442,7 +442,7 @@ $selectedPaymentMethod = $d['sistem_pembayaran'] ?? 'VA';
                     $isSelected = (int)$biaya['id'] === $selectedMasterId;
                     if (!(int)$biaya['is_active'] && !$isSelected) continue;
                   ?>
-                  <option value="<?= (int)$biaya['id'] ?>" data-nominal="<?= money_attr($biaya['nominal']) ?>" <?= $isSelected ? 'selected' : '' ?>>
+                  <option value="<?= (int)$biaya['id'] ?>" data-nominal="<?= money_attr($biaya['nominal']) ?>" data-base-label="<?= htmlspecialchars($isSelected ? $detail['nama_biaya_snapshot'] : $biaya['nama']) ?><?= !(int)$biaya['is_active'] ? ' (Nonaktif)' : '' ?>" <?= $isSelected ? 'selected' : '' ?>>
                     <?= htmlspecialchars($isSelected ? $detail['nama_biaya_snapshot'] : $biaya['nama']) ?><?= !(int)$biaya['is_active'] ? ' (Nonaktif)' : '' ?>
                   </option>
                   <?php endforeach; ?>
@@ -477,7 +477,7 @@ $selectedPaymentMethod = $d['sistem_pembayaran'] ?? 'VA';
                 <select class="field-input field-select biaya-lain-select" name="biaya_lain_master_id[]">
                   <option value="">-- Pilih Biaya --</option>
                   <?php foreach ($master_biaya_lain as $biaya): if (!(int)$biaya['is_active']) continue; ?>
-                  <option value="<?= (int)$biaya['id'] ?>" data-nominal="<?= money_attr($biaya['nominal']) ?>"><?= htmlspecialchars($biaya['nama']) ?></option>
+                  <option value="<?= (int)$biaya['id'] ?>" data-nominal="<?= money_attr($biaya['nominal']) ?>" data-base-label="<?= htmlspecialchars($biaya['nama']) ?>"><?= htmlspecialchars($biaya['nama']) ?></option>
                   <?php endforeach; ?>
                 </select>
               </label>
@@ -546,7 +546,7 @@ $selectedPaymentMethod = $d['sistem_pembayaran'] ?? 'VA';
       updateTotal();
     });
   </script>
-  <script src="../assets/js/app.js?v=4.3"></script>
+  <script src="../assets/js/app.js?v=4.4"></script>
 </body>
 </html>
 

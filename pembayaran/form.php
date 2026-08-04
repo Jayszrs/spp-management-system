@@ -352,7 +352,7 @@ unset($_SESSION['flash']);
                 <select class="field-input field-select biaya-lain-select" name="biaya_lain_master_id[]">
                   <option value="">-- Pilih Biaya --</option>
                   <?php foreach ($master_biaya_lain as $biaya): ?>
-                  <option value="<?= (int)$biaya['id'] ?>" data-nominal="<?= money_attr($biaya['nominal']) ?>"><?= htmlspecialchars($biaya['nama']) ?></option>
+                  <option value="<?= (int)$biaya['id'] ?>" data-nominal="<?= money_attr($biaya['nominal']) ?>" data-base-label="<?= htmlspecialchars($biaya['nama']) ?>"><?= htmlspecialchars($biaya['nama']) ?></option>
                   <?php endforeach; ?>
                 </select>
               </label>
@@ -379,7 +379,7 @@ unset($_SESSION['flash']);
                 <select class="field-input field-select biaya-lain-select" name="biaya_lain_master_id[]">
                   <option value="">-- Pilih Biaya --</option>
                   <?php foreach ($master_biaya_lain as $biaya): ?>
-                  <option value="<?= (int)$biaya['id'] ?>" data-nominal="<?= money_attr($biaya['nominal']) ?>"><?= htmlspecialchars($biaya['nama']) ?></option>
+                  <option value="<?= (int)$biaya['id'] ?>" data-nominal="<?= money_attr($biaya['nominal']) ?>" data-base-label="<?= htmlspecialchars($biaya['nama']) ?>"><?= htmlspecialchars($biaya['nama']) ?></option>
                   <?php endforeach; ?>
                 </select>
               </label>
@@ -449,7 +449,7 @@ unset($_SESSION['flash']);
     window.sppDaftarUlangMasters = <?= json_encode($master_daftar_ulang, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT) ?>;
     window.sppDaftarUlangHasMasters = <?= $has_master_daftar_ulang ? 'true' : 'false' ?>;
   </script>
-  <script src="../assets/js/app.js?v=4.3"></script>
+  <script src="../assets/js/app.js?v=4.4"></script>
 </body>
 </html>
 

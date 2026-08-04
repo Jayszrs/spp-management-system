@@ -308,6 +308,14 @@ function collect_biaya_lain(mysqli $koneksi, string $noInduk, int $bayarId = 0):
             throw new RuntimeException($master['nama'] . ' sudah melebihi total tagihan. Total: Rp ' . number_format($masterTotal, 0, ',', '.') . ', sudah terbayar: Rp ' . number_format($paidBefore, 0, ',', '.') . '. Cek ulang transaksi sebelumnya.');
         }
 
+        if ($paidBefore >= $masterTotal - 0.001) {
+            throw new RuntimeException($master['nama'] . ' sudah lunas dan tidak dapat ditambahkan lagi.');
+        }
+
+        if (array_key_exists($masterId, $submittedByMaster)) {
+            throw new RuntimeException($master['nama'] . ' hanya boleh dipilih satu kali dalam satu transaksi.');
+        }
+
         $submittedBefore = (float)($submittedByMaster[$masterId] ?? 0);
         $remaining = max(0, $masterTotal - $paidBefore - $submittedBefore);
         if ($nominalInput > $remaining + 0.001) {
