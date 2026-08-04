@@ -16,6 +16,7 @@ Thumbs.db
 tmp/
 temp/
 documentation/_sop_preview_*.png
+documentation/_flow_preview_*.png
 
 # Composer dependencies
 vendor/
