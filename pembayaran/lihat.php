@@ -10,6 +10,19 @@ requireRole(['admin']);
 
 $flash = $_SESSION['flash'] ?? null;
 unset($_SESSION['flash']);
+$printPayment = is_array($flash['print_payment'] ?? null) ? $flash['print_payment'] : null;
+$printPaymentId = max(0, (int)($printPayment['id'] ?? 0));
+$printPaymentMonth = str_pad((string)(int)($printPayment['bulan'] ?? 0), 2, '0', STR_PAD_LEFT);
+$printPaymentYear = (string)(int)($printPayment['tahun'] ?? 0);
+$showPrintPrompt = $printPaymentId > 0
+    && preg_match('/^(0[1-9]|1[0-2])$/', $printPaymentMonth)
+    && preg_match('/^\d{4}$/', $printPaymentYear);
+$printPaymentUrl = '../laporan/export_pdf.php?' . http_build_query([
+    'mode' => 'selected',
+    'bulan' => $printPaymentMonth,
+    'tahun' => $printPaymentYear,
+    'ids' => [$printPaymentId],
+]);
 
 function month_code($value) {
     $map = [
@@ -124,6 +137,20 @@ $bln_list = [
           <?php endif; ?>
         </svg>
         <?= htmlspecialchars($flash['msg']) ?>
+      </div>
+      <?php endif; ?>
+
+      <?php if ($showPrintPrompt): ?>
+      <div class="modal-overlay show" id="receipt-print-modal" role="dialog" aria-modal="true" aria-labelledby="receipt-print-title">
+        <div class="modal-box">
+          <div class="modal-icon" aria-hidden="true">🧾</div>
+          <h3 class="modal-title" id="receipt-print-title">Cetak struk pembayaran?</h3>
+          <p class="modal-body">Pembayaran sudah tersimpan. Kamu bisa langsung membuka struk transaksi ini tanpa memilihnya lagi dari halaman Laporan.</p>
+          <div class="modal-actions">
+            <button type="button" class="btn btn-ghost" id="receipt-print-later">Tidak, nanti</button>
+            <button type="button" class="btn btn-primary" id="receipt-print-now">Ya, cetak struk</button>
+          </div>
+        </div>
       </div>
       <?php endif; ?>
 
@@ -245,6 +272,26 @@ $bln_list = [
   </div>
 
   <script src="../assets/js/app.js?v=4.1"></script>
+  <?php if ($showPrintPrompt): ?>
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      const modal = document.getElementById('receipt-print-modal');
+      const printNow = document.getElementById('receipt-print-now');
+      const printLater = document.getElementById('receipt-print-later');
+      const closePrompt = function () {
+        modal.classList.remove('show');
+        window.setTimeout(function () { modal.remove(); }, 250);
+      };
+
+      printLater.addEventListener('click', closePrompt);
+      printNow.addEventListener('click', function () {
+        window.open(<?= json_encode($printPaymentUrl, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT) ?>, '_blank', 'noopener');
+        closePrompt();
+      });
+      printNow.focus();
+    });
+  </script>
+  <?php endif; ?>
 </body>
 </html>
 

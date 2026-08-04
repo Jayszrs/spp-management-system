@@ -538,7 +538,15 @@ if ($aksi === 'input') {
         save_linked_savings($koneksi, $bayar_id, $no_induk, $tanggal_bayar, $tabungan_wajib, $user_id);
 
         $koneksi->commit();
-        $_SESSION['flash'] = ['type' => 'success', 'msg' => 'Data pembayaran berhasil disimpan!'];
+        $_SESSION['flash'] = [
+            'type' => 'success',
+            'msg' => 'Data pembayaran berhasil disimpan!',
+            'print_payment' => [
+                'id' => $bayar_id,
+                'bulan' => $bulan_bayar,
+                'tahun' => (string)$tahun_bayar,
+            ],
+        ];
         header('Location: lihat.php');
         exit;
     } catch (Exception $e) {

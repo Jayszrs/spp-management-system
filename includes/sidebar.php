@@ -57,6 +57,10 @@ $allNavItems = [
   ['laporan/index.php', 'Laporan',
    '<path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>',
    ['admin', 'bendahara']],
+
+  ['laporan/rekap_kelas.php', 'Rekap per Kelas',
+   '<path d="M3 3h18v18H3z"/><path d="M3 9h18M9 3v18"/>',
+   ['admin', 'bendahara']],
 ];
 
 // Filter nav items berdasarkan role
@@ -75,6 +79,7 @@ $shortLabels = [
   'Tabungan Keluar'   => 'Keluar',
   'Riwayat Tabungan'  => 'Riwayat',
   'Laporan'           => 'Laporan',
+  'Rekap per Kelas'   => 'Rekap',
 ];
 
 // Role label
