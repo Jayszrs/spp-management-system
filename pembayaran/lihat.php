@@ -18,12 +18,7 @@ $isUpdatedPayment = ($printPayment['source'] ?? '') === 'update';
 $showPrintPrompt = $printPaymentId > 0
     && preg_match('/^(0[1-9]|1[0-2])$/', $printPaymentMonth)
     && preg_match('/^\d{4}$/', $printPaymentYear);
-$printPaymentUrl = '../laporan/export_pdf.php?' . http_build_query([
-    'mode' => 'selected',
-    'bulan' => $printPaymentMonth,
-    'tahun' => $printPaymentYear,
-    'ids' => [$printPaymentId],
-]);
+$printPaymentUrl = '../laporan/cetak_struk.php?' . http_build_query(['id' => $printPaymentId]);
 
 function month_code($value) {
     $map = [

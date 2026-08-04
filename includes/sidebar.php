@@ -106,7 +106,8 @@ $roleAvatar = $roleAvatars[$role] ?? 'US';
   <nav class="sidebar-nav">
     <?php $lastSection = null; ?>
     <?php foreach ($navItems as [$href, $label, $icon, $roles, $section]):
-      $isActive = (strpos($_SERVER['PHP_SELF'], str_replace('../', '', $href)) !== false) ? 'active' : '';
+      $isRecapDetail = $href === 'laporan/rekap_kelas.php' && strpos($_SERVER['PHP_SELF'], 'laporan/detail_siswa.php') !== false;
+      $isActive = (strpos($_SERVER['PHP_SELF'], str_replace('../', '', $href)) !== false || $isRecapDetail) ? 'active' : '';
     ?>
     <?php if ($section !== $lastSection): $lastSection = $section; ?>
     <div class="nav-section-label"><?= htmlspecialchars($section) ?></div>
@@ -149,7 +150,8 @@ $roleAvatar = $roleAvatars[$role] ?? 'US';
 <!-- Material 3 Bottom Navigation for Mobile -->
 <nav class="bottom-nav">
   <?php foreach ($navItems as [$href, $label, $icon, $roles, $section]):
-    $isActive   = (strpos($_SERVER['PHP_SELF'], str_replace('../', '', $href)) !== false) ? 'active' : '';
+    $isRecapDetail = $href === 'laporan/rekap_kelas.php' && strpos($_SERVER['PHP_SELF'], 'laporan/detail_siswa.php') !== false;
+    $isActive   = (strpos($_SERVER['PHP_SELF'], str_replace('../', '', $href)) !== false || $isRecapDetail) ? 'active' : '';
     $shortLabel = $shortLabels[$label] ?? $label;
   ?>
   <a href="<?= $root . $href ?>" class="bottom-nav-item <?= $isActive ?>">

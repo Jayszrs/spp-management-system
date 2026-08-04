@@ -166,7 +166,7 @@ unset($row);
   <meta name="description" content="Rekap pembayaran siswa berdasarkan kelas dan periode." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="../assets/css/style.css?v=4.7" />
+  <link rel="stylesheet" href="../assets/css/style.css?v=4.9" />
   <script>(function(){var t=localStorage.getItem('spp_theme')||'dark';document.documentElement.setAttribute('data-theme',t);})();</script>
 </head>
 <body>
@@ -183,7 +183,7 @@ unset($row);
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
         </button>
         <div class="topbar-title">
-          <h2>Rekap Pembayaran per Kelas</h2>
+          <h2>Rekap Kelas</h2>
           <span class="breadcrumb">SistemSPP / Laporan / Rekap Kelas</span>
         </div>
         <div class="clock-badge" id="liveClock">--:--:--</div>
@@ -280,9 +280,16 @@ unset($row);
               <tr><td colspan="13" class="text-center recap-empty">Belum ada siswa aktif di kelas <?= recap_e($filterClass) ?> untuk filter ini.</td></tr>
               <?php else: ?>
               <?php foreach ($rows as $index => $row): ?>
+              <?php $detailUrl = 'detail_siswa.php?' . http_build_query([
+                  'nis' => $row['NO_INDUK'],
+                  'kelas' => $filterClass,
+                  'bulan' => $filterMonth,
+                  'tahun' => $filterYear,
+                  'q' => $search,
+              ]); ?>
               <tr>
                 <td class="text-center recap-row-number"><?= $index + 1 ?></td>
-                <td class="recap-student-name"><strong><?= recap_e($row['NAMA']) ?></strong><span>NIS <?= recap_e($row['NO_INDUK']) ?> · <?= (int)$row['transaksi'] ?> transaksi</span></td>
+                <td class="recap-student-name"><a class="recap-student-link" href="<?= recap_e($detailUrl) ?>"><?= recap_e($row['NAMA']) ?></a><span>NIS <?= recap_e($row['NO_INDUK']) ?> · <?= (int)$row['transaksi'] ?> transaksi</span></td>
                 <td><span class="recap-status <?= recap_e($row['status_class']) ?>"><?= recap_e($row['status_label']) ?></span></td>
                 <td class="recap-money"><?= recap_money($row['pangkal']) ?></td>
                 <td class="recap-money"><?= recap_money($row['bangunan']) ?></td>
@@ -299,6 +306,39 @@ unset($row);
               <?php endif; ?>
             </tbody>
           </table>
+        </div>
+
+        <div class="recap-mobile-list">
+          <?php if (!$rows): ?>
+          <div class="recap-mobile-empty">Belum ada siswa aktif di kelas <?= recap_e($filterClass) ?> untuk filter ini.</div>
+          <?php else: foreach ($rows as $index => $row): ?>
+          <?php $detailUrl = 'detail_siswa.php?' . http_build_query([
+              'nis' => $row['NO_INDUK'],
+              'kelas' => $filterClass,
+              'bulan' => $filterMonth,
+              'tahun' => $filterYear,
+              'q' => $search,
+          ]); ?>
+          <article class="recap-mobile-card">
+            <div class="recap-mobile-card-head">
+              <span class="recap-mobile-number"><?= $index + 1 ?></span>
+              <div>
+                <a href="<?= recap_e($detailUrl) ?>"><?= recap_e($row['NAMA']) ?></a>
+                <span>NIS <?= recap_e($row['NO_INDUK']) ?> · <?= (int)$row['transaksi'] ?> transaksi</span>
+              </div>
+              <span class="recap-status <?= recap_e($row['status_class']) ?>"><?= recap_e($row['status_label']) ?></span>
+            </div>
+            <div class="recap-mobile-values">
+              <div><span>SPP</span><strong><?= recap_money($row['spp']) ?></strong></div>
+              <div><span>Komite</span><strong><?= recap_money($row['komite']) ?></strong></div>
+              <div><span>Daftar Ulang</span><strong><?= recap_money($row['daftar_ulang']) ?></strong></div>
+              <div><span>Biaya Lain</span><strong><?= recap_money($row['biaya_lain']) ?></strong></div>
+              <div><span>Tabungan</span><strong><?= recap_money($row['tabungan']) ?></strong></div>
+              <div class="is-total"><span>Total</span><strong><?= recap_money($row['total_bayar']) ?></strong></div>
+            </div>
+            <a class="recap-mobile-detail" href="<?= recap_e($detailUrl) ?>">Lihat riwayat selama sekolah <span>→</span></a>
+          </article>
+          <?php endforeach; endif; ?>
         </div>
       </div>
     </main>

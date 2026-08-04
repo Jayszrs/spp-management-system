@@ -263,7 +263,7 @@ $bulan_label = $bln_names[str_pad($filter_bulan, 2, '0', STR_PAD_LEFT)];
                 <td><?= htmlspecialchars($b['sistem_pembayaran'] ?? 'VA') ?></td>
                 <td class="nominal">Rp <?= number_format((float)$b['total_jumlah'],0,',','.') ?></td>
                 <td><?= date('d M Y', strtotime($b['TGL_BYR'])) ?></td>
-                <td class="aksi-col"><a class="btn-tbl btn-tbl-print" href="export_pdf.php?bulan=<?= urlencode((string)$filter_bulan) ?>&tahun=<?= urlencode((string)$filter_tahun) ?>&mode=selected&ids[]=<?= (int)$b['id'] ?>">Cetak</a></td>
+                <td class="aksi-col"><a class="btn-tbl btn-tbl-print" href="cetak_struk.php?id=<?= (int)$b['id'] ?>" target="_blank" rel="noopener">Cetak</a></td>
               </tr>
               <?php endforeach; ?>
               <?php endif; ?>
