@@ -24,7 +24,7 @@ function validate_payment_amounts(array $amounts): void {
     }
 }
 
-function validate_payment_context(string $tanggal, string $bulan, string $tahun, float $uangDu, string $kelasDu, string $tahunAjaran): void {
+function validate_payment_context(string $tanggal, string $bulan, string $tahun): void {
     if (!in_array($bulan, ['01','02','03','04','05','06','07','08','09','10','11','12'], true)) {
         throw new RuntimeException('Bulan pembayaran tidak valid.');
     }
@@ -34,12 +34,21 @@ function validate_payment_context(string $tanggal, string $bulan, string $tahun,
     if (!$parsedDate || $parsedDate->format('Y-m-d') !== $datePart) {
         throw new RuntimeException('Tanggal pembayaran tidak valid.');
     }
-    if ($uangDu > 0 && !in_array($kelasDu, ['1','2','3','4','5','6'], true)) {
-        throw new RuntimeException('Kelas daftar ulang harus dipilih dari kelas 1 sampai 6.');
+}
+
+function academic_year_from_payment_period(string $bulan, string $tahun): string {
+    $month = (int)$bulan;
+    $year = (int)$tahun;
+    $start = $month >= 7 ? $year : $year - 1;
+    return $start . '/' . ($start + 1);
+}
+
+function normalize_student_class_for_du(array $student): string {
+    $kelas = preg_replace('/\D+/', '', (string)($student['KELAS'] ?? ''));
+    if (!in_array($kelas, ['1','2','3','4','5','6'], true)) {
+        throw new RuntimeException('Kelas siswa tidak valid untuk Daftar Ulang.');
     }
-    if ($uangDu > 0 && !preg_match('/^\d{4}\/\d{4}$/', $tahunAjaran)) {
-        throw new RuntimeException('Tahun ajaran daftar ulang tidak valid.');
-    }
+    return $kelas;
 }
 
 function normalize_payment_method($value): string {
@@ -184,7 +193,7 @@ function validate_component_remaining(
         'makan' => ['label' => 'Uang Makan', 'total' => 0.0, 'paid' => (float)($paid['makan'] ?? 0), 'input' => (float)($components['makan'] ?? 0)],
         'sorga' => ['label' => 'Uang Sorga', 'total' => 0.0, 'paid' => (float)($paid['sorga'] ?? 0), 'input' => (float)($components['sorga'] ?? 0)],
         'infaq' => ['label' => 'Uang Infaq', 'total' => 0.0, 'paid' => (float)($paid['infaq'] ?? 0), 'input' => (float)($components['infaq'] ?? 0)],
-        'du' => ['label' => 'Uang Daftar Ulang', 'total' => $duTotal, 'paid' => (float)($paid['du'] ?? 0), 'input' => $uangDu],
+        'du' => ['label' => 'Daftar Ulang', 'total' => $duTotal, 'paid' => (float)($paid['du'] ?? 0), 'input' => $uangDu],
     ];
 
     foreach ($limits as $limit) {

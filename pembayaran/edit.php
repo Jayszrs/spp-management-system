@@ -135,43 +135,25 @@ while ($master = $master_du_result->fetch_assoc()) {
 }
 $has_master_daftar_ulang = count($master_daftar_ulang) > 0;
 
-function current_academic_year(): string {
+function active_academic_year_from_payment_period($bulan, $tahun): string {
+    $month = (int)month_code($bulan);
+    $year = (int)$tahun;
+    if ($month < 1 || $month > 12 || $year < 2000) {
+        $year = (int)date('Y');
+        $month = (int)date('n');
+    }
+    $start = $month >= 7 ? $year : $year - 1;
+    return $start . '/' . ($start + 1);
+}
+
+function active_academic_year_from_today(): string {
     $year = (int)date('Y');
     $month = (int)date('n');
     $start = $month >= 7 ? $year : $year - 1;
     return $start . '/' . ($start + 1);
 }
 
-function academic_year_options(array $existingYears = [], array $includeYears = [], int $range = 3): array {
-    $activeYear = current_academic_year();
-    $activeStart = (int)substr($activeYear, 0, 4);
-    $options = [];
-
-    for ($offset = -$range; $offset <= $range; $offset++) {
-        $start = $activeStart + $offset;
-        $label = $start . '/' . ($start + 1);
-        $options[$label] = $label;
-    }
-
-    foreach (array_merge($existingYears, $includeYears) as $year) {
-        $year = trim((string)$year);
-        if (preg_match('/^\d{4}\/\d{4}$/', $year)) {
-            $options[$year] = $year;
-        }
-    }
-
-    krsort($options);
-    return array_values($options);
-}
-
-$master_daftar_ulang_years = [];
-foreach (array_keys($master_daftar_ulang) as $periodKey) {
-    [, $year] = explode('|', $periodKey, 2);
-    $master_daftar_ulang_years[$year] = $year;
-}
-$activeAcademicYear = current_academic_year();
-$selectedAcademicYear = !empty($d['th_ajaran']) ? $d['th_ajaran'] : $activeAcademicYear;
-$daftar_ulang_years = academic_year_options(array_values($master_daftar_ulang_years), [$selectedAcademicYear, $activeAcademicYear]);
+$selectedAcademicYear = active_academic_year_from_payment_period($d['BULAN'], $d['TAHUN']);
 
 $biaya_lain_paid = [];
 $stmt_biaya_lain_paid = $koneksi->prepare("
@@ -417,7 +399,7 @@ $selectedPaymentMethod = $d['sistem_pembayaran'] ?? 'VA';
                   ['makan', '🍽️ Uang Makan', 'U_MAKAN', 'uang_makan'],
                   ['sorga', '🌅 Uang Sorga', 'U_SORGA', 'uang_sorga'],
                   ['infaq', '🕌 Uang Infaq', 'U_INFAQ', 'uang_infaq'],
-                  ['du', '📚 Uang Daftar Ulang', 'uang_du', 'uang_du']
+                  ['du', '📚 Daftar Ulang', 'uang_du', 'uang_du']
                 ];
                 array_splice($komp, 5, 0, [[ 'komite', 'Uang Komite', 'U_KOMITE', 'uang_komite' ]]);
                 foreach ($komp as $i => [$key,$label,$col,$inputName]):
@@ -531,32 +513,8 @@ $selectedPaymentMethod = $d['sistem_pembayaran'] ?? 'VA';
             </div>
           </div>
 
-          <!-- Daftar Ulang -->
-          <div class="section-divider"><span>Info Daftar Ulang</span></div>
-          <div class="fields-grid">
-            <div class="field-row">
-              <label class="field-label">Kelas Daftar Ulang</label>
-              <select class="field-input field-select" id="kelas-du" name="kelas_du" <?= $selectedDuClass !== '' ? 'data-preserve-default="1"' : '' ?>>
-                <option value="">-- Pilih Kelas --</option>
-                <?php
-                $selectedDuClass = preg_replace('/\D+/', '', (string)$d['kelas_du']);
-                for ($kl = 1; $kl <= 6; $kl++):
-                ?>
-                <option value="<?= $kl ?>" <?= $selectedDuClass === (string)$kl ? 'selected' : '' ?>>Kelas <?= $kl ?></option>
-                <?php endfor; ?>
-              </select>
-            </div>
-            <div class="field-row">
-              <label class="field-label">Tahun Ajaran</label>
-              <select class="field-input field-select" id="tahun-ajaran-du" name="tahun_ajaran_du">
-                <?php foreach($daftar_ulang_years as $ta): ?>
-                <option value="<?= htmlspecialchars($ta) ?>" <?= $selectedAcademicYear === $ta ? 'selected' : '' ?>>
-                  <?= htmlspecialchars($ta) ?><?= $activeAcademicYear === $ta ? ' - Tahun ajaran aktif' : '' ?>
-                </option>
-                <?php endforeach; ?>
-              </select>
-            </div>
-          </div>
+          <input type="hidden" id="kelas-du" name="kelas_du" value="<?= htmlspecialchars(preg_replace('/\D+/', '', (string)$d['KELAS'])) ?>" />
+          <input type="hidden" id="tahun-ajaran-du" name="tahun_ajaran_du" value="<?= htmlspecialchars($selectedAcademicYear) ?>" />
           <p class="field-hint du-master-warning" id="du-master-warning" hidden></p>
 
           <!-- Catatan -->
@@ -588,7 +546,7 @@ $selectedPaymentMethod = $d['sistem_pembayaran'] ?? 'VA';
       updateTotal();
     });
   </script>
-  <script src="../assets/js/app.js?v=4.2"></script>
+  <script src="../assets/js/app.js?v=4.3"></script>
 </body>
 </html>
 

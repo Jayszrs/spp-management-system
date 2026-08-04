@@ -161,22 +161,36 @@ function pilihSiswaDatalist(input) {
 }
 
 function applyDefaultDaftarUlangClass(opt) {
-  const select = document.getElementById('kelas-du') || document.querySelector('[name="kelas_du"]');
-  if (!select || !opt) return;
-  if (select.dataset.userChanged === '1') return;
-  if (select.dataset.preserveDefault === '1' && select.value) return;
-
   const studentClass = String(opt.dataset.kelas || '').match(/[1-6]/)?.[0] || '';
-  if (!studentClass) return;
-  if (Array.from(select.options).some(option => option.value === studentClass)) {
-    select.value = studentClass;
-  }
+  setDaftarUlangContext(studentClass, academicYearFromPaymentPeriod());
 }
 
 function selectedPaymentPeriod() {
   const bulan = document.getElementById('bulan-bayar')?.value || '';
   const tahun = document.getElementById('tahun-bayar')?.value || '';
   return bulan && tahun ? bulan + '-' + tahun : '';
+}
+
+function academicYearFromPaymentPeriod() {
+  const month = parseNumber(document.getElementById('bulan-bayar')?.value || 0);
+  const year = parseNumber(document.getElementById('tahun-bayar')?.value || 0);
+  if (!month || !year) return '';
+  const start = month >= 7 ? year : year - 1;
+  return start + '/' + (start + 1);
+}
+
+function setDaftarUlangContext(kelas, tahunAjaran) {
+  const kelasInput = document.getElementById('kelas-du') || document.querySelector('[name="kelas_du"]');
+  const tahunInput = document.getElementById('tahun-ajaran-du') || document.querySelector('[name="tahun_ajaran_du"]');
+  if (kelasInput) kelasInput.value = kelas || '';
+  if (tahunInput) tahunInput.value = tahunAjaran || '';
+}
+
+function syncDaftarUlangContextFromCurrentState() {
+  const opt = selectedStudentOption();
+  const kelas = opt ? String(opt.dataset.kelas || '').match(/[1-6]/)?.[0] || '' : '';
+  setDaftarUlangContext(kelas, academicYearFromPaymentPeriod());
+  return opt;
 }
 
 function datasetNumber(opt, prefix, key) {
@@ -206,7 +220,7 @@ function paidForPeriod(opt, key) {
 
 function selectedDaftarUlangKey() {
   const kelas = document.getElementById('kelas-du')?.value || document.querySelector('[name="kelas_du"]')?.value || '';
-  const tahun = document.getElementById('tahun-ajaran-du')?.value || document.querySelector('[name="tahun_ajaran_du"]')?.value || '';
+  const tahun = document.getElementById('tahun-ajaran-du')?.value || document.querySelector('[name="tahun_ajaran_du"]')?.value || academicYearFromPaymentPeriod();
   return kelas && tahun ? kelas + '|' + tahun : '';
 }
 
@@ -253,7 +267,7 @@ function refreshDaftarUlangMasterWarning(opt) {
 
   const [kelas, tahun] = periodKey.split('|');
   warning.hidden = false;
-  warning.textContent = 'Master daftar ulang kelas ' + kelas + ' tahun ajaran ' + tahun + ' belum diatur. Lengkapi master daftar ulang agar nominal DU bisa dipakai.';
+  warning.textContent = 'Master daftar ulang kelas ' + kelas + ' tahun ajaran ' + tahun + ' belum diatur. Lengkapi Master Daftar Ulang agar cicilan bisa dicatat.';
 }
 
 function paidDaftarUlangForContext(opt) {
@@ -429,7 +443,7 @@ function clearOverpaidUiState() {
 }
 
 function refreshSelectedStudentPaymentDetails() {
-  const opt = selectedStudentOption();
+  const opt = syncDaftarUlangContextFromCurrentState();
   if (opt) applyStudentPaymentDetails(opt);
 }
 
@@ -512,10 +526,7 @@ document.addEventListener('DOMContentLoaded', function () {
     tgl.value = new Date().toISOString().split('T')[0];
   }
 
-  document.querySelectorAll('#bulan-bayar, #tahun-bayar, #kelas-du, #tahun-ajaran-du, [name="kelas_du"], [name="tahun_ajaran_du"]').forEach(el => {
-    if (el.name === 'kelas_du') {
-      el.addEventListener('change', () => { el.dataset.userChanged = '1'; });
-    }
+  document.querySelectorAll('#bulan-bayar, #tahun-bayar').forEach(el => {
     el.addEventListener('change', refreshSelectedStudentPaymentDetails);
   });
 
