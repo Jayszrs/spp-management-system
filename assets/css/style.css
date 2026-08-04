@@ -2468,3 +2468,295 @@ input[list]::-webkit-calendar-picker-indicator { display: none !important; }
   }
 }
 
+/* Rekap kelas — layout laporan bertingkat seperti lembar penilaian */
+.recap-report-shell {
+  padding: 0 !important;
+  overflow: hidden;
+  border-radius: 22px;
+}
+.recap-report-header {
+  display: grid;
+  grid-template-columns: minmax(280px, 1fr) minmax(560px, 0.95fr);
+  gap: 28px;
+  align-items: start;
+  padding: 26px 28px 22px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-card);
+}
+.recap-report-copy { padding-top: 8px; }
+.recap-class-overline {
+  display: block;
+  margin-bottom: 7px;
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 1.25px;
+  text-transform: uppercase;
+}
+.recap-report-copy h1 {
+  margin: 0;
+  color: var(--text-primary);
+  font-family: 'Outfit', 'Inter', sans-serif;
+  font-size: clamp(24px, 2.3vw, 34px);
+  line-height: 1.15;
+  letter-spacing: -0.6px;
+}
+.recap-report-copy p {
+  margin: 8px 0 0;
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+.recap-header-controls {
+  min-width: 0;
+  display: grid;
+  gap: 9px;
+}
+.recap-filter-label {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.45px;
+  text-transform: uppercase;
+}
+.recap-filter-fields {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr 0.82fr;
+  gap: 9px;
+}
+.recap-filter-field {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+.recap-filter-field span {
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.35px;
+  text-transform: uppercase;
+}
+.recap-filter-field select {
+  width: 100%;
+  height: 44px;
+  padding: 0 36px 0 13px;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  outline: none;
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  font: 600 13px 'Inter', sans-serif;
+  cursor: pointer;
+  transition: border-color var(--transition), box-shadow var(--transition);
+}
+.recap-filter-field select:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(31, 157, 85, 0.12);
+}
+.recap-search-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 9px;
+  align-items: center;
+}
+.recap-header-search {
+  height: 42px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 0 13px;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  background: var(--bg-surface);
+  color: var(--text-muted);
+}
+.recap-header-search:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(31, 157, 85, 0.12);
+}
+.recap-header-search input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--text-primary);
+  font: 500 13px 'Inter', sans-serif;
+}
+.recap-reset-link {
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 800;
+  text-decoration: none;
+  padding: 9px 10px;
+}
+.recap-reset-link:hover { color: var(--accent); }
+.recap-view-switch {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 7px;
+  padding: 5px;
+  border-radius: 13px;
+  background: rgba(148, 163, 184, 0.09);
+}
+.recap-view-switch button {
+  min-height: 40px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--text-secondary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font: 800 12.5px 'Inter', sans-serif;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+.recap-view-switch button:hover { color: var(--accent); background: rgba(255,255,255,0.05); }
+.recap-view-switch button.is-active {
+  color: var(--accent);
+  background: var(--bg-elevated);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+}
+.recap-period-strip {
+  min-height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 28px;
+  border-bottom: 1px solid var(--border);
+  background: rgba(31, 157, 85, 0.045);
+}
+.recap-period-strip div { display: grid; gap: 3px; }
+.recap-period-strip strong { color: var(--text-primary); font-size: 13px; }
+.recap-period-strip div span { color: var(--text-muted); font-size: 11.5px; }
+.recap-period-strip > span {
+  padding: 5px 11px;
+  border-radius: 999px;
+  background: var(--green-bg);
+  color: var(--green);
+  font-size: 11px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.recap-report-shell .class-recap-scroll {
+  margin: 0;
+  max-height: 610px;
+  border: 0;
+  border-radius: 0;
+  overflow: auto;
+}
+.recap-report-shell .class-recap-table {
+  min-width: 1420px;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+.recap-report-shell .class-recap-table thead {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+}
+.recap-report-shell .class-recap-table th {
+  height: 46px;
+  padding: 10px 14px;
+  border-right: 1px solid rgba(255,255,255,0.18);
+  border-bottom: 1px solid rgba(255,255,255,0.2);
+  font-size: 11px;
+  font-weight: 850;
+  letter-spacing: 0.28px;
+}
+.recap-report-shell .class-recap-table th.recap-identity-head {
+  background: #143f31 !important;
+  color: #fff !important;
+  text-align: left;
+  vertical-align: middle;
+}
+.recap-report-shell .class-recap-table th.recap-number-head {
+  width: 64px;
+  text-align: center;
+}
+.recap-report-shell .class-recap-table th.recap-group-head {
+  background: #07845d !important;
+  color: #fff !important;
+  text-align: center;
+  font-size: 13px;
+}
+.recap-report-shell .class-recap-table th.recap-component-head {
+  background: #e8f8f0 !important;
+  color: #174c3a !important;
+  text-align: center;
+  border-right-color: #bde7d2;
+  border-bottom-color: #a8dec2;
+}
+.recap-report-shell .class-recap-table td {
+  height: 62px;
+  padding: 12px 14px;
+  border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-card);
+}
+.recap-report-shell .class-recap-table tbody tr:nth-child(even) td {
+  background: rgba(148,163,184,0.035);
+}
+.recap-row-number {
+  color: var(--text-muted) !important;
+  font-weight: 800;
+}
+.recap-report-shell .recap-student-name {
+  min-width: 270px;
+  white-space: normal;
+}
+.recap-report-shell .recap-student-name strong {
+  display: block !important;
+  color: var(--text-primary) !important;
+  font-size: 13px;
+  line-height: 1.3;
+}
+.recap-report-shell .recap-student-name span {
+  display: block !important;
+  margin-top: 4px;
+  color: var(--text-muted) !important;
+  font-size: 10.5px;
+  line-height: 1.25;
+}
+.recap-report-shell .recap-money {
+  min-width: 110px;
+  text-align: center;
+  color: var(--text-secondary);
+}
+
+[data-theme="light"] .recap-report-shell,
+[data-theme="light"] .recap-report-header { background: #fff; }
+[data-theme="light"] .recap-view-switch { background: #f1f3f4; }
+[data-theme="light"] .recap-view-switch button.is-active { background: #fff; box-shadow: 0 2px 7px rgba(19,63,49,0.12); }
+[data-theme="light"] .recap-filter-field select,
+[data-theme="light"] .recap-header-search { background: #fff; }
+[data-theme="light"] .recap-report-shell .class-recap-table td { background: #fff; color: #43554d; }
+[data-theme="light"] .recap-report-shell .class-recap-table tbody tr:nth-child(even) td { background: #f8faf9; }
+
+@media (max-width: 1180px) {
+  .recap-report-header { grid-template-columns: 1fr; }
+  .recap-header-controls { width: 100%; }
+}
+
+@media (max-width: 680px) {
+  .recap-report-header { padding: 20px 16px; gap: 20px; }
+  .recap-filter-fields { grid-template-columns: 1fr; }
+  .recap-search-row { grid-template-columns: 1fr; }
+  .recap-reset-link { text-align: center; }
+  .recap-view-switch { grid-template-columns: 1fr; }
+  .recap-period-strip { align-items: flex-start; flex-direction: column; padding: 12px 16px; }
+}
+
+@media print {
+  .recap-report-header { display: block; padding: 0 0 12px; }
+  .recap-period-strip { padding: 8px 0; }
+  .recap-report-shell .class-recap-scroll { max-height: none; overflow: visible; }
+  .recap-report-shell .class-recap-table { min-width: 0; }
+  .recap-report-shell .class-recap-table th,
+  .recap-report-shell .class-recap-table td { height: auto; padding: 4px 3px; }
+  .recap-report-shell .class-recap-table th.recap-identity-head { background: #dceee5 !important; color: #111 !important; }
+  .recap-report-shell .class-recap-table th.recap-group-head { background: #cce8da !important; color: #111 !important; }
+}
+

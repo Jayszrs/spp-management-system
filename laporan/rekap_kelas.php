@@ -20,11 +20,7 @@ function recap_money($value): string {
     return $amount > 0 ? 'Rp ' . number_format($amount, 0, ',', '.') : '—';
 }
 
-$classes = [];
-$classResult = $koneksi->query("SELECT DISTINCT KELAS FROM siswa WHERE KELAS <> '' ORDER BY CAST(KELAS AS UNSIGNED), KELAS");
-while ($classRow = $classResult->fetch_assoc()) {
-    $classes[] = (string)$classRow['KELAS'];
-}
+$classes = array_map('strval', range(1, 6));
 
 $filterClass = trim((string)($_GET['kelas'] ?? ($classes[0] ?? '')));
 if ($classes && !in_array($filterClass, $classes, true)) {
@@ -39,6 +35,12 @@ if ($filterYear < 2000 || $filterYear > 2100) {
     $filterYear = (int)date('Y');
 }
 $search = trim((string)($_GET['q'] ?? ''));
+
+$classCountStmt = $koneksi->prepare('SELECT COUNT(*) AS total FROM siswa WHERE is_active = 1 AND KELAS = ?');
+$classCountStmt->bind_param('s', $filterClass);
+$classCountStmt->execute();
+$classStudentTotal = (int)$classCountStmt->get_result()->fetch_assoc()['total'];
+$classCountStmt->close();
 
 $monthAliases = array_values(array_unique([
     $filterMonth,
@@ -164,7 +166,7 @@ unset($row);
   <meta name="description" content="Rekap pembayaran siswa berdasarkan kelas dan periode." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="../assets/css/style.css?v=4.4" />
+  <link rel="stylesheet" href="../assets/css/style.css?v=4.5" />
   <script>(function(){var t=localStorage.getItem('spp_theme')||'dark';document.documentElement.setAttribute('data-theme',t);})();</script>
 </head>
 <body>
@@ -187,82 +189,101 @@ unset($row);
         <div class="clock-badge" id="liveClock">--:--:--</div>
       </div>
 
-      <div class="main-card class-recap-card">
-        <div class="card-title-row">
-          <div>
-            <div class="recap-kicker">Kelas <?= recap_e($filterClass ?: '-') ?></div>
-            <div class="card-title">Rekap <?= recap_e($monthNames[$filterMonth]) ?> <?= $filterYear ?></div>
-            <p class="recap-subtitle">Data ditarik langsung dari siswa aktif dan transaksi pembayaran pada periode terpilih.</p>
+      <div class="main-card class-recap-card recap-report-shell">
+        <div class="recap-report-header">
+          <div class="recap-report-copy">
+            <span class="recap-class-overline">Kelas <?= recap_e($filterClass) ?></span>
+            <h1>Data Pembayaran &amp; Rekap Kelas</h1>
+            <p><?= number_format(count($rows)) ?> siswa tampil dari <?= number_format($classStudentTotal) ?> siswa.</p>
           </div>
-          <button type="button" class="btn btn-warning recap-no-print" onclick="window.print()">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
-            Cetak Rekap
-          </button>
+
+          <form method="GET" action="rekap_kelas.php" class="recap-header-controls recap-no-print">
+            <span class="recap-filter-label">Filter Rekap</span>
+            <div class="recap-filter-fields">
+              <label class="recap-filter-field">
+                <span>Kelas</span>
+                <select name="kelas" required>
+                  <?php foreach ($classes as $class): ?>
+                  <option value="<?= $class ?>" <?= $filterClass === $class ? 'selected' : '' ?>>Kelas <?= $class ?></option>
+                  <?php endforeach; ?>
+                </select>
+              </label>
+              <label class="recap-filter-field">
+                <span>Bulan</span>
+                <select name="bulan">
+                  <?php foreach ($monthNames as $code => $label): ?>
+                  <option value="<?= $code ?>" <?= $filterMonth === $code ? 'selected' : '' ?>><?= recap_e($label) ?></option>
+                  <?php endforeach; ?>
+                </select>
+              </label>
+              <label class="recap-filter-field">
+                <span>Tahun</span>
+                <select name="tahun">
+                  <?php for ($year = (int)date('Y') - 2; $year <= (int)date('Y') + 1; $year++): ?>
+                  <option value="<?= $year ?>" <?= $filterYear === $year ? 'selected' : '' ?>><?= $year ?></option>
+                  <?php endfor; ?>
+                </select>
+              </label>
+            </div>
+            <div class="recap-search-row">
+              <label class="recap-header-search">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                <input type="text" name="q" placeholder="Cari nama / NIS..." value="<?= recap_e($search) ?>" />
+              </label>
+              <a href="rekap_kelas.php" class="recap-reset-link">Reset</a>
+            </div>
+            <div class="recap-view-switch">
+              <button type="submit" class="is-active">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3h18v18H3z"/><path d="M3 9h18M9 3v18"/></svg>
+                Tampilkan Rekap
+              </button>
+              <button type="button" onclick="window.print()">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+                Cetak Rekap
+              </button>
+            </div>
+          </form>
         </div>
 
-        <form method="GET" action="rekap_kelas.php" class="filter-bar recap-filter recap-no-print">
-          <div class="search-box">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-            <input type="text" name="q" placeholder="Cari nama / NIS..." value="<?= recap_e($search) ?>" />
+        <div class="recap-period-strip">
+          <div>
+            <strong>Pembayaran <?= recap_e($monthNames[$filterMonth]) ?> <?= $filterYear ?></strong>
+            <span>SPP diterima Rp <?= number_format($summary['paid_spp'], 0, ',', '.') ?> · Total penerimaan Rp <?= number_format($summary['total'], 0, ',', '.') ?></span>
           </div>
-          <select class="field-input field-select filter-sel" name="kelas" required>
-            <?php foreach ($classes as $class): ?>
-            <option value="<?= recap_e($class) ?>" <?= $filterClass === $class ? 'selected' : '' ?>>Kelas <?= recap_e($class) ?></option>
-            <?php endforeach; ?>
-          </select>
-          <select class="field-input field-select filter-sel month-code-select" name="bulan">
-            <?php foreach ($monthNames as $code => $label): ?>
-            <option value="<?= $code ?>" data-label="<?= recap_e($label) ?>" <?= $filterMonth === $code ? 'selected' : '' ?>><?= recap_e($label) ?></option>
-            <?php endforeach; ?>
-          </select>
-          <select class="field-input field-select filter-sel" name="tahun">
-            <?php for ($year = (int)date('Y') - 2; $year <= (int)date('Y') + 1; $year++): ?>
-            <option value="<?= $year ?>" <?= $filterYear === $year ? 'selected' : '' ?>><?= $year ?></option>
-            <?php endfor; ?>
-          </select>
-          <button type="submit" class="btn btn-primary">Tampilkan</button>
-          <a href="rekap_kelas.php" class="btn btn-ghost">Reset</a>
-        </form>
-
-        <div class="recap-summary-grid">
-          <div class="recap-summary-item"><span>Siswa ditampilkan</span><strong><?= number_format($summary['students']) ?></strong></div>
-          <div class="recap-summary-item"><span>SPP diterima</span><strong>Rp <?= number_format($summary['paid_spp'], 0, ',', '.') ?></strong></div>
-          <div class="recap-summary-item"><span>Total penerimaan</span><strong>Rp <?= number_format($summary['total'], 0, ',', '.') ?></strong></div>
-          <div class="recap-summary-item"><span>SPP lunas</span><strong><?= number_format($summary['paid_off']) ?> siswa</strong></div>
+          <span><?= number_format($summary['paid_off']) ?> siswa lunas</span>
         </div>
 
         <div class="table-container class-recap-scroll">
           <table class="payment-table class-recap-table">
             <thead>
               <tr>
-                <th rowspan="2">No</th>
-                <th rowspan="2">NIS</th>
-                <th rowspan="2">Nama Siswa</th>
-                <th colspan="10" class="text-center">Pembayaran <?= recap_e($monthNames[$filterMonth]) ?> <?= $filterYear ?></th>
-                <th rowspan="2">Status SPP</th>
+                <th rowspan="2" class="recap-identity-head recap-number-head">No</th>
+                <th rowspan="2" class="recap-identity-head">Nama Peserta Didik</th>
+                <th rowspan="2" class="recap-identity-head">Status SPP</th>
+                <th colspan="10" class="recap-group-head">Pembayaran <?= recap_e($monthNames[$filterMonth]) ?> <?= $filterYear ?></th>
               </tr>
               <tr>
-                <th>Pangkal</th>
-                <th>Bangunan</th>
-                <th>Seragam</th>
-                <th>Kegiatan</th>
-                <th>SPP</th>
-                <th>Komite</th>
-                <th>Daftar Ulang</th>
-                <th>Biaya Lain</th>
-                <th>Tabungan</th>
-                <th>Total</th>
+                <th class="recap-component-head">Pangkal</th>
+                <th class="recap-component-head">Bangunan</th>
+                <th class="recap-component-head">Seragam</th>
+                <th class="recap-component-head">Kegiatan</th>
+                <th class="recap-component-head">SPP</th>
+                <th class="recap-component-head">Komite</th>
+                <th class="recap-component-head">Daftar Ulang</th>
+                <th class="recap-component-head">Biaya Lain</th>
+                <th class="recap-component-head">Tabungan</th>
+                <th class="recap-component-head">Total</th>
               </tr>
             </thead>
             <tbody>
               <?php if (!$rows): ?>
-              <tr><td colspan="14" class="text-center recap-empty">Belum ada siswa aktif untuk filter ini.</td></tr>
+              <tr><td colspan="13" class="text-center recap-empty">Belum ada siswa aktif di kelas <?= recap_e($filterClass) ?> untuk filter ini.</td></tr>
               <?php else: ?>
               <?php foreach ($rows as $index => $row): ?>
               <tr>
-                <td class="text-center"><?= $index + 1 ?></td>
-                <td><span class="badge-nis"><?= recap_e($row['NO_INDUK']) ?></span></td>
-                <td class="recap-student-name"><strong><?= recap_e($row['NAMA']) ?></strong><small>Kelas <?= recap_e($row['KELAS']) ?> · <?= (int)$row['transaksi'] ?> transaksi</small></td>
+                <td class="text-center recap-row-number"><?= $index + 1 ?></td>
+                <td class="recap-student-name"><strong><?= recap_e($row['NAMA']) ?></strong><span>NIS <?= recap_e($row['NO_INDUK']) ?> · <?= (int)$row['transaksi'] ?> transaksi</span></td>
+                <td><span class="recap-status <?= recap_e($row['status_class']) ?>"><?= recap_e($row['status_label']) ?></span></td>
                 <td class="recap-money"><?= recap_money($row['pangkal']) ?></td>
                 <td class="recap-money"><?= recap_money($row['bangunan']) ?></td>
                 <td class="recap-money"><?= recap_money($row['seragam']) ?></td>
@@ -273,7 +294,6 @@ unset($row);
                 <td class="recap-money"><?= recap_money($row['biaya_lain']) ?></td>
                 <td class="recap-money"><?= recap_money($row['tabungan']) ?></td>
                 <td class="recap-money recap-total"><?= recap_money($row['total_bayar']) ?></td>
-                <td><span class="recap-status <?= recap_e($row['status_class']) ?>"><?= recap_e($row['status_label']) ?></span></td>
               </tr>
               <?php endforeach; ?>
               <?php endif; ?>
