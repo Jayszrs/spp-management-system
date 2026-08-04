@@ -55,7 +55,7 @@ Sistem pembayaran sudah ditambahkan dengan pilihan `Tunai`, `VA`, dan `Qris`. Ni
 
 Total pembayaran dihitung ulang dari backend agar data yang tersimpan tidak bergantung pada nilai dari browser. Untuk biaya tambahan, aplikasi menggunakan master biaya lain sehingga jenis biaya dapat dikelola secara dinamis. Biaya lain juga sudah mendukung cicilan: sistem menampilkan total tagihan, sudah dibayar, sisa, dan input bayar sehingga pembayaran tidak harus langsung lunas.
 
-Untuk daftar ulang, sistem memakai master `Daftar_ulang` berdasarkan kombinasi kelas dan tahun ajaran jika data master tersedia. Jika master belum diisi, sistem memakai fallback dari nominal daftar ulang pada data siswa agar transaksi tetap dapat berjalan. Perhitungan sisa daftar ulang dipisahkan per siswa, kelas daftar ulang, dan tahun ajaran.
+Untuk daftar ulang, sistem memakai master `Daftar_ulang` berdasarkan kombinasi kelas dan tahun ajaran. Jika tabel master masih kosong total, sistem memakai fallback dari nominal daftar ulang pada data siswa agar transaksi lama tetap dapat berjalan. Jika master sudah ada tetapi kelas/tahun ajaran yang dipilih belum diatur, sistem menampilkan peringatan dan pembayaran daftar ulang ditolak sampai master dilengkapi. Perhitungan sisa daftar ulang dipisahkan per siswa, kelas daftar ulang, dan tahun ajaran.
 
 ### 5. Fitur Master Biaya Lain
 
@@ -63,25 +63,31 @@ Master Biaya Lain digunakan untuk mengelola daftar biaya tambahan. Admin dapat m
 
 Biaya yang sudah digunakan pada transaksi tetap tersimpan melalui snapshot nama dan nominal bayar. Keputusan ini dibuat agar perubahan tarif di masa depan tidak mengubah histori transaksi lama, sekaligus tetap memungkinkan pembayaran bertahap sesuai sisa tagihan siswa.
 
-### 6. Fitur Tabungan
+### 6. Fitur Master Daftar Ulang
+
+Master Daftar Ulang digunakan untuk mengelola nominal daftar ulang per kelas dan tahun ajaran. Admin dapat menambahkan, mengubah, dan menghapus tarif selama tarif tersebut belum digunakan pada histori pembayaran.
+
+Setiap kombinasi kelas dan tahun ajaran dibuat unik agar tidak ada tarif ganda. Dengan konsep ini, ketika tahun ajaran baru berubah, admin cukup membuat master nominal baru tanpa mengubah histori daftar ulang tahun sebelumnya.
+
+### 7. Fitur Tabungan
 
 Fitur tabungan digunakan untuk mencatat transaksi tabungan masuk dan tabungan keluar siswa. Sistem menampilkan saldo siswa, total masuk, total keluar, dan riwayat transaksi tabungan.
 
 Penarikan tabungan tidak boleh melebihi saldo yang tersedia. Riwayat tabungan juga sudah dirapikan pada tampilan mobile, termasuk filter bulan, tahun, nomor induk, tombol aksi, dan tabel transaksi.
 
-### 7. Role dan Hak Akses
+### 8. Role dan Hak Akses
 
 Aplikasi menggunakan tiga role pengguna, yaitu admin, bendahara, dan kasir.
 
 | Role | Hak Akses Utama |
 | --- | --- |
-| Admin | Dashboard, pembayaran, data siswa, master biaya lain, role management, tabungan, dan laporan |
+| Admin | Dashboard, pembayaran, data siswa, master biaya lain, master daftar ulang, role management, tabungan, dan laporan |
 | Bendahara | Dashboard, riwayat tabungan, dan laporan |
 | Kasir | Tabungan masuk, tabungan keluar, dan riwayat tabungan |
 
 Hak akses tidak hanya dibatasi dari tampilan menu, tetapi juga melalui pengecekan role pada backend. Tampilan profile pada sidebar sudah diganti menjadi avatar agar lebih rapi untuk setiap role.
 
-### 8. Fitur Laporan dan Export
+### 9. Fitur Laporan dan Export
 
 Fitur laporan digunakan untuk melihat rekap pembayaran dan tabungan berdasarkan periode bulan dan tahun. Laporan menampilkan total pembayaran, tabungan masuk, tabungan keluar, rekap komponen pembayaran, detail transaksi pembayaran, dan rekap tabungan.
 
@@ -89,7 +95,7 @@ Export PDF slip pembayaran sudah dirender server-side menggunakan Dompdf. Dengan
 
 Export Excel sudah diubah menjadi alur preview terlebih dahulu. Pengguna dapat melihat preview laporan, lalu menekan tombol `Download Excel` jika sudah sesuai. Tampilan preview Excel mobile juga dirapikan dengan tombol yang proporsional dan scroll horizontal per tabel agar kolom tetap terbaca.
 
-### 9. Responsive Mobile
+### 10. Responsive Mobile
 
 Beberapa tampilan mobile sudah direvisi agar lebih nyaman digunakan, terutama:
 
@@ -102,7 +108,7 @@ Beberapa tampilan mobile sudah direvisi agar lebih nyaman digunakan, terutama:
 
 Konsep mobile dibuat agar pengguna tetap dapat mengakses fitur utama tanpa tombol bertabrakan atau layout terlalu sempit.
 
-### 10. Keamanan dan Validasi
+### 11. Keamanan dan Validasi
 
 Beberapa validasi utama sudah diterapkan, seperti validasi role, pengecekan login, validasi nominal, validasi metode pembayaran, pembatasan siswa aktif untuk transaksi baru, serta penggunaan database transaction pada proses yang melibatkan lebih dari satu tabel.
 
@@ -116,11 +122,12 @@ Masih terdapat catatan pengembangan lanjutan, yaitu penerapan CSRF token secara 
 2. Role pengguna ditetapkan menjadi admin, bendahara, dan kasir.
 3. Data siswa yang tidak aktif tidak dihapus permanen, tetapi diarsipkan.
 4. Biaya tambahan menggunakan master biaya lain agar lebih fleksibel, historinya tetap aman, dan pembayarannya dapat dicicil.
-5. Sistem pembayaran transaksi menggunakan pilihan `Tunai`, `VA`, dan `Qris`.
-6. Laporan keuangan harus dapat ditampilkan di web, dipreview sebelum export Excel, dan diexport sebagai PDF slip pembayaran.
-7. Slip PDF menggunakan Dompdf server-side dengan ukuran landscape `210mm x 148mm`.
-8. Tampilan mobile menjadi bagian penting dari finalisasi project karena aplikasi sering diuji melalui browser mobile atau viewport kecil.
-9. Validasi nominal, role, status siswa, dan total pembayaran harus tetap dilakukan di backend.
+5. Daftar ulang menggunakan master resmi per kelas dan tahun ajaran agar tarif tahun ajaran baru dapat berubah tanpa mengganggu histori lama.
+6. Sistem pembayaran transaksi menggunakan pilihan `Tunai`, `VA`, dan `Qris`.
+7. Laporan keuangan harus dapat ditampilkan di web, dipreview sebelum export Excel, dan diexport sebagai PDF slip pembayaran.
+8. Slip PDF menggunakan Dompdf server-side dengan ukuran landscape `210mm x 148mm`.
+9. Tampilan mobile menjadi bagian penting dari finalisasi project karena aplikasi sering diuji melalui browser mobile atau viewport kecil.
+10. Validasi nominal, role, status siswa, dan total pembayaran harus tetap dilakukan di backend.
 
 ## Action Items
 
@@ -151,7 +158,8 @@ Masih terdapat catatan pengembangan lanjutan, yaitu penerapan CSRF token secara 
 | Sidebar | Avatar profile role dan logout mobile lebih mudah diakses |
 | Dark mode | Palet warna dibuat lebih ramah dan tidak terlalu pekat |
 | Pembayaran | Menambahkan metode pembayaran `Tunai`, `VA`, dan `Qris` |
-| Daftar Ulang | Pencatatan memakai master kelas/tahun ajaran bila tersedia, dengan fallback ke data siswa |
+| Daftar Ulang | Pencatatan memakai master resmi kelas/tahun ajaran, fallback hanya saat master kosong total |
+| Master Daftar Ulang | CRUD admin untuk nominal daftar ulang per kelas dan tahun ajaran |
 | Biaya Lain | Mendukung cicilan dengan kolom total, sudah dibayar, sisa, bayar, dan alert jika melebihi sisa |
 | Navigasi Data | Baris pembayaran, transaksi dashboard, dan siswa dapat diklik langsung untuk edit |
 | Slip PDF | Export server-side dengan Dompdf, ukuran `210mm x 148mm`, layout lebih rapi |
@@ -176,6 +184,7 @@ Sistem sudah dapat digunakan sebagai dasar laporan project, dengan catatan penge
 | Data Siswa | `siswa/daftar.php` |
 | Pembayaran | `pembayaran/` |
 | Master Biaya Lain | `master_biaya_lain.php` |
+| Master Daftar Ulang | `master_daftar_ulang.php` |
 | Tabungan | `tabungan/` |
 | Laporan Web | `laporan/index.php` |
 | Export Excel | `laporan/export_excel.php` |

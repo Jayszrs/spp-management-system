@@ -117,6 +117,25 @@ while ($master = $master_du_result->fetch_assoc()) {
     $periodKey = trim((string)$master['kelas']) . '|' . trim((string)$master['th_ajaran']);
     $master_daftar_ulang[$periodKey] = (float)$master['Jumlah'];
 }
+$has_master_daftar_ulang = count($master_daftar_ulang) > 0;
+$daftar_ulang_years = [];
+foreach (array_keys($master_daftar_ulang) as $periodKey) {
+    [, $year] = explode('|', $periodKey, 2);
+    $daftar_ulang_years[$year] = $year;
+}
+if (!empty($d['th_ajaran'])) {
+    $daftar_ulang_years[$d['th_ajaran']] = $d['th_ajaran'];
+}
+if (!$daftar_ulang_years) {
+    $year = (int)date('Y');
+    $start = (int)date('n') >= 7 ? $year : $year - 1;
+    for ($offset = -1; $offset <= 1; $offset++) {
+        $academicStart = $start + $offset;
+        $label = $academicStart . '/' . ($academicStart + 1);
+        $daftar_ulang_years[$label] = $label;
+    }
+}
+krsort($daftar_ulang_years);
 
 $biaya_lain_paid = [];
 $biaya_lain_paid_result = $koneksi->query("
@@ -189,7 +208,7 @@ $selectedPaymentMethod = $d['sistem_pembayaran'] ?? 'VA';
   <meta name="description" content="Edit data transaksi pembayaran siswa." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="../assets/css/style.css?v=4.4" />
+  <link rel="stylesheet" href="../assets/css/style.css?v=4.6" />
   <!-- Prevent theme flash -->
   <script>(function(){var t=localStorage.getItem('spp_theme')||'dark';document.documentElement.setAttribute('data-theme',t);})();</script>
 </head>
@@ -333,13 +352,15 @@ $selectedPaymentMethod = $d['sistem_pembayaran'] ?? 'VA';
 
           <!-- Rincian Pembayaran -->
           <div class="section-divider"><span>Rincian Pembayaran</span></div>
+          <p class="payment-auto-note">Kolom total, sudah terbayar, dan sisa dihitung otomatis dari riwayat transaksi.</p>
           <div class="alert alert-warning payment-overpaid-alert" id="payment-overpaid-alert" hidden></div>
+          <div class="alert alert-warning payment-input-overlimit-alert" id="payment-input-overlimit-alert" hidden></div>
           <div class="table-container">
             <table class="payment-table form-payment-table">
               <thead>
                 <tr>
                   <th>Komponen Bayar</th>
-                  <th>Total Sebelum (Rp)</th>
+                  <th>Total Tagihan (Rp)</th>
                   <th>Sudah Terbayar (Rp)</th>
                   <th>Sisa (Rp)</th>
                   <th>Input Bayar (Rp)</th>
@@ -363,9 +384,9 @@ $selectedPaymentMethod = $d['sistem_pembayaran'] ?? 'VA';
                 ?>
                 <tr class="<?= $i%2===0?'row-highlight':'' ?>">
                   <td><span class="comp-label"><?=$label?></span></td>
-                  <td data-label="Total Sebelum"><input class="tbl-input" type="text" value="0" id="<?=$key?>-total" /></td>
-                  <td data-label="Sudah Terbayar"><input class="tbl-input" type="text" value="0" id="<?=$key?>-bayar" /></td>
-                  <td data-label="Sisa"><input class="tbl-input tbl-readonly" type="text" value="0" id="<?=$key?>-sisa" readonly /></td>
+                  <td data-label="Total Tagihan"><input class="tbl-input tbl-system" type="text" value="0" id="<?=$key?>-total" readonly tabindex="-1" aria-readonly="true" /></td>
+                  <td data-label="Sudah Terbayar"><input class="tbl-input tbl-system" type="text" value="0" id="<?=$key?>-bayar" readonly tabindex="-1" aria-readonly="true" /></td>
+                  <td data-label="Sisa"><input class="tbl-input tbl-system tbl-system-sisa" type="text" value="0" id="<?=$key?>-sisa" readonly tabindex="-1" aria-readonly="true" /></td>
                   <td data-label="Input Bayar"><input class="tbl-input tbl-pay" type="text"
                         id="<?=$key?>-input" name="<?=$inputName?>"
                         value="<?= number_format((float)$d[$col], 0, ',', '.') ?>" /></td>
@@ -488,12 +509,13 @@ $selectedPaymentMethod = $d['sistem_pembayaran'] ?? 'VA';
             <div class="field-row">
               <label class="field-label">Tahun Ajaran</label>
               <select class="field-input field-select" name="tahun_ajaran_du">
-                <?php foreach(['2024/2025','2025/2026','2026/2027'] as $ta): ?>
-                <option <?= $d['th_ajaran'] === $ta ? 'selected' : '' ?>><?=$ta?></option>
+                <?php foreach($daftar_ulang_years as $ta): ?>
+                <option value="<?= htmlspecialchars($ta) ?>" <?= $d['th_ajaran'] === $ta ? 'selected' : '' ?>><?= htmlspecialchars($ta) ?></option>
                 <?php endforeach; ?>
               </select>
             </div>
           </div>
+          <p class="field-hint du-master-warning" id="du-master-warning" hidden></p>
 
           <!-- Catatan -->
           <div class="section-divider"><span>Catatan</span></div>
@@ -518,12 +540,13 @@ $selectedPaymentMethod = $d['sistem_pembayaran'] ?? 'VA';
 
   <script>
     window.sppDaftarUlangMasters = <?= json_encode($master_daftar_ulang, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT) ?>;
+    window.sppDaftarUlangHasMasters = <?= $has_master_daftar_ulang ? 'true' : 'false' ?>;
     // Pre-fill total on load
     window.addEventListener('DOMContentLoaded', function() {
       updateTotal();
     });
   </script>
-  <script src="../assets/js/app.js?v=3.9"></script>
+  <script src="../assets/js/app.js?v=4.1"></script>
 </body>
 </html>
 

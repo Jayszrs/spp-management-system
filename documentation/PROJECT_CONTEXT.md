@@ -71,6 +71,7 @@ Get-Content sql\schema.sql -Raw | C:\xampp\mysql\bin\mysql.exe -u root
 | `login.php`, `logout.php` | Autentikasi session dan keluar aplikasi |
 | `role_management.php` | CRUD akun dan role, hanya untuk admin |
 | `master_biaya_lain.php` | CRUD master jenis biaya tambahan |
+| `master_daftar_ulang.php` | CRUD master nominal daftar ulang per kelas dan tahun ajaran |
 | `pembayaran/` | Input, daftar, edit, hapus, dan proses transaksi pembayaran |
 | `siswa/` | Master siswa, mode Advance, arsip, filter, dan audit perubahan |
 | `tabungan/` | Transaksi masuk/keluar, saldo, dan riwayat tabungan |
@@ -93,6 +94,7 @@ Guard backend memakai `requireRole()` dari `includes/auth.php`. Menyembunyikan m
 | Input/lihat/edit pembayaran | Ya | Tidak | Tidak |
 | Master Siswa | Ya | Tidak | Tidak |
 | Master Biaya Lain | Ya | Tidak | Tidak |
+| Master Daftar Ulang | Ya | Tidak | Tidak |
 | Role Management | Ya | Tidak | Tidak |
 | Tabungan masuk/keluar | Ya | Tidak | Ya |
 | Riwayat tabungan | Ya | Ya | Ya |
@@ -146,7 +148,7 @@ Detail biaya tambahan per transaksi. Nama dan nominal disimpan sebagai snapshot 
 
 `bayar_du` menyimpan pembayaran daftar ulang per siswa, kelas daftar ulang, dan tahun ajaran. Child yang dibuat oleh pembayaran versi aman menyimpan `bayar_id` unik dengan foreign key `ON DELETE CASCADE` ke `bayar`.
 
-Tabel `Daftar_ulang` dipakai sebagai master nominal daftar ulang per kombinasi `kelas + th_ajaran` bila datanya tersedia. Jika master belum diisi, alur pembayaran memakai fallback dari data siswa (`DAFTAR_ULANG`, `potong_du`, `tot_du`) supaya transaksi lama tetap bisa berjalan. Sisa daftar ulang dihitung per `NO_INDUK + kelas + th_ajaran`, bukan total global siswa.
+Tabel `Daftar_ulang` dipakai sebagai master nominal daftar ulang per kombinasi `kelas + th_ajaran`. Kombinasi tersebut harus unik dan dikelola admin melalui halaman Master Daftar Ulang. Jika tabel master benar-benar kosong, alur pembayaran memakai fallback dari data siswa (`DAFTAR_ULANG`, `potong_du`, `tot_du`) supaya transaksi lama tetap bisa berjalan. Jika master sudah memiliki data tetapi kombinasi kelas/tahun yang dipilih belum tersedia, nominal daftar ulang dianggap belum diatur dan transaksi DU harus ditolak sampai master dilengkapi. Sisa daftar ulang dihitung per `NO_INDUK + kelas + th_ajaran`, bukan total global siswa.
 
 ### `tabungan`, `transaksi_m`, dan `transaksi_k`
 
@@ -174,9 +176,11 @@ Tabel `Daftar_ulang` dipakai sebagai master nominal daftar ulang per kombinasi `
 - Edit transaksi lama tetap mengizinkan siswa arsip yang memang menjadi pemilik transaksi; siswa arsip lain tidak dapat dipilih.
 - Backend mengambil kelas, tarif Komite, dan total tagihan master biaya lain langsung dari database.
 - `total_jumlah` dihitung ulang di backend dari komponen pembayaran, daftar ulang, biaya lain, dan potongan SPP. Hidden total dari browser bukan sumber kebenaran.
+- Pada rincian pembayaran, `Total Tagihan`, `Sudah Terbayar`, dan `Sisa` adalah nilai sistem otomatis dari database/histori dan ditampilkan sebagai readonly visual-only; hanya `Input Bayar` yang dapat diedit pengguna.
 - Sistem pembayaran dipilih dari opsi `Tunai`, `VA`, atau `Qris` dan divalidasi ulang di backend.
 - Nominal negatif, periode tidak valid, pembayaran Komite melebihi sisa periode, dan input komponen yang melebihi sisa tagihan harus ditolak.
-- Form pembayaran menampilkan alert bila `Sudah Terbayar` lebih besar dari `Total Sebelum`; sisa ditampilkan sebagai nol dan input bayar pada komponen tersebut dikunci.
+- Form pembayaran menampilkan alert bila `Sudah Terbayar` lebih besar dari `Total Tagihan`; sisa ditampilkan sebagai nol dan input bayar pada komponen tersebut dikunci.
+- Form pembayaran juga menampilkan alert inline bila `Input Bayar` lebih besar dari sisa tagihan sebelum submit; input tersebut diberi invalid state dan browser menahan submit melalui custom validity.
 - Simpan, edit, dan hapus transaksi utama, daftar ulang, tabungan terkait, serta detail biaya lain dijalankan dalam transaction.
 - Pembayaran baru menyimpan relasi eksplisit ke Daftar Ulang dan setoran Tabungan Wajib melalui `bayar_id`. Edit atau hapus hanya boleh mengubah child dengan `bayar_id` yang sama, bukan child dengan NIS, tanggal, atau tahun ajaran yang kebetulan sama.
 - Pembayaran `payment_link_version=0` adalah legacy. Sistem menandainya di daftar dan menolak edit/hapus, termasuk akses endpoint langsung; rekonsiliasi harus dilakukan manual tanpa pencocokan otomatis.
@@ -199,6 +203,16 @@ Tabel `Daftar_ulang` dipakai sebagai master nominal daftar ulang per kombinasi `
 - Form pembayaran menampilkan total tagihan, sudah dibayar, sisa, dan input bayar untuk biaya lain. Input bayar boleh lebih kecil dari sisa, tetapi tidak boleh melebihi sisa akumulasi siswa untuk master tersebut.
 - Bila master pada detail lama tidak berubah, nama snapshot lama dipertahankan; nominal snapshot dapat diedit sebagai nominal cicilan selama tidak melebihi sisa tagihan.
 - Master nonaktif tetap dapat ditampilkan pada edit transaksi lama, tetapi tidak untuk pilihan baru.
+
+### Master Daftar Ulang
+
+- Admin mengelola nominal daftar ulang resmi pada `master_daftar_ulang.php`.
+- Satu kombinasi `th_ajaran + kelas` hanya boleh memiliki satu nominal aktif melalui unique key `uk_daftar_ulang_period_class`.
+- Format tahun ajaran wajib `YYYY/YYYY` dan tahun kedua harus satu tahun setelah tahun pertama.
+- Master yang sudah dipakai pada `bayar_du` tidak dapat dihapus agar histori tetap dapat diaudit.
+- Form input/edit pembayaran mengambil dropdown tahun ajaran dan nominal daftar ulang dari master ini.
+- Jika tabel master kosong total, sistem fallback ke data daftar ulang di tabel siswa untuk kompatibilitas transaksi lama.
+- Jika master sudah ada tetapi kombinasi kelas/tahun yang dipilih belum diatur, form menampilkan warning dan backend menolak pembayaran DU sampai master dilengkapi.
 
 ### Tabungan
 
@@ -234,22 +248,24 @@ Schema ini bersifat destruktif untuk sebagian tabel karena memakai `DROP TABLE`.
 1. Buat backup database.
 2. Periksa nilai `siswa.KELAS`. Label lama maksimal 5 karakter akan dipertahankan untuk kompatibilitas; siswa baru tetap dibatasi kelas `1` sampai `6`.
 3. Jalankan `sql/add_master_biaya_lain.sql`.
-4. Jalankan `sql/add_student_advanced.sql`.
-5. Jalankan `sql/add_payment_references.sql`.
-6. Jalankan `sql/add_payment_method.sql`.
-7. Jalankan `sql/verify_schema.sql` dan uji aplikasi.
+4. Jalankan `sql/add_master_daftar_ulang.sql`.
+5. Jalankan `sql/add_student_advanced.sql`.
+6. Jalankan `sql/add_payment_references.sql`.
+7. Jalankan `sql/add_payment_method.sql`.
+8. Jalankan `sql/verify_schema.sql` dan uji aplikasi.
 
 Contoh PowerShell:
 
 ```powershell
 Get-Content sql\add_master_biaya_lain.sql -Raw | C:\xampp\mysql\bin\mysql.exe -u root
+Get-Content sql\add_master_daftar_ulang.sql -Raw | C:\xampp\mysql\bin\mysql.exe -u root
 Get-Content sql\add_student_advanced.sql -Raw | C:\xampp\mysql\bin\mysql.exe -u root
 Get-Content sql\add_payment_references.sql -Raw | C:\xampp\mysql\bin\mysql.exe -u root
 Get-Content sql\add_payment_method.sql -Raw | C:\xampp\mysql\bin\mysql.exe -u root
 Get-Content sql\verify_schema.sql -Raw | C:\xampp\mysql\bin\mysql.exe -u root
 ```
 
-Seluruh migrasi bertahap dirancang idempotent. Migrasi siswa melakukan preflight dan berhenti bila menemukan kelas kosong atau lebih dari 5 karakter. Label kelas legacy dipertahankan pada upgrade, tetapi siswa baru tetap dibatasi kelas `1` sampai `6`; constraint kelas SD hanya ditambahkan bila seluruh data sudah sesuai. Migrasi biaya lain menyalin data legacy secara idempotent melalui `legacy_key` dan tidak mengubah `bayar.total_jumlah`. Migrasi relasi pembayaran menambahkan kolom, index, dan foreign key tanpa menghubungkan histori lama: data lama tetap `payment_link_version=0` dan `bayar_id=NULL` sampai direkonsiliasi manual. Migrasi sistem pembayaran menambahkan default `VA` untuk transaksi lama.
+Seluruh migrasi bertahap dirancang idempotent. Migrasi siswa melakukan preflight dan berhenti bila menemukan kelas kosong atau lebih dari 5 karakter. Label kelas legacy dipertahankan pada upgrade, tetapi siswa baru tetap dibatasi kelas `1` sampai `6`; constraint kelas SD hanya ditambahkan bila seluruh data sudah sesuai. Migrasi biaya lain menyalin data legacy secara idempotent melalui `legacy_key` dan tidak mengubah `bayar.total_jumlah`. Migrasi daftar ulang membuat/menormalkan tabel `Daftar_ulang`, menghapus duplikat kelas+tahun ajaran dengan mempertahankan id terbaru, lalu menambahkan unique key resmi. Migrasi relasi pembayaran menambahkan kolom, index, dan foreign key tanpa menghubungkan histori lama: data lama tetap `payment_link_version=0` dan `bayar_id=NULL` sampai direkonsiliasi manual. Migrasi sistem pembayaran menambahkan default `VA` untuk transaksi lama.
 
 ## 9. Konvensi Keamanan
 

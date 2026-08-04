@@ -105,6 +105,17 @@ function daftar_ulang_total(mysqli $db, array $student, string $kelasDu, string 
         if ($master) return (float)$master['Jumlah'];
     }
 
+    $masterCount = $db->query("
+        SELECT COUNT(*) AS jumlah
+        FROM Daftar_ulang
+        WHERE kelas IS NOT NULL AND kelas <> ''
+          AND th_ajaran IS NOT NULL AND th_ajaran <> ''
+          AND Jumlah > 0
+    ")->fetch_assoc();
+    if ((int)($masterCount['jumlah'] ?? 0) > 0) {
+        return 0.0;
+    }
+
     return payable_total((float)$student['DAFTAR_ULANG'], (float)$student['potong_du'], (float)$student['tot_du']);
 }
 
@@ -170,11 +181,17 @@ function validate_component_remaining(
         'kegiatan' => ['label' => 'Uang Kegiatan', 'total' => (float)$student['KEGIATAN'], 'paid' => (float)($paid['kegiatan'] ?? 0), 'input' => (float)($components['kegiatan'] ?? 0)],
         'spp' => ['label' => 'Uang SPP', 'total' => (float)$student['SPP_PERBULAN'], 'paid' => (float)($paid['spp'] ?? 0), 'input' => (float)($components['spp'] ?? 0)],
         'komite' => ['label' => 'Uang Komite', 'total' => (float)$student['POMG'], 'paid' => (float)($paid['komite'] ?? 0), 'input' => (float)($components['komite'] ?? 0)],
+        'makan' => ['label' => 'Uang Makan', 'total' => 0.0, 'paid' => (float)($paid['makan'] ?? 0), 'input' => (float)($components['makan'] ?? 0)],
+        'sorga' => ['label' => 'Uang Sorga', 'total' => 0.0, 'paid' => (float)($paid['sorga'] ?? 0), 'input' => (float)($components['sorga'] ?? 0)],
+        'infaq' => ['label' => 'Uang Infaq', 'total' => 0.0, 'paid' => (float)($paid['infaq'] ?? 0), 'input' => (float)($components['infaq'] ?? 0)],
         'du' => ['label' => 'Uang Daftar Ulang', 'total' => $duTotal, 'paid' => (float)($paid['du'] ?? 0), 'input' => $uangDu],
     ];
 
     foreach ($limits as $limit) {
-        if ($limit['total'] <= 0 || $limit['input'] <= 0) continue;
+        if ($limit['input'] <= 0) continue;
+        if ($limit['total'] <= 0) {
+            throw new RuntimeException($limit['label'] . ' belum memiliki total tagihan. Lengkapi master atau data tagihan terlebih dahulu.');
+        }
         $remaining = max(0, $limit['total'] - $limit['paid']);
         if ($limit['paid'] > $limit['total'] + 0.001) {
             throw new RuntimeException($limit['label'] . ' sudah melebihi total tagihan. Total: Rp ' . number_format($limit['total'], 0, ',', '.') . ', sudah terbayar: Rp ' . number_format($limit['paid'], 0, ',', '.') . '. Cek ulang transaksi sebelumnya.');
@@ -472,6 +489,9 @@ if ($aksi === 'input') {
             'kegiatan' => $uang_kegiatan,
             'spp' => $uang_spp,
             'komite' => $uang_komite,
+            'makan' => $uang_makan,
+            'sorga' => $uang_sorga,
+            'infaq' => $uang_infaq,
         ], $uang_du, $kelas_du, $tahun_ajaran_du);
         $kelas_siswa = $siswa_data['KELAS'];
         $biaya_lain = collect_biaya_lain($koneksi, $no_induk);
@@ -592,6 +612,9 @@ if ($aksi === 'update') {
             'kegiatan' => $uang_kegiatan,
             'spp' => $uang_spp,
             'komite' => $uang_komite,
+            'makan' => $uang_makan,
+            'sorga' => $uang_sorga,
+            'infaq' => $uang_infaq,
         ], $uang_du, $kelas_du, $tahun_ajaran_du, $id);
         $kelas_siswa = $siswa_data['KELAS'];
         $biaya_lain = collect_biaya_lain($koneksi, $no_induk, $id);

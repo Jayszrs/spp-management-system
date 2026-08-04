@@ -13,6 +13,109 @@ File ini mencatat perubahan proyek secara reverse chronological. Baca [PROJECT_C
 - Jangan menghapus atau menulis ulang entri lama. Tambahkan entri koreksi bila diperlukan.
 - Perubahan implementasi dan entri changelog wajib masuk commit yang sama.
 
+## 2026-08-04 - Master Daftar Ulang dan Integrasi Pembayaran
+
+**AI/Aktor:** Codex berbasis GPT-5, bersama pemilik proyek
+
+**Tujuan:** Menjadikan `Daftar_ulang` sebagai master resmi nominal daftar ulang per kelas dan tahun ajaran, lengkap dengan CRUD admin dan integrasi pembayaran.
+
+**Perubahan fitur dan perilaku:**
+
+- Menambahkan halaman admin `master_daftar_ulang.php` untuk tambah, edit, hapus, dan daftar nominal daftar ulang per `Tahun Ajaran + Kelas`.
+- Menambahkan menu sidebar `Master Daftar Ulang` khusus admin.
+- Form input dan edit pembayaran sekarang membaca master daftar ulang dari database untuk dropdown tahun ajaran dan nominal DU.
+- Jika master daftar ulang kosong total, pembayaran tetap fallback ke data siswa agar alur lama kompatibel.
+- Jika master sudah ada tetapi kombinasi kelas/tahun ajaran belum tersedia, form menampilkan warning dan nominal DU menjadi `0` sampai master dilengkapi.
+- Backend pembayaran menghitung ulang nominal DU dari master/fallback resmi dan menolak input DU bila total tagihan belum tersedia atau pembayaran melebihi sisa.
+
+**Database dan migrasi:**
+
+- Menambahkan migrasi idempoten `sql/add_master_daftar_ulang.sql`.
+- Memperbarui `sql/schema.sql` agar `Daftar_ulang(th_ajaran, kelas)` memiliki unique key `uk_daftar_ulang_period_class`.
+- Memperbarui `sql/verify_schema.sql` untuk memeriksa tabel `Daftar_ulang` dan unique key daftar ulang.
+
+**Kompatibilitas dan data lama:**
+
+- Tidak mengubah route lama pembayaran.
+- Histori `bayar_du` tetap dipakai untuk menghitung `Sudah Terbayar` dan `Sisa`.
+- Fallback ke kolom daftar ulang di tabel siswa hanya berlaku bila tabel master DU benar-benar belum berisi data.
+
+**Verifikasi:**
+
+- `sql/add_master_daftar_ulang.sql` dijalankan dua kali pada database lokal tanpa error.
+- `sql/verify_schema.sql` mengembalikan `OK` untuk seluruh requirement, termasuk `table.Daftar_ulang` dan `uk_daftar_ulang_period_class`.
+- `php -l master_daftar_ulang.php`, `php -l includes/sidebar.php`, `php -l pembayaran/form.php`, `php -l pembayaran/edit.php`, dan `php -l pembayaran/proses.php` berhasil.
+- `node --check assets/js/app.js` berhasil.
+- `git diff --check` berhasil, dengan warning line ending CRLF dari Git.
+
+**Catatan tindak lanjut:**
+
+- Isi master daftar ulang sesuai kebijakan sekolah, misalnya tahun ajaran terbaru dan nominal per kelas.
+
+## 2026-08-04 - Alert Input Pembayaran Melebihi Sisa
+
+**AI/Aktor:** Codex berbasis GPT-5, bersama pemilik proyek
+
+**Tujuan:** Memberi peringatan langsung saat nominal input pembayaran lebih besar dari sisa tagihan.
+
+**Perubahan fitur dan perilaku:**
+
+- Menambahkan alert inline khusus `payment-input-overlimit-alert` pada form input dan edit pembayaran.
+- Menambahkan validasi browser-side untuk membandingkan `Input Bayar` dengan sisa sebelum input (`Total Tagihan - Sudah Terbayar`).
+- Input yang melebihi sisa diberi invalid state, barisnya diberi highlight, dan form ditahan dengan `setCustomValidity()`.
+- Nilai input user tidak dihapus otomatis agar pengguna dapat melihat nominal yang salah.
+- Membump `app.js` halaman input/edit pembayaran ke `v=4.0`.
+
+**Database dan migrasi:**
+
+- Tidak ada.
+
+**Kompatibilitas dan data lama:**
+
+- Tidak mengubah route, schema, atau data. Backend tetap menjadi sumber kebenaran dan tetap menolak pembayaran yang melebihi sisa.
+
+**Verifikasi:**
+
+- `php -l pembayaran/form.php` dan `php -l pembayaran/edit.php` berhasil.
+- `node --check assets/js/app.js` berhasil.
+- `git diff --check -- assets/css/style.css assets/js/app.js pembayaran/form.php pembayaran/edit.php documentation/PROJECT_CONTEXT.md documentation/AI_CHANGELOG.md` berhasil, dengan warning line ending CRLF dari Git.
+
+**Catatan tindak lanjut:**
+
+- Uji browser: input lebih dari sisa, sama dengan sisa, lebih kecil dari sisa, dan input pada komponen dengan total nol.
+
+## 2026-08-04 - Rincian Pembayaran Visual-Only Untuk Nilai Sistem
+
+**AI/Aktor:** Codex berbasis GPT-5, bersama pemilik proyek
+
+**Tujuan:** Memperjelas logika akuntansi pada form pembayaran agar nilai histori tidak terlihat seperti input manual.
+
+**Perubahan fitur dan perilaku:**
+
+- Mengganti label `Total Sebelum (Rp)` menjadi `Total Tagihan (Rp)` pada form input dan edit pembayaran.
+- Menambahkan microcopy bahwa total, sudah terbayar, dan sisa dihitung otomatis dari riwayat transaksi.
+- Membuat kolom `Total Tagihan`, `Sudah Terbayar`, dan `Sisa` menjadi readonly visual-only dengan style berbeda dari `Input Bayar`.
+- Mempertahankan `Input Bayar` sebagai satu-satunya kolom yang dapat diedit pengguna.
+- Membump `style.css` halaman input/edit pembayaran ke `v=4.6`.
+
+**Database dan migrasi:**
+
+- Tidak ada.
+
+**Kompatibilitas dan data lama:**
+
+- Tidak mengubah route, schema, atau data. Sumber `Sudah Terbayar` tetap berasal dari transaksi, data migrasi/saldo awal siswa, `bayar_du`, dan `bayar_biaya_lain` sesuai komponen masing-masing.
+
+**Verifikasi:**
+
+- `php -l pembayaran/form.php` dan `php -l pembayaran/edit.php` berhasil.
+- `node --check assets/js/app.js` berhasil.
+- `git diff --check -- assets/css/style.css pembayaran/form.php pembayaran/edit.php documentation/PROJECT_CONTEXT.md documentation/AI_CHANGELOG.md` berhasil, dengan warning line ending CRLF dari Git.
+
+**Catatan tindak lanjut:**
+
+- Uji browser: pilih siswa dengan/ tanpa histori, ubah periode SPP/Komite, ubah kelas/tahun daftar ulang, lalu pastikan hanya kolom `Input Bayar` yang bisa diketik.
+
 ## 2026-08-03 - Penyesuaian Label Riwayat Pembayaran
 
 **AI/Aktor:** Codex berbasis GPT-5, bersama pemilik proyek

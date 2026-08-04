@@ -200,8 +200,30 @@ function totalDaftarUlangForContext(opt) {
   const fallbackTotal = datasetNumber(opt, 'total', 'du');
   const periodKey = selectedDaftarUlangKey();
   const masters = window.sppDaftarUlangMasters || {};
+  const hasMasters = window.sppDaftarUlangHasMasters === true;
   const masterTotal = periodKey ? parseNumber(masters[periodKey] || 0) : 0;
+  if (hasMasters) return masterTotal > 0 ? masterTotal : 0;
   return masterTotal > 0 ? masterTotal : fallbackTotal;
+}
+
+function refreshDaftarUlangMasterWarning(opt) {
+  const warning = document.getElementById('du-master-warning');
+  if (!warning) return;
+
+  const hasMasters = window.sppDaftarUlangHasMasters === true;
+  const periodKey = selectedDaftarUlangKey();
+  const masters = window.sppDaftarUlangMasters || {};
+  const masterTotal = periodKey ? parseNumber(masters[periodKey] || 0) : 0;
+
+  if (!opt || !hasMasters || !periodKey || masterTotal > 0) {
+    warning.hidden = true;
+    warning.textContent = '';
+    return;
+  }
+
+  const [kelas, tahun] = periodKey.split('|');
+  warning.hidden = false;
+  warning.textContent = 'Master daftar ulang kelas ' + kelas + ' tahun ajaran ' + tahun + ' belum diatur. Lengkapi master daftar ulang agar nominal DU bisa dipakai.';
 }
 
 function paidDaftarUlangForContext(opt) {
@@ -233,6 +255,7 @@ function applyStudentPaymentDetails(opt) {
       : (['spp', 'komite'].includes(key) ? paidForPeriod(opt, key) : datasetNumber(opt, 'paid', key));
     setPaymentComponent(key, total, paid);
   });
+  refreshDaftarUlangMasterWarning(opt);
   document.querySelectorAll('.biaya-lain-row').forEach(row => refreshBiayaLainRow(row, true));
   updateTotal();
 }
@@ -244,6 +267,7 @@ function clearPaymentDetails() {
       if (el) el.value = '0';
     });
   });
+  refreshDaftarUlangMasterWarning(null);
   document.querySelectorAll('.biaya-lain-row').forEach(row => refreshBiayaLainRow(row, true));
   updateTotal();
 }
@@ -300,8 +324,58 @@ function refreshOverpaidWarnings() {
   return overpaid;
 }
 
+function refreshPaymentInputOverlimitWarnings() {
+  const alertEl = document.getElementById('payment-input-overlimit-alert');
+  const warnings = [];
+
+  Object.keys(paymentComponentLabels).forEach(key => {
+    const totalEl = document.getElementById(key + '-total');
+    const paidEl = document.getElementById(key + '-bayar');
+    const inputEl = document.getElementById(key + '-input');
+    const row = inputEl?.closest('tr');
+    if (!totalEl || !paidEl || !inputEl) return;
+
+    if (inputEl.disabled) {
+      row?.classList.remove('row-input-overlimit');
+      inputEl.classList.remove('is-input-overlimit');
+      inputEl.setCustomValidity('');
+      return;
+    }
+
+    const total = parseNumber(totalEl.value || 0);
+    const paid = parseNumber(paidEl.value || 0);
+    const input = parseNumber(inputEl.value || 0);
+    const remainingBeforeInput = Math.max(0, total - paid);
+    const isTooMuch = input > remainingBeforeInput + 0.001;
+
+    row?.classList.toggle('row-input-overlimit', isTooMuch);
+    inputEl.classList.toggle('is-input-overlimit', isTooMuch);
+
+    if (isTooMuch) {
+      const message = paymentComponentLabels[key] + ' melebihi sisa tagihan. Sisa Rp ' + formatRupiah(remainingBeforeInput) + ', input Rp ' + formatRupiah(input) + '.';
+      inputEl.setCustomValidity(message);
+      inputEl.title = message;
+      warnings.push(message);
+    } else {
+      inputEl.setCustomValidity('');
+      inputEl.removeAttribute('title');
+    }
+  });
+
+  if (!alertEl) return warnings;
+  if (warnings.length === 0) {
+    alertEl.hidden = true;
+    alertEl.textContent = '';
+    return warnings;
+  }
+
+  alertEl.hidden = false;
+  alertEl.textContent = 'Perhatian: input pembayaran melebihi sisa tagihan. ' + warnings.join(' ');
+  return warnings;
+}
+
 function clearOverpaidUiState() {
-  ['payment-overpaid-alert', 'biaya-lain-overpaid-alert'].forEach(id => {
+  ['payment-overpaid-alert', 'payment-input-overlimit-alert', 'biaya-lain-overpaid-alert'].forEach(id => {
     const alertEl = document.getElementById(id);
     if (!alertEl) return;
     alertEl.hidden = true;
@@ -309,12 +383,14 @@ function clearOverpaidUiState() {
   });
 
   document.querySelectorAll('.row-overpaid').forEach(row => row.classList.remove('row-overpaid'));
+  document.querySelectorAll('.row-input-overlimit').forEach(row => row.classList.remove('row-input-overlimit'));
   Object.keys(paymentComponentLabels).forEach(key => {
     const inputEl = document.getElementById(key + '-input');
     if (!inputEl) return;
     inputEl.disabled = false;
     inputEl.removeAttribute('title');
     inputEl.setCustomValidity('');
+    inputEl.classList.remove('is-input-overlimit');
   });
   document.querySelectorAll('.biaya-lain-nominal').forEach(input => {
     input.removeAttribute('title');
@@ -607,6 +683,7 @@ function hitungSisa(key) {
 /* ── Update Total ────────────────────────── */
 function updateTotal() {
   refreshOverpaidWarnings();
+  refreshPaymentInputOverlimitWarnings();
   document.querySelectorAll('.biaya-lain-row').forEach(row => refreshBiayaLainRow(row, true));
   refreshBiayaLainWarnings();
   const ids = ['pangkal-input','bangunan-input','seragam-input','kegiatan-input','spp-input','komite-input','makan-input','sorga-input','infaq-input','du-input'];

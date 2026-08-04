@@ -164,7 +164,8 @@ CREATE TABLE `Daftar_ulang` (
   `id`        INT AUTO_INCREMENT PRIMARY KEY,
   `th_ajaran` CHAR(9) DEFAULT NULL,
   `kelas`     CHAR(1) DEFAULT NULL,
-  `Jumlah`    DECIMAL(18,2) DEFAULT 0
+  `Jumlah`    DECIMAL(18,2) DEFAULT 0,
+  UNIQUE KEY `uk_daftar_ulang_period_class` (`th_ajaran`, `kelas`)
 ) ENGINE=InnoDB;
 
 -- Tabel Bayar DU

@@ -32,6 +32,12 @@ FROM (
            WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'master_biaya_lain'
          )
   UNION ALL
+  SELECT 'table.Daftar_ulang',
+         EXISTS(
+           SELECT 1 FROM information_schema.TABLES
+           WHERE TABLE_SCHEMA = DATABASE() AND LOWER(TABLE_NAME) = 'daftar_ulang'
+         )
+  UNION ALL
   SELECT 'table.bayar_biaya_lain',
          EXISTS(
            SELECT 1 FROM information_schema.TABLES
@@ -105,6 +111,13 @@ FROM (
            SELECT 1 FROM information_schema.STATISTICS
            WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'transaksi_m'
              AND INDEX_NAME = 'uk_transaksi_m_bayar_id' AND NON_UNIQUE = 0
+         )
+  UNION ALL
+  SELECT 'uk_daftar_ulang_period_class',
+         EXISTS(
+           SELECT 1 FROM information_schema.STATISTICS
+           WHERE TABLE_SCHEMA = DATABASE() AND LOWER(TABLE_NAME) = 'daftar_ulang'
+             AND INDEX_NAME = 'uk_daftar_ulang_period_class' AND NON_UNIQUE = 0
          )
   UNION ALL
   SELECT 'idx_siswa_status_kelas_nama',

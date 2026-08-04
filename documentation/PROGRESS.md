@@ -15,7 +15,7 @@ Dokumen kerja ini melacak pekerjaan teknis yang sedang dan sudah dilakukan. Perb
 | --- | --- | --- |
 | Database pengembangan | Tersedia | `db_spp` lokal; saat migrasi ini diterapkan, tabel transaksi pembayaran dan tabungan tidak berisi data. |
 | Instalasi baru | Siap | `sql/schema.sql` sudah memuat relasi pembayaran aman. File ini destruktif dan tidak boleh dijalankan pada database berisi data. |
-| Upgrade database berhistori | Siap | Jalankan `sql/add_payment_references.sql` setelah backup. Migrasi bersifat idempoten dan tidak melakukan backfill relasi. |
+| Upgrade database berhistori | Siap | Jalankan migrasi bertahap setelah backup, termasuk `sql/add_master_daftar_ulang.sql`. Migrasi bersifat idempoten dan tidak melakukan backfill relasi legacy. |
 | Pemeriksaan schema | Siap | Jalankan `sql/verify_schema.sql`; hasil harus seluruhnya `OK`. |
 
 ## Register temuan dan progres
@@ -33,6 +33,7 @@ Dokumen kerja ini melacak pekerjaan teknis yang sedang dan sudah dilakukan. Perb
 | PAY-003 | Reset form masih dapat meninggalkan alert overpayment. | Sedang | Selesai | Reset membersihkan alert, state row overpaid, custom validity, dan baris biaya lain. |
 | PAY-004 | Pencatatan daftar ulang belum memakai master `Daftar_ulang` secara kontekstual. | Tinggi | Selesai | Nominal DU memakai master per `kelas + th_ajaran` bila tersedia, fallback ke data siswa bila master kosong, dan sisa DU dihitung per `NO_INDUK + kelas + th_ajaran`. |
 | PAY-005 | Daftar pembayaran, dashboard, dan data siswa masih mengharuskan klik tombol edit. | Rendah | Selesai | Baris tabel dapat diklik langsung untuk masuk edit; tombol aksi tetap berjalan sendiri. |
+| PAY-006 | Master daftar ulang belum punya CRUD admin dan belum menjadi sumber tarif resmi. | Tinggi | Selesai | `master_daftar_ulang.php`, unique key `Daftar_ulang(th_ajaran, kelas)`, migrasi idempoten, dropdown tahun ajaran dinamis, dan validasi backend pembayaran DU sudah disiapkan. |
 | REP-001 | Export Excel langsung download tanpa preview. | Sedang | Selesai | Alur diubah menjadi preview terlebih dahulu, lalu tombol `Download Excel`. |
 | REP-002 | Slip PDF pernah bergantung pada print browser dan memunculkan header/footer URL. | Tinggi | Selesai | Slip dirender server-side memakai Dompdf dengan ukuran landscape `210mm x 148mm`; header/footer browser tidak ikut tercetak. |
 | UI-001 | Beberapa tampilan mobile dan dark mode kurang rapi/user friendly. | Sedang | Selesai bertahap | Sidebar mobile, logout, bottom nav, preview Excel, riwayat tabungan, avatar role, dan palet dark mode sudah direvisi. |
@@ -72,10 +73,19 @@ Dokumen kerja ini melacak pekerjaan teknis yang sedang dan sudah dilakukan. Perb
 ### Daftar ulang
 
 - Pembayaran daftar ulang dicatat pada `bayar_du` dengan `bayar_id`, `no_induk`, `kelas`, `th_ajaran`, dan `jumlah`.
-- Master `Daftar_ulang` menjadi sumber nominal per `kelas + th_ajaran` bila tabel master berisi data.
-- Bila master `Daftar_ulang` belum diisi, sistem fallback ke nominal daftar ulang dari tabel `siswa` agar transaksi lama tetap bisa digunakan.
+- Master `Daftar_ulang` menjadi sumber resmi nominal per `kelas + th_ajaran` dan dikelola melalui halaman admin `Master Daftar Ulang`.
+- Kombinasi kelas dan tahun ajaran dijaga unik oleh database agar tidak ada tarif ganda.
+- Bila master `Daftar_ulang` kosong total, sistem fallback ke nominal daftar ulang dari tabel `siswa` agar transaksi lama tetap bisa digunakan.
+- Bila master sudah ada tetapi kombinasi kelas/tahun belum diatur, form menampilkan warning dan nominal DU menjadi nol sampai master dilengkapi.
 - Perhitungan `Sudah Terbayar` dan `Sisa` daftar ulang dipisah per siswa, kelas daftar ulang, dan tahun ajaran.
-- Pemeriksaan lokal terakhir menunjukkan tabel `Daftar_ulang` tersedia tetapi masih kosong, sehingga data master perlu diisi/import bila ingin memakai nominal master sepenuhnya.
+
+### Master daftar ulang
+
+- Admin dapat menambah dan mengubah nominal daftar ulang berdasarkan tahun ajaran dan kelas.
+- Tahun ajaran divalidasi dengan format `YYYY/YYYY` dan tahun kedua harus tahun pertama + 1.
+- Kelas dibatasi `1` sampai `6`, nominal wajib lebih dari nol, dan duplikat kelas/tahun ditolak.
+- Data master diurutkan dari tahun ajaran terbaru lalu kelas.
+- Penghapusan master ditolak bila kombinasi kelas/tahun tersebut sudah dipakai pada `bayar_du`.
 
 ### Master biaya lain
 
@@ -125,6 +135,25 @@ Dokumen kerja ini melacak pekerjaan teknis yang sedang dan sudah dilakukan. Perb
 - Transaksi tabungan manual (`transaksi_m.bayar_id IS NULL`) dan semua penarikan (`transaksi_k`) bukan child pembayaran; edit/hapus pembayaran tidak boleh mengubahnya.
 
 ## Bukti verifikasi terakhir
+
+Dilakukan pada 2026-08-04 di database lokal `db_spp` untuk fitur Master Daftar Ulang:
+
+```powershell
+Get-Content sql\add_master_daftar_ulang.sql -Raw | C:\xampp\mysql\bin\mysql.exe -u root
+Get-Content sql\add_master_daftar_ulang.sql -Raw | C:\xampp\mysql\bin\mysql.exe -u root
+Get-Content sql\verify_schema.sql -Raw | C:\xampp\mysql\bin\mysql.exe -u root
+C:\xampp\php\php.exe -l master_daftar_ulang.php
+C:\xampp\php\php.exe -l includes\sidebar.php
+C:\xampp\php\php.exe -l pembayaran\form.php
+C:\xampp\php\php.exe -l pembayaran\edit.php
+C:\xampp\php\php.exe -l pembayaran\proses.php
+node --check assets\js\app.js
+git diff --check
+```
+
+Verifikasi schema mengembalikan `OK` untuk seluruh requirement, termasuk tabel `Daftar_ulang` dan unique key `uk_daftar_ulang_period_class`. Migrasi daftar ulang aman dijalankan ulang. `git diff --check` tidak menemukan error whitespace; hanya muncul warning line ending CRLF dari Git di Windows.
+
+## Bukti verifikasi sebelumnya
 
 Dilakukan pada 2026-07-30 di database lokal `db_spp` setelah memastikan tabel transaksi kosong:
 

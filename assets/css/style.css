@@ -836,6 +836,9 @@ h1, h2, h3, h4, h5, h6, .card-title, .topbar-title h2, .sidebar-brand-name {
 .payment-table tbody tr.row-overpaid {
   background: rgba(245,158,11,0.10);
 }
+.payment-table tbody tr.row-input-overlimit {
+  background: rgba(239, 68, 68, 0.075);
+}
 
 /* Table Inputs */
 .tbl-input {
@@ -853,6 +856,22 @@ h1, h2, h3, h4, h5, h6, .card-title, .topbar-title h2, .sidebar-brand-name {
 }
 .tbl-input:focus { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(52, 211, 153, 0.14); }
 .tbl-readonly { opacity: 0.5; cursor: not-allowed; background: rgba(148, 163, 184, 0.06) !important; }
+.tbl-system {
+  cursor: default;
+  user-select: none;
+  pointer-events: none;
+  background: rgba(148, 163, 184, 0.055) !important;
+  border-color: rgba(148, 163, 184, 0.14) !important;
+  color: var(--text-secondary) !important;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  box-shadow: none !important;
+}
+.tbl-system-sisa {
+  color: var(--accent-light) !important;
+  background: rgba(52, 211, 153, 0.055) !important;
+  border-color: rgba(52, 211, 153, 0.16) !important;
+}
 .tbl-pay { background: rgba(52, 211, 153, 0.08) !important; border-color: rgba(52, 211, 153, 0.28) !important; color: var(--green) !important; }
 .tbl-pay:disabled {
   opacity: 0.65;
@@ -862,6 +881,12 @@ h1, h2, h3, h4, h5, h6, .card-title, .topbar-title h2, .sidebar-brand-name {
   color: var(--orange) !important;
 }
 .tbl-pay:focus { border-color: var(--green) !important; box-shadow: 0 0 0 2px rgba(52, 211, 153, 0.14) !important; }
+.tbl-pay.is-input-overlimit {
+  background: rgba(239, 68, 68, 0.08) !important;
+  border-color: rgba(239, 68, 68, 0.48) !important;
+  color: var(--red) !important;
+  box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.12) !important;
+}
 
 .comp-label { font-weight: 500; color: var(--text-primary); }
 .nominal { color: var(--green) !important; font-weight: 600 !important; }
@@ -941,6 +966,14 @@ h1, h2, h3, h4, h5, h6, .card-title, .topbar-title h2, .sidebar-brand-name {
   color: var(--text-muted);
   font-size: 11.5px;
   line-height: 1.45;
+}
+.du-master-warning {
+  margin: 10px 0 0;
+  color: var(--orange);
+  font-weight: 700;
+}
+.du-master-warning[hidden] {
+  display: none !important;
 }
 .password-field-wrap {
   position: relative;
@@ -1307,11 +1340,19 @@ input[list]::-webkit-calendar-picker-indicator { display: none !important; }
   border: 1px solid rgba(245,158,11,0.30);
 }
 .payment-overpaid-alert,
+.payment-input-overlimit-alert,
 .biaya-lain-overpaid-alert {
   margin: 0 0 14px;
   line-height: 1.5;
 }
+.payment-auto-note {
+  margin: -2px 0 14px;
+  color: var(--text-muted);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
 .payment-overpaid-alert[hidden],
+.payment-input-overlimit-alert[hidden],
 .biaya-lain-overpaid-alert[hidden] {
   display: none !important;
 }
@@ -1746,7 +1787,23 @@ input[list]::-webkit-calendar-picker-indicator { display: none !important; }
 }
 [data-theme="light"] .tbl-input:focus { border-color: var(--accent); }
 [data-theme="light"] .tbl-readonly { background: #f3f7f4 !important; color: #8aa095 !important; }
+[data-theme="light"] .tbl-system {
+  background: #f4f8f5 !important;
+  border-color: rgba(31, 157, 85, 0.12) !important;
+  color: #5d7466 !important;
+}
+[data-theme="light"] .tbl-system-sisa {
+  background: #eefaf3 !important;
+  border-color: rgba(31, 157, 85, 0.18) !important;
+  color: var(--accent) !important;
+}
 [data-theme="light"] .tbl-pay { background: rgba(22,163,74,0.07) !important; border-color: rgba(22,163,74,0.3) !important; }
+[data-theme="light"] .tbl-pay.is-input-overlimit {
+  background: rgba(220, 38, 38, 0.075) !important;
+  border-color: rgba(220, 38, 38, 0.42) !important;
+  color: var(--red) !important;
+  box-shadow: 0 0 0 2px rgba(220, 38, 38, 0.10) !important;
+}
 [data-theme="light"] .comp-label { color: #17261e; }
 
 /* Lain-lain rows */
@@ -1787,6 +1844,7 @@ input[list]::-webkit-calendar-picker-indicator { display: none !important; }
 [data-theme="light"] .alert-error   { background: rgba(220,38,38,0.08); border-color: rgba(220,38,38,0.3); }
 [data-theme="light"] .alert-warning { background: rgba(245,158,11,0.10); border-color: rgba(245,158,11,0.32); }
 [data-theme="light"] .payment-table tbody tr.row-overpaid { background: rgba(245,158,11,0.12); }
+[data-theme="light"] .payment-table tbody tr.row-input-overlimit { background: rgba(220, 38, 38, 0.055); }
 
 /* Filter / search bar */
 [data-theme="light"] .search-box {
@@ -2114,6 +2172,32 @@ input[list]::-webkit-calendar-picker-indicator { display: none !important; }
   }
   [data-theme="light"] .form-payment-table td .tbl-input {
     background: #fbfefc !important;
+  }
+  .form-payment-table td .tbl-system {
+    background: rgba(148, 163, 184, 0.055) !important;
+    color: var(--text-secondary) !important;
+  }
+  .form-payment-table td .tbl-system-sisa {
+    background: rgba(52, 211, 153, 0.055) !important;
+    color: var(--accent-light) !important;
+  }
+  [data-theme="light"] .form-payment-table td .tbl-system {
+    background: #f4f8f5 !important;
+    color: #5d7466 !important;
+  }
+  [data-theme="light"] .form-payment-table td .tbl-system-sisa {
+    background: #eefaf3 !important;
+    color: var(--accent) !important;
+  }
+  .form-payment-table td .tbl-pay.is-input-overlimit {
+    background: rgba(239, 68, 68, 0.08) !important;
+    border-color: rgba(239, 68, 68, 0.48) !important;
+    color: var(--red) !important;
+  }
+  [data-theme="light"] .form-payment-table td .tbl-pay.is-input-overlimit {
+    background: rgba(220, 38, 38, 0.075) !important;
+    border-color: rgba(220, 38, 38, 0.42) !important;
+    color: var(--red) !important;
   }
   
   /* Quick Actions spacing on Mobile */
