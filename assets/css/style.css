@@ -2679,10 +2679,19 @@ input[list]::-webkit-calendar-picker-indicator { display: none !important; }
   letter-spacing: 0.28px;
 }
 .recap-report-shell .class-recap-table th.recap-identity-head {
-  background: #143f31 !important;
+  background: linear-gradient(180deg, #174b3a 0%, #123b2f 100%) !important;
   color: #fff !important;
   text-align: center;
   vertical-align: middle;
+  border-right: 0;
+  border-bottom: 0;
+  box-shadow: none;
+}
+.recap-report-shell .class-recap-table thead tr:first-child th.recap-identity-head:first-child {
+  border-top-left-radius: 12px;
+}
+.recap-report-shell .class-recap-table thead tr:first-child th.recap-identity-head:nth-child(3) {
+  border-right: 2px solid rgba(255,255,255,0.14);
 }
 .recap-report-shell .class-recap-table th.recap-number-head {
   width: 64px;
@@ -2805,7 +2814,7 @@ input[list]::-webkit-calendar-picker-indicator { display: none !important; }
 .recap-report-shell .class-recap-table thead .recap-identity-head { position: sticky; z-index: 8; }
 .recap-report-shell .class-recap-table thead .recap-identity-head:nth-child(1) { left: 0; width: 64px; min-width: 64px; }
 .recap-report-shell .class-recap-table thead .recap-identity-head:nth-child(2) { left: 64px; width: 270px; min-width: 270px; }
-.recap-report-shell .class-recap-table thead .recap-identity-head:nth-child(3) { left: 334px; width: 122px; min-width: 122px; box-shadow: 7px 0 12px -10px rgba(0,0,0,.6); }
+.recap-report-shell .class-recap-table thead .recap-identity-head:nth-child(3) { left: 334px; width: 122px; min-width: 122px; box-shadow: none; }
 .recap-mobile-list { display: none; }
 
 /* Riwayat pembayaran lengkap per siswa */
