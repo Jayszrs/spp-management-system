@@ -95,7 +95,7 @@ $bulan_label = $bln_names[str_pad($filter_bulan, 2, '0', STR_PAD_LEFT)];
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
   <script>(function(){var t=localStorage.getItem('spp_theme')||'dark';document.documentElement.setAttribute('data-theme',t);})();</script>
-  <link rel="stylesheet" href="../assets/css/style.css?v=3.9" />
+  <link rel="stylesheet" href="../assets/css/style.css?v=4.7" />
 </head>
 <body>
 <div class="bg-orbs"><div class="orb orb-1"></div><div class="orb orb-2"></div><div class="orb orb-3"></div></div>

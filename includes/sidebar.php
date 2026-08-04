@@ -12,55 +12,55 @@ if (in_array($dir, ['pembayaran', 'siswa', 'tabungan', 'laporan'])) {
 
 $role = $_SESSION['admin_role'] ?? '';
 
-// Definisi semua nav item: [href, label, svg-path, roles yang boleh akses]
+// Definisi semua nav item: [href, label, svg-path, roles yang boleh akses, kategori]
 $allNavItems = [
   ['dashboard.php', 'Dashboard',
    '<rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>',
-   ['admin', 'bendahara']],
+   ['admin', 'bendahara'], 'Menu Utama'],
 
   ['pembayaran/form.php', 'Input Pembayaran',
    '<rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/>',
-   ['admin']],
+   ['admin'], 'Pembayaran'],
 
   ['pembayaran/lihat.php', 'Riwayat Pembayaran',
    '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>',
-   ['admin']],
+   ['admin'], 'Pembayaran'],
 
   ['siswa/daftar.php', 'Data Siswa',
    '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
-   ['admin']],
+   ['admin'], 'Data Master'],
 
   ['master_biaya_lain.php', 'Master Biaya Lain',
    '<path d="M20 12V8H6a2 2 0 0 1 0-4h12v4"/><path d="M4 6v12a2 2 0 0 0 2 2h14v-4"/><path d="M18 12a2 2 0 0 0 0 4h4v-4z"/>',
-   ['admin']],
+   ['admin'], 'Data Master'],
 
   ['master_daftar_ulang.php', 'Master Daftar Ulang',
    '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M4 4.5A2.5 2.5 0 0 1 6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5z"/><path d="M9 7h6"/><path d="M9 11h6"/>',
-   ['admin']],
-
-  ['role_management.php', 'Role Management',
-   '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/>',
-   ['admin']],
+   ['admin'], 'Data Master'],
 
   ['tabungan/masuk.php', 'Tabungan Masuk',
    '<path d="M12 2v20M17 7H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>',
-   ['admin', 'kasir']],
+   ['admin', 'kasir'], 'Tabungan'],
 
   ['tabungan/keluar.php', 'Tabungan Keluar',
    '<path d="M6 17H18M12 22V2M7 7l5-5 5 5"/>',
-   ['admin', 'kasir']],
+   ['admin', 'kasir'], 'Tabungan'],
 
   ['tabungan/riwayat.php', 'Riwayat Tabungan',
    '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/>',
-   ['admin', 'kasir', 'bendahara']],
+   ['admin', 'kasir', 'bendahara'], 'Tabungan'],
 
   ['laporan/index.php', 'Laporan',
    '<path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>',
-   ['admin', 'bendahara']],
+   ['admin', 'bendahara'], 'Laporan'],
 
   ['laporan/rekap_kelas.php', 'Rekap per Kelas',
    '<path d="M3 3h18v18H3z"/><path d="M3 9h18M9 3v18"/>',
-   ['admin', 'bendahara']],
+   ['admin', 'bendahara'], 'Laporan'],
+
+  ['role_management.php', 'Role Management',
+   '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/>',
+   ['admin'], 'Pengaturan'],
 ];
 
 // Filter nav items berdasarkan role
@@ -104,9 +104,13 @@ $roleAvatar = $roleAvatars[$role] ?? 'US';
   </div>
 
   <nav class="sidebar-nav">
-    <?php foreach ($navItems as [$href, $label, $icon, $roles]):
+    <?php $lastSection = null; ?>
+    <?php foreach ($navItems as [$href, $label, $icon, $roles, $section]):
       $isActive = (strpos($_SERVER['PHP_SELF'], str_replace('../', '', $href)) !== false) ? 'active' : '';
     ?>
+    <?php if ($section !== $lastSection): $lastSection = $section; ?>
+    <div class="nav-section-label"><?= htmlspecialchars($section) ?></div>
+    <?php endif; ?>
     <a href="<?= $root . $href ?>" class="nav-item <?= $isActive ?>">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><?= $icon ?></svg>
       <?= $label ?>
@@ -144,7 +148,7 @@ $roleAvatar = $roleAvatars[$role] ?? 'US';
 
 <!-- Material 3 Bottom Navigation for Mobile -->
 <nav class="bottom-nav">
-  <?php foreach ($navItems as [$href, $label, $icon, $roles]):
+  <?php foreach ($navItems as [$href, $label, $icon, $roles, $section]):
     $isActive   = (strpos($_SERVER['PHP_SELF'], str_replace('../', '', $href)) !== false) ? 'active' : '';
     $shortLabel = $shortLabels[$label] ?? $label;
   ?>
