@@ -244,7 +244,7 @@ $bln_list = [
     </main>
   </div>
 
-  <script src="../assets/js/app.js?v=3.8"></script>
+  <script src="../assets/js/app.js?v=4.1"></script>
 </body>
 </html>
 

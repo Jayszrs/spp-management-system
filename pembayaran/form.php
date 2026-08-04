@@ -80,21 +80,43 @@ while ($master = $master_du_result->fetch_assoc()) {
     $master_daftar_ulang[$periodKey] = (float)$master['Jumlah'];
 }
 $has_master_daftar_ulang = count($master_daftar_ulang) > 0;
-$daftar_ulang_years = [];
+
+function current_academic_year(): string {
+    $year = (int)date('Y');
+    $month = (int)date('n');
+    $start = $month >= 7 ? $year : $year - 1;
+    return $start . '/' . ($start + 1);
+}
+
+function academic_year_options(array $existingYears = [], array $includeYears = [], int $range = 3): array {
+    $activeYear = current_academic_year();
+    $activeStart = (int)substr($activeYear, 0, 4);
+    $options = [];
+
+    for ($offset = -$range; $offset <= $range; $offset++) {
+        $start = $activeStart + $offset;
+        $label = $start . '/' . ($start + 1);
+        $options[$label] = $label;
+    }
+
+    foreach (array_merge($existingYears, $includeYears) as $year) {
+        $year = trim((string)$year);
+        if (preg_match('/^\d{4}\/\d{4}$/', $year)) {
+            $options[$year] = $year;
+        }
+    }
+
+    krsort($options);
+    return array_values($options);
+}
+
+$master_daftar_ulang_years = [];
 foreach (array_keys($master_daftar_ulang) as $periodKey) {
     [, $year] = explode('|', $periodKey, 2);
-    $daftar_ulang_years[$year] = $year;
+    $master_daftar_ulang_years[$year] = $year;
 }
-if (!$daftar_ulang_years) {
-    $year = (int)date('Y');
-    $start = (int)date('n') >= 7 ? $year : $year - 1;
-    for ($offset = -1; $offset <= 1; $offset++) {
-        $academicStart = $start + $offset;
-        $label = $academicStart . '/' . ($academicStart + 1);
-        $daftar_ulang_years[$label] = $label;
-    }
-}
-krsort($daftar_ulang_years);
+$activeAcademicYear = current_academic_year();
+$daftar_ulang_years = academic_year_options(array_values($master_daftar_ulang_years), [$activeAcademicYear]);
 
 $biaya_lain_paid = [];
 $biaya_lain_paid_result = $koneksi->query("
@@ -433,9 +455,11 @@ unset($_SESSION['flash']);
             <div class="field-row">
               <label class="field-label" for="tahun-ajaran-du">Tahun Ajaran</label>
               <select class="field-input field-select" id="tahun-ajaran-du" name="tahun_ajaran_du">
-                <?php $firstDuYear = true; foreach ($daftar_ulang_years as $ta): ?>
-                <option value="<?= htmlspecialchars($ta) ?>" <?= $firstDuYear ? 'selected' : '' ?>><?= htmlspecialchars($ta) ?></option>
-                <?php $firstDuYear = false; endforeach; ?>
+                <?php foreach ($daftar_ulang_years as $ta): ?>
+                <option value="<?= htmlspecialchars($ta) ?>" <?= $activeAcademicYear === $ta ? 'selected' : '' ?>>
+                  <?= htmlspecialchars($ta) ?><?= $activeAcademicYear === $ta ? ' - Tahun ajaran aktif' : '' ?>
+                </option>
+                <?php endforeach; ?>
               </select>
             </div>
           </div>
@@ -474,7 +498,7 @@ unset($_SESSION['flash']);
     window.sppDaftarUlangMasters = <?= json_encode($master_daftar_ulang, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT) ?>;
     window.sppDaftarUlangHasMasters = <?= $has_master_daftar_ulang ? 'true' : 'false' ?>;
   </script>
-  <script src="../assets/js/app.js?v=4.1"></script>
+  <script src="../assets/js/app.js?v=4.2"></script>
 </body>
 </html>
 

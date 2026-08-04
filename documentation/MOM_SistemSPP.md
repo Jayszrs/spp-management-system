@@ -55,7 +55,9 @@ Sistem pembayaran sudah ditambahkan dengan pilihan `Tunai`, `VA`, dan `Qris`. Ni
 
 Total pembayaran dihitung ulang dari backend agar data yang tersimpan tidak bergantung pada nilai dari browser. Untuk biaya tambahan, aplikasi menggunakan master biaya lain sehingga jenis biaya dapat dikelola secara dinamis. Biaya lain juga sudah mendukung cicilan: sistem menampilkan total tagihan, sudah dibayar, sisa, dan input bayar sehingga pembayaran tidak harus langsung lunas.
 
-Untuk daftar ulang, sistem memakai master `Daftar_ulang` berdasarkan kombinasi kelas dan tahun ajaran. Jika tabel master masih kosong total, sistem memakai fallback dari nominal daftar ulang pada data siswa agar transaksi lama tetap dapat berjalan. Jika master sudah ada tetapi kelas/tahun ajaran yang dipilih belum diatur, sistem menampilkan peringatan dan pembayaran daftar ulang ditolak sampai master dilengkapi. Perhitungan sisa daftar ulang dipisahkan per siswa, kelas daftar ulang, dan tahun ajaran.
+Untuk daftar ulang, sistem memakai master `Daftar_ulang` berdasarkan kombinasi kelas dan tahun ajaran. Tahun ajaran mengikuti kalender pendidikan Juli-Juni dan dipilih dari opsi sistem, bukan diketik manual. Jika tabel master masih kosong total, sistem memakai fallback dari nominal daftar ulang pada data siswa agar transaksi lama tetap dapat berjalan. Jika master sudah ada tetapi kelas/tahun ajaran yang dipilih belum diatur, sistem menampilkan peringatan, mengunci input daftar ulang, dan pembayaran daftar ulang ditolak sampai master dilengkapi. Perhitungan sisa daftar ulang dipisahkan per siswa, kelas daftar ulang, dan tahun ajaran.
+
+Pada edit pembayaran dari halaman riwayat, sistem memakai master dan tarif terbaru sebagai dasar total tagihan. Transaksi yang sedang diedit dikecualikan dari hitungan histori agar nominal tidak dihitung ganda, sedangkan nominal input transaksi tetap dipertahankan untuk diperiksa terhadap sisa terbaru.
 
 ### 5. Fitur Master Biaya Lain
 
@@ -65,7 +67,7 @@ Biaya yang sudah digunakan pada transaksi tetap tersimpan melalui snapshot nama 
 
 ### 6. Fitur Master Daftar Ulang
 
-Master Daftar Ulang digunakan untuk mengelola nominal daftar ulang per kelas dan tahun ajaran. Admin dapat menambahkan, mengubah, dan menghapus tarif selama tarif tersebut belum digunakan pada histori pembayaran.
+Master Daftar Ulang digunakan untuk mengelola nominal daftar ulang per kelas dan tahun ajaran. Admin memilih tahun ajaran dari dropdown sistem yang mengikuti periode sekolah Juli-Juni, lalu mengisi kelas dan nominal. Admin dapat menambahkan, mengubah, dan menghapus tarif selama tarif tersebut belum digunakan pada histori pembayaran.
 
 Setiap kombinasi kelas dan tahun ajaran dibuat unik agar tidak ada tarif ganda. Dengan konsep ini, ketika tahun ajaran baru berubah, admin cukup membuat master nominal baru tanpa mengubah histori daftar ulang tahun sebelumnya.
 
@@ -159,8 +161,9 @@ Masih terdapat catatan pengembangan lanjutan, yaitu penerapan CSRF token secara 
 | Dark mode | Palet warna dibuat lebih ramah dan tidak terlalu pekat |
 | Pembayaran | Menambahkan metode pembayaran `Tunai`, `VA`, dan `Qris` |
 | Daftar Ulang | Pencatatan memakai master resmi kelas/tahun ajaran, fallback hanya saat master kosong total |
-| Master Daftar Ulang | CRUD admin untuk nominal daftar ulang per kelas dan tahun ajaran |
+| Master Daftar Ulang | CRUD admin untuk nominal daftar ulang per kelas dan tahun ajaran Juli-Juni |
 | Biaya Lain | Mendukung cicilan dengan kolom total, sudah dibayar, sisa, bayar, dan alert jika melebihi sisa |
+| Edit Pembayaran | Rincian edit dari riwayat langsung memakai histori terbaru dan mengecualikan transaksi aktif |
 | Navigasi Data | Baris pembayaran, transaksi dashboard, dan siswa dapat diklik langsung untuk edit |
 | Slip PDF | Export server-side dengan Dompdf, ukuran `210mm x 148mm`, layout lebih rapi |
 | Cetak Slip Terpilih | Detail transaksi pembayaran dapat mencetak satu atau beberapa slip yang dipilih |

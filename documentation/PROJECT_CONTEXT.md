@@ -148,7 +148,7 @@ Detail biaya tambahan per transaksi. Nama dan nominal disimpan sebagai snapshot 
 
 `bayar_du` menyimpan pembayaran daftar ulang per siswa, kelas daftar ulang, dan tahun ajaran. Child yang dibuat oleh pembayaran versi aman menyimpan `bayar_id` unik dengan foreign key `ON DELETE CASCADE` ke `bayar`.
 
-Tabel `Daftar_ulang` dipakai sebagai master nominal daftar ulang per kombinasi `kelas + th_ajaran`. Kombinasi tersebut harus unik dan dikelola admin melalui halaman Master Daftar Ulang. Jika tabel master benar-benar kosong, alur pembayaran memakai fallback dari data siswa (`DAFTAR_ULANG`, `potong_du`, `tot_du`) supaya transaksi lama tetap bisa berjalan. Jika master sudah memiliki data tetapi kombinasi kelas/tahun yang dipilih belum tersedia, nominal daftar ulang dianggap belum diatur dan transaksi DU harus ditolak sampai master dilengkapi. Sisa daftar ulang dihitung per `NO_INDUK + kelas + th_ajaran`, bukan total global siswa.
+Tabel `Daftar_ulang` dipakai sebagai master nominal daftar ulang per kombinasi `kelas + th_ajaran`. Tahun ajaran mengikuti kalender pendidikan Juli-Juni; tahun ajaran aktif adalah `YYYY/YYYY+1` pada Juli-Desember dan `YYYY-1/YYYY` pada Januari-Juni. Kombinasi kelas+tahun harus unik dan dikelola admin melalui halaman Master Daftar Ulang. Jika tabel master benar-benar kosong, alur pembayaran memakai fallback dari data siswa (`DAFTAR_ULANG`, `potong_du`, `tot_du`) supaya transaksi lama tetap bisa berjalan. Jika master sudah memiliki data tetapi kombinasi kelas/tahun yang dipilih belum tersedia, nominal daftar ulang dianggap belum diatur dan transaksi DU harus ditolak sampai master dilengkapi. Sisa daftar ulang dihitung per `NO_INDUK + kelas + th_ajaran`, bukan total global siswa.
 
 ### `tabungan`, `transaksi_m`, dan `transaksi_k`
 
@@ -177,6 +177,7 @@ Tabel `Daftar_ulang` dipakai sebagai master nominal daftar ulang per kombinasi `
 - Backend mengambil kelas, tarif Komite, dan total tagihan master biaya lain langsung dari database.
 - `total_jumlah` dihitung ulang di backend dari komponen pembayaran, daftar ulang, biaya lain, dan potongan SPP. Hidden total dari browser bukan sumber kebenaran.
 - Pada rincian pembayaran, `Total Tagihan`, `Sudah Terbayar`, dan `Sisa` adalah nilai sistem otomatis dari database/histori dan ditampilkan sebagai readonly visual-only; hanya `Input Bayar` yang dapat diedit pengguna.
+- Halaman edit pembayaran harus auto-bind siswa yang sedang diedit saat load sehingga rincian tagihan langsung memakai konteks siswa aktif, master/tarif terbaru, dan histori lain yang mengecualikan `bayar.id` transaksi tersebut.
 - Sistem pembayaran dipilih dari opsi `Tunai`, `VA`, atau `Qris` dan divalidasi ulang di backend.
 - Nominal negatif, periode tidak valid, pembayaran Komite melebihi sisa periode, dan input komponen yang melebihi sisa tagihan harus ditolak.
 - Form pembayaran menampilkan alert bila `Sudah Terbayar` lebih besar dari `Total Tagihan`; sisa ditampilkan sebagai nol dan input bayar pada komponen tersebut dikunci.
@@ -193,6 +194,7 @@ Tabel `Daftar_ulang` dipakai sebagai master nominal daftar ulang per kombinasi `
 - Sudah dibayar dan sisa dihitung per `NO_INDUK + BULAN + TAHUN`.
 - Periode berbeda memiliki saldo Komite yang terpisah.
 - Edit transaksi mengecualikan transaksi yang sedang diedit saat menghitung pembayaran periode sebelumnya.
+- Pada edit pembayaran, basis total tagihan mengikuti master/tarif terbaru sesuai keputusan project; nominal input transaksi aktif tetap dipertahankan dan ikut diuji terhadap sisa terbaru.
 
 ### Master Biaya Lain
 
@@ -207,10 +209,12 @@ Tabel `Daftar_ulang` dipakai sebagai master nominal daftar ulang per kombinasi `
 ### Master Daftar Ulang
 
 - Admin mengelola nominal daftar ulang resmi pada `master_daftar_ulang.php`.
+- Tahun ajaran master dipilih dari dropdown sistem aktif +/- 3 tahun, bukan input manual bebas.
 - Satu kombinasi `th_ajaran + kelas` hanya boleh memiliki satu nominal aktif melalui unique key `uk_daftar_ulang_period_class`.
 - Format tahun ajaran wajib `YYYY/YYYY` dan tahun kedua harus satu tahun setelah tahun pertama.
 - Master yang sudah dipakai pada `bayar_du` tidak dapat dihapus agar histori tetap dapat diaudit.
 - Form input/edit pembayaran mengambil dropdown tahun ajaran dan nominal daftar ulang dari master ini.
+- Form input pembayaran default ke tahun ajaran aktif; kelas DU default mengikuti kelas siswa yang dipilih, tetapi admin tetap dapat mengubahnya.
 - Jika tabel master kosong total, sistem fallback ke data daftar ulang di tabel siswa untuk kompatibilitas transaksi lama.
 - Jika master sudah ada tetapi kombinasi kelas/tahun yang dipilih belum diatur, form menampilkan warning dan backend menolak pembayaran DU sampai master dilengkapi.
 

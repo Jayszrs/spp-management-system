@@ -145,6 +145,7 @@ function pilihSiswaDatalist(input) {
       document.getElementById('disp-nis').value = nis || '';
       document.getElementById('disp-nama').value = nama || '';
       document.getElementById('disp-kelas').value = opt.dataset.kelas || '';
+      applyDefaultDaftarUlangClass(opt);
       applyStudentPaymentDetails(opt);
       found = true;
       break;
@@ -156,6 +157,19 @@ function pilihSiswaDatalist(input) {
     document.getElementById('disp-nama').value = '';
     document.getElementById('disp-kelas').value = '';
     clearPaymentDetails();
+  }
+}
+
+function applyDefaultDaftarUlangClass(opt) {
+  const select = document.getElementById('kelas-du') || document.querySelector('[name="kelas_du"]');
+  if (!select || !opt) return;
+  if (select.dataset.userChanged === '1') return;
+  if (select.dataset.preserveDefault === '1' && select.value) return;
+
+  const studentClass = String(opt.dataset.kelas || '').match(/[1-6]/)?.[0] || '';
+  if (!studentClass) return;
+  if (Array.from(select.options).some(option => option.value === studentClass)) {
+    select.value = studentClass;
   }
 }
 
@@ -208,14 +222,30 @@ function totalDaftarUlangForContext(opt) {
 
 function refreshDaftarUlangMasterWarning(opt) {
   const warning = document.getElementById('du-master-warning');
-  if (!warning) return;
+  const input = document.getElementById('du-input');
+  if (!warning && !input) return;
 
   const hasMasters = window.sppDaftarUlangHasMasters === true;
   const periodKey = selectedDaftarUlangKey();
   const masters = window.sppDaftarUlangMasters || {};
   const masterTotal = periodKey ? parseNumber(masters[periodKey] || 0) : 0;
+  const isMissingMaster = !!opt && hasMasters && !!periodKey && masterTotal <= 0;
 
-  if (!opt || !hasMasters || !periodKey || masterTotal > 0) {
+  if (input) {
+    const missingMessage = 'Master daftar ulang untuk pilihan kelas dan tahun ajaran ini belum diatur.';
+    input.readOnly = isMissingMaster;
+    input.classList.toggle('tbl-readonly', isMissingMaster);
+    if (isMissingMaster) {
+      input.title = missingMessage;
+      input.setCustomValidity(parseNumber(input.value || 0) > 0 ? missingMessage : '');
+    } else if (input.title === missingMessage) {
+      input.setCustomValidity('');
+      input.removeAttribute('title');
+    }
+  }
+
+  if (!warning) return;
+  if (!isMissingMaster) {
     warning.hidden = true;
     warning.textContent = '';
     return;
@@ -471,6 +501,10 @@ function bindNumericInput(input) {
 document.addEventListener('DOMContentLoaded', function () {
   const sel = document.getElementById('siswa-select');
   if (sel && sel.value) pilihSiswa(sel);
+  const siswaSearch = document.getElementById('siswa-search');
+  if (siswaSearch && siswaSearch.value.trim() !== '') {
+    pilihSiswaDatalist(siswaSearch);
+  }
 
   // Set today's date if empty
   const tgl = document.getElementById('tgl-bayar');
@@ -479,6 +513,9 @@ document.addEventListener('DOMContentLoaded', function () {
   }
 
   document.querySelectorAll('#bulan-bayar, #tahun-bayar, #kelas-du, #tahun-ajaran-du, [name="kelas_du"], [name="tahun_ajaran_du"]').forEach(el => {
+    if (el.name === 'kelas_du') {
+      el.addEventListener('change', () => { el.dataset.userChanged = '1'; });
+    }
     el.addEventListener('change', refreshSelectedStudentPaymentDetails);
   });
 

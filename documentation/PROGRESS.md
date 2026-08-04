@@ -33,7 +33,9 @@ Dokumen kerja ini melacak pekerjaan teknis yang sedang dan sudah dilakukan. Perb
 | PAY-003 | Reset form masih dapat meninggalkan alert overpayment. | Sedang | Selesai | Reset membersihkan alert, state row overpaid, custom validity, dan baris biaya lain. |
 | PAY-004 | Pencatatan daftar ulang belum memakai master `Daftar_ulang` secara kontekstual. | Tinggi | Selesai | Nominal DU memakai master per `kelas + th_ajaran` bila tersedia, fallback ke data siswa bila master kosong, dan sisa DU dihitung per `NO_INDUK + kelas + th_ajaran`. |
 | PAY-005 | Daftar pembayaran, dashboard, dan data siswa masih mengharuskan klik tombol edit. | Rendah | Selesai | Baris tabel dapat diklik langsung untuk masuk edit; tombol aksi tetap berjalan sendiri. |
-| PAY-006 | Master daftar ulang belum punya CRUD admin dan belum menjadi sumber tarif resmi. | Tinggi | Selesai | `master_daftar_ulang.php`, unique key `Daftar_ulang(th_ajaran, kelas)`, migrasi idempoten, dropdown tahun ajaran dinamis, dan validasi backend pembayaran DU sudah disiapkan. |
+| PAY-006 | Master daftar ulang belum punya CRUD admin dan belum menjadi sumber tarif resmi. | Tinggi | Selesai | `master_daftar_ulang.php`, unique key `Daftar_ulang(th_ajaran, kelas)`, migrasi idempoten, dropdown tahun ajaran sistem Juli-Juni, dan validasi backend pembayaran DU sudah disiapkan. |
+| PAY-007 | Edit pembayaran dari riwayat belum otomatis mengikat data siswa dan histori terbaru saat halaman dibuka. | Tinggi | Selesai | Edit sekarang auto-bind konteks siswa, mengecualikan transaksi aktif dari histori, memakai master/tarif terbaru, dan query histori edit memakai prepared statement. |
+| PAY-008 | Tahun ajaran master daftar ulang masih bisa diketik manual dan default pembayaran belum mengikuti tahun ajaran aktif sekolah. | Sedang | Selesai | Master DU memakai dropdown tahun ajaran aktif +/- 3 tahun, input pembayaran default ke tahun ajaran aktif, kelas DU mengikuti kelas siswa, dan input DU terkunci bila master kombinasi belum ada. |
 | REP-001 | Export Excel langsung download tanpa preview. | Sedang | Selesai | Alur diubah menjadi preview terlebih dahulu, lalu tombol `Download Excel`. |
 | REP-002 | Slip PDF pernah bergantung pada print browser dan memunculkan header/footer URL. | Tinggi | Selesai | Slip dirender server-side memakai Dompdf dengan ukuran landscape `210mm x 148mm`; header/footer browser tidak ikut tercetak. |
 | UI-001 | Beberapa tampilan mobile dan dark mode kurang rapi/user friendly. | Sedang | Selesai bertahap | Sidebar mobile, logout, bottom nav, preview Excel, riwayat tabungan, avatar role, dan palet dark mode sudah direvisi. |
@@ -69,19 +71,23 @@ Dokumen kerja ini melacak pekerjaan teknis yang sedang dan sudah dilakukan. Perb
 - Komponen pembayaran yang sudah terbayar lebih besar dari total menampilkan alert, sisa menjadi nol, dan input dikunci.
 - Backend ikut menolak nominal negatif, periode tidak valid, metode pembayaran tidak valid, dan pembayaran yang melebihi sisa tagihan.
 - Edit/hapus pembayaran hanya menyentuh child yang terhubung dengan `bayar_id`, bukan mencocokkan berdasarkan NIS/tanggal secara rapuh.
+- Edit pembayaran dari riwayat memakai master/tarif terbaru, mempertahankan nominal input transaksi aktif, dan mengecualikan transaksi aktif dari hitungan `Sudah Terbayar`.
 
 ### Daftar ulang
 
 - Pembayaran daftar ulang dicatat pada `bayar_du` dengan `bayar_id`, `no_induk`, `kelas`, `th_ajaran`, dan `jumlah`.
 - Master `Daftar_ulang` menjadi sumber resmi nominal per `kelas + th_ajaran` dan dikelola melalui halaman admin `Master Daftar Ulang`.
+- Tahun ajaran daftar ulang mengikuti kalender sekolah Juli-Juni; tahun ajaran aktif dipilih otomatis berdasarkan tanggal berjalan.
 - Kombinasi kelas dan tahun ajaran dijaga unik oleh database agar tidak ada tarif ganda.
 - Bila master `Daftar_ulang` kosong total, sistem fallback ke nominal daftar ulang dari tabel `siswa` agar transaksi lama tetap bisa digunakan.
 - Bila master sudah ada tetapi kombinasi kelas/tahun belum diatur, form menampilkan warning dan nominal DU menjadi nol sampai master dilengkapi.
+- Pada form pembayaran, kelas DU default mengikuti kelas siswa dan input DU dikunci saat master kombinasi belum tersedia.
 - Perhitungan `Sudah Terbayar` dan `Sisa` daftar ulang dipisah per siswa, kelas daftar ulang, dan tahun ajaran.
 
 ### Master daftar ulang
 
 - Admin dapat menambah dan mengubah nominal daftar ulang berdasarkan tahun ajaran dan kelas.
+- Tahun ajaran dipilih dari dropdown sistem, bukan input manual bebas.
 - Tahun ajaran divalidasi dengan format `YYYY/YYYY` dan tahun kedua harus tahun pertama + 1.
 - Kelas dibatasi `1` sampai `6`, nominal wajib lebih dari nol, dan duplikat kelas/tahun ditolak.
 - Data master diurutkan dari tahun ajaran terbaru lalu kelas.
@@ -101,6 +107,7 @@ Dokumen kerja ini melacak pekerjaan teknis yang sedang dan sudah dilakukan. Perb
 - Halaman lihat pembayaran menampilkan tanggal dan jam bayar.
 - Bila transaksi pernah diupdate, sistem menampilkan keterangan waktu update.
 - Baris transaksi dapat diklik langsung untuk edit tanpa harus menekan tombol `Edit`.
+- Saat edit dibuka dari riwayat, rincian pembayaran langsung terisi dari konteks siswa dan histori terbaru.
 - Transaksi legacy dengan `payment_link_version=0` tetap dibatasi dan tidak diedit/hapus otomatis.
 
 ### Tabungan
@@ -136,6 +143,35 @@ Dokumen kerja ini melacak pekerjaan teknis yang sedang dan sudah dilakukan. Perb
 
 ## Bukti verifikasi terakhir
 
+Dilakukan pada 2026-08-04 untuk perapihan tahun ajaran dan cicilan DU:
+
+```powershell
+C:\xampp\php\php.exe -l master_daftar_ulang.php
+C:\xampp\php\php.exe -l pembayaran\form.php
+C:\xampp\php\php.exe -l pembayaran\edit.php
+C:\xampp\php\php.exe -l pembayaran\proses.php
+node --check assets\js\app.js
+git diff --check
+```
+
+Seluruh lint dan check berhasil. `git diff --check` tidak menemukan error whitespace; hanya muncul warning line ending CRLF dari Git di Windows.
+
+## Bukti verifikasi sebelumnya
+
+Dilakukan pada 2026-08-04 untuk perbaikan edit pembayaran dari riwayat:
+
+```powershell
+C:\xampp\php\php.exe -l pembayaran\edit.php
+C:\xampp\php\php.exe -l pembayaran\proses.php
+C:\xampp\php\php.exe -l pembayaran\lihat.php
+node --check assets\js\app.js
+git diff --check
+```
+
+Seluruh lint dan check berhasil. `git diff --check` tidak menemukan error whitespace; hanya muncul warning line ending CRLF dari Git di Windows.
+
+## Bukti verifikasi Master Daftar Ulang
+
 Dilakukan pada 2026-08-04 di database lokal `db_spp` untuk fitur Master Daftar Ulang:
 
 ```powershell
@@ -153,7 +189,7 @@ git diff --check
 
 Verifikasi schema mengembalikan `OK` untuk seluruh requirement, termasuk tabel `Daftar_ulang` dan unique key `uk_daftar_ulang_period_class`. Migrasi daftar ulang aman dijalankan ulang. `git diff --check` tidak menemukan error whitespace; hanya muncul warning line ending CRLF dari Git di Windows.
 
-## Bukti verifikasi sebelumnya
+## Bukti verifikasi 2026-07-30
 
 Dilakukan pada 2026-07-30 di database lokal `db_spp` setelah memastikan tabel transaksi kosong:
 

@@ -37,6 +37,28 @@ function current_academic_year(): string {
     return $start . '/' . ($start + 1);
 }
 
+function academic_year_options(array $existingYears = [], array $includeYears = [], int $range = 3): array {
+    $activeYear = current_academic_year();
+    $activeStart = (int)substr($activeYear, 0, 4);
+    $options = [];
+
+    for ($offset = -$range; $offset <= $range; $offset++) {
+        $start = $activeStart + $offset;
+        $label = $start . '/' . ($start + 1);
+        $options[$label] = $label;
+    }
+
+    foreach (array_merge($existingYears, $includeYears) as $year) {
+        $year = trim((string)$year);
+        if (preg_match('/^\d{4}\/\d{4}$/', $year)) {
+            $options[$year] = $year;
+        }
+    }
+
+    krsort($options);
+    return array_values($options);
+}
+
 $flash = $_SESSION['flash'] ?? null;
 unset($_SESSION['flash']);
 
@@ -145,7 +167,9 @@ $yearRows = $koneksi->query("
     ORDER BY th_ajaran DESC
 ")->fetch_all(MYSQLI_ASSOC);
 $yearOptions = array_column($yearRows, 'th_ajaran');
-$defaultYear = $editData['th_ajaran'] ?? ($yearOptions[0] ?? current_academic_year());
+$activeAcademicYear = current_academic_year();
+$yearOptions = academic_year_options($yearOptions, [$editData['th_ajaran'] ?? null]);
+$defaultYear = $editData['th_ajaran'] ?? $activeAcademicYear;
 
 $masterList = $koneksi->query("
     SELECT du.id, du.th_ajaran, du.kelas, du.Jumlah, COUNT(bd.id) AS jumlah_pemakaian
@@ -195,13 +219,13 @@ $masterList = $koneksi->query("
           <div class="fields-grid master-fee-form">
             <div class="field-row">
               <label class="field-label" for="tahun-ajaran-master-du">Tahun Ajaran</label>
-              <input class="field-input" id="tahun-ajaran-master-du" name="th_ajaran" list="tahun-ajaran-options" maxlength="9" required
-                placeholder="Contoh: 2026/2027" value="<?= htmlspecialchars($defaultYear) ?>" />
-              <datalist id="tahun-ajaran-options">
+              <select class="field-input field-select" id="tahun-ajaran-master-du" name="th_ajaran" required>
                 <?php foreach ($yearOptions as $year): ?>
-                <option value="<?= htmlspecialchars($year) ?>"></option>
+                <option value="<?= htmlspecialchars($year) ?>" <?= $defaultYear === $year ? 'selected' : '' ?>>
+                  <?= htmlspecialchars($year) ?><?= $activeAcademicYear === $year ? ' - Tahun ajaran aktif' : '' ?>
+                </option>
                 <?php endforeach; ?>
-              </datalist>
+              </select>
             </div>
             <div class="field-row">
               <label class="field-label" for="kelas-master-du">Kelas</label>
@@ -257,7 +281,7 @@ $masterList = $koneksi->query("
       </div>
     </main>
   </div>
-  <script src="assets/js/app.js?v=4.1"></script>
+  <script src="assets/js/app.js?v=4.2"></script>
   <script>
     document.addEventListener('DOMContentLoaded', function () {
       var nominal = document.getElementById('nominal-master-du');

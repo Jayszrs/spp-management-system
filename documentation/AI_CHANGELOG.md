@@ -13,6 +13,77 @@ File ini mencatat perubahan proyek secara reverse chronological. Baca [PROJECT_C
 - Jangan menghapus atau menulis ulang entri lama. Tambahkan entri koreksi bila diperlukan.
 - Perubahan implementasi dan entri changelog wajib masuk commit yang sama.
 
+## 2026-08-04 - Tahun Ajaran Sistem dan Cicilan Daftar Ulang
+
+**AI/Aktor:** Codex berbasis GPT-5, bersama pemilik proyek
+
+**Tujuan:** Merapikan daftar ulang sebagai tagihan tahunan SD berbasis tahun ajaran Juli-Juni dan memastikan cicilan DU terkunci ke master yang benar.
+
+**Perubahan fitur dan perilaku:**
+
+- Mengganti input manual tahun ajaran pada Master Daftar Ulang menjadi dropdown sistem.
+- Tahun ajaran aktif dihitung otomatis dengan aturan Juli-Desember memakai `YYYY/YYYY+1`, sedangkan Januari-Juni memakai `YYYY-1/YYYY`.
+- Dropdown tahun ajaran menampilkan tahun ajaran aktif +/- 3 tahun serta tahun master lama yang sudah ada.
+- Form input pembayaran memakai tahun ajaran aktif sebagai default DU, bukan master terbaru.
+- Kelas DU otomatis mengikuti kelas siswa saat siswa dipilih, selama admin belum mengubahnya manual.
+- Input `Uang Daftar Ulang` dikunci saat master DU untuk kombinasi kelas/tahun ajaran belum tersedia, dan warning tetap tampil.
+- Membump `app.js` pada halaman master/input/edit DU ke `v=4.2`.
+
+**Database dan migrasi:**
+
+- Tidak ada.
+
+**Kompatibilitas dan data lama:**
+
+- Tidak mengubah schema atau route.
+- Tahun ajaran lama yang sudah tersimpan tetap dimasukkan ke pilihan agar data master lama dapat diedit.
+- Fallback ke data siswa tetap hanya berlaku bila tabel master DU benar-benar kosong total.
+
+**Verifikasi:**
+
+- `php -l master_daftar_ulang.php`, `php -l pembayaran/form.php`, `php -l pembayaran/edit.php`, dan `php -l pembayaran/proses.php` berhasil.
+- `node --check assets/js/app.js` berhasil.
+- `git diff --check` berhasil, dengan warning line ending CRLF dari Git.
+
+**Catatan tindak lanjut:**
+
+- Uji browser pada Master Daftar Ulang dan form pembayaran untuk memastikan default tahun ajaran aktif serta locking DU berjalan sesuai kombinasi master.
+
+## 2026-08-04 - Perbaikan Fundamental Edit Pembayaran Dari Riwayat
+
+**AI/Aktor:** Codex berbasis GPT-5, bersama pemilik proyek
+
+**Tujuan:** Memastikan halaman edit pembayaran dari riwayat langsung memakai data terbaru dan menghitung sisa tagihan dengan mengecualikan transaksi yang sedang diedit.
+
+**Perubahan fitur dan perilaku:**
+
+- Halaman edit pembayaran sekarang otomatis mengikat siswa yang sedang diedit ke konteks datalist saat load.
+- `Total Tagihan`, `Sudah Terbayar`, dan `Sisa` pada edit langsung dihitung dari data/master terbaru tanpa perlu mengetik ulang siswa.
+- Nominal input transaksi yang sedang diedit tetap dipertahankan, sementara histori pembayaran lain mengecualikan `bayar.id` aktif.
+- Data daftar ulang yang eksplisit terhubung melalui `bayar_du.bayar_id` dipakai untuk menguatkan konteks `kelas_du`, `th_ajaran`, dan nominal DU pada edit.
+- Query histori edit untuk siswa, SPP/Komite periodik, DU, dan biaya lain diperbaiki memakai prepared statement.
+- Membump `app.js` pada halaman riwayat pembayaran agar klik baris edit memakai script terbaru.
+
+**Database dan migrasi:**
+
+- Tidak ada.
+
+**Kompatibilitas dan data lama:**
+
+- Tidak menambah schema baru.
+- Edit transaksi tetap hanya berlaku untuk pembayaran `payment_link_version=1`.
+- Basis edit mengikuti master/tarif terbaru sesuai keputusan project; histori transaksi yang sedang diedit tidak dihitung ganda.
+
+**Verifikasi:**
+
+- `php -l pembayaran/edit.php`, `php -l pembayaran/proses.php`, dan `php -l pembayaran/lihat.php` berhasil.
+- `node --check assets/js/app.js` berhasil.
+- `git diff --check` berhasil, dengan warning line ending CRLF dari Git.
+
+**Catatan tindak lanjut:**
+
+- Uji browser dari halaman Riwayat Pembayaran dengan klik baris langsung, lalu cek rincian total/sudah/sisa pada transaksi yang punya histori lain.
+
 ## 2026-08-04 - Master Daftar Ulang dan Integrasi Pembayaran
 
 **AI/Aktor:** Codex berbasis GPT-5, bersama pemilik proyek

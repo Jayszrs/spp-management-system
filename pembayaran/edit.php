@@ -25,11 +25,15 @@ if ((int)($d['payment_link_version'] ?? 0) !== 1) {
 }
 
 // Ambil Daftar Ulang dan tabungan wajib yang secara eksplisit milik pembayaran ini.
-$stmt_du = $koneksi->prepare("SELECT jumlah FROM bayar_du WHERE bayar_id = ? LIMIT 1");
+$stmt_du = $koneksi->prepare("SELECT jumlah, kelas, th_ajaran FROM bayar_du WHERE bayar_id = ? LIMIT 1");
 $stmt_du->bind_param('i', $id);
 $stmt_du->execute();
 $res_du = $stmt_du->get_result()->fetch_assoc();
 $d['uang_du'] = $res_du ? (float)$res_du['jumlah'] : 0.0;
+if ($res_du) {
+    $d['kelas_du'] = $res_du['kelas'];
+    $d['th_ajaran'] = $res_du['th_ajaran'];
+}
 $stmt_du->close();
 
 // Ambil tabungan wajib dari jurnal yang terhubung ke pembayaran ini.
@@ -65,46 +69,58 @@ $siswa_sql = "
             SUM(U_SORGA) AS paid_sorga,
             SUM(U_INFAQ) AS paid_infaq
         FROM bayar
-        WHERE id <> $id
+        WHERE id <> ?
         GROUP BY NO_INDUK
     ) p ON p.NO_INDUK = s.NO_INDUK
     LEFT JOIN (
         SELECT no_induk, SUM(jumlah) AS paid_du
         FROM bayar_du
+        WHERE bayar_id IS NULL OR bayar_id <> ?
         GROUP BY no_induk
     ) du ON du.no_induk = s.NO_INDUK
-    WHERE s.is_active = 1 OR s.NO_INDUK = '" . $koneksi->real_escape_string($d['NO_INDUK']) . "'
+    WHERE s.is_active = 1 OR s.NO_INDUK = ?
     ORDER BY s.NAMA ASC
 ";
-$siswa_list = $koneksi->query($siswa_sql);
+$stmt_siswa = $koneksi->prepare($siswa_sql);
+$stmt_siswa->bind_param('iis', $id, $id, $d['NO_INDUK']);
+$stmt_siswa->execute();
+$siswa_list = $stmt_siswa->get_result();
 
 $period_payments = [];
-$spp_paid_result = $koneksi->query("
+$stmt_period = $koneksi->prepare("
     SELECT NO_INDUK, BULAN, TAHUN, SUM(U_SPP) AS paid_spp, SUM(U_KOMITE) AS paid_komite
     FROM bayar
-    WHERE id <> $id
+    WHERE id <> ?
     GROUP BY NO_INDUK, BULAN, TAHUN
 ");
+$stmt_period->bind_param('i', $id);
+$stmt_period->execute();
+$spp_paid_result = $stmt_period->get_result();
 while ($paid = $spp_paid_result->fetch_assoc()) {
     $bulan_key = month_code($paid['BULAN']);
     $periodKey = $bulan_key . '-' . $paid['TAHUN'];
     $period_payments[$paid['NO_INDUK']]['spp'][$periodKey] = (float)$paid['paid_spp'];
     $period_payments[$paid['NO_INDUK']]['komite'][$periodKey] = (float)$paid['paid_komite'];
 }
+$stmt_period->close();
 
 $du_paid_periods = [];
-$du_paid_result = $koneksi->query("
+$stmt_du_paid = $koneksi->prepare("
     SELECT no_induk, kelas, th_ajaran, COALESCE(SUM(jumlah), 0) AS paid_du
     FROM bayar_du
-    WHERE (bayar_id IS NULL OR bayar_id <> $id)
+    WHERE (bayar_id IS NULL OR bayar_id <> ?)
       AND kelas IS NOT NULL AND kelas <> ''
       AND th_ajaran IS NOT NULL AND th_ajaran <> ''
     GROUP BY no_induk, kelas, th_ajaran
 ");
+$stmt_du_paid->bind_param('i', $id);
+$stmt_du_paid->execute();
+$du_paid_result = $stmt_du_paid->get_result();
 while ($paid = $du_paid_result->fetch_assoc()) {
     $periodKey = trim((string)$paid['kelas']) . '|' . trim((string)$paid['th_ajaran']);
     $du_paid_periods[$paid['no_induk']][$periodKey] = (float)$paid['paid_du'];
 }
+$stmt_du_paid->close();
 
 $master_daftar_ulang = [];
 $master_du_result = $koneksi->query("
@@ -118,36 +134,60 @@ while ($master = $master_du_result->fetch_assoc()) {
     $master_daftar_ulang[$periodKey] = (float)$master['Jumlah'];
 }
 $has_master_daftar_ulang = count($master_daftar_ulang) > 0;
-$daftar_ulang_years = [];
+
+function current_academic_year(): string {
+    $year = (int)date('Y');
+    $month = (int)date('n');
+    $start = $month >= 7 ? $year : $year - 1;
+    return $start . '/' . ($start + 1);
+}
+
+function academic_year_options(array $existingYears = [], array $includeYears = [], int $range = 3): array {
+    $activeYear = current_academic_year();
+    $activeStart = (int)substr($activeYear, 0, 4);
+    $options = [];
+
+    for ($offset = -$range; $offset <= $range; $offset++) {
+        $start = $activeStart + $offset;
+        $label = $start . '/' . ($start + 1);
+        $options[$label] = $label;
+    }
+
+    foreach (array_merge($existingYears, $includeYears) as $year) {
+        $year = trim((string)$year);
+        if (preg_match('/^\d{4}\/\d{4}$/', $year)) {
+            $options[$year] = $year;
+        }
+    }
+
+    krsort($options);
+    return array_values($options);
+}
+
+$master_daftar_ulang_years = [];
 foreach (array_keys($master_daftar_ulang) as $periodKey) {
     [, $year] = explode('|', $periodKey, 2);
-    $daftar_ulang_years[$year] = $year;
+    $master_daftar_ulang_years[$year] = $year;
 }
-if (!empty($d['th_ajaran'])) {
-    $daftar_ulang_years[$d['th_ajaran']] = $d['th_ajaran'];
-}
-if (!$daftar_ulang_years) {
-    $year = (int)date('Y');
-    $start = (int)date('n') >= 7 ? $year : $year - 1;
-    for ($offset = -1; $offset <= 1; $offset++) {
-        $academicStart = $start + $offset;
-        $label = $academicStart . '/' . ($academicStart + 1);
-        $daftar_ulang_years[$label] = $label;
-    }
-}
-krsort($daftar_ulang_years);
+$activeAcademicYear = current_academic_year();
+$selectedAcademicYear = !empty($d['th_ajaran']) ? $d['th_ajaran'] : $activeAcademicYear;
+$daftar_ulang_years = academic_year_options(array_values($master_daftar_ulang_years), [$selectedAcademicYear, $activeAcademicYear]);
 
 $biaya_lain_paid = [];
-$biaya_lain_paid_result = $koneksi->query("
+$stmt_biaya_lain_paid = $koneksi->prepare("
     SELECT b.NO_INDUK, d.master_biaya_lain_id, COALESCE(SUM(d.nominal_snapshot), 0) AS paid
     FROM bayar_biaya_lain d
     JOIN bayar b ON b.id = d.bayar_id
-    WHERE b.id <> $id AND d.master_biaya_lain_id IS NOT NULL
+    WHERE b.id <> ? AND d.master_biaya_lain_id IS NOT NULL
     GROUP BY b.NO_INDUK, d.master_biaya_lain_id
 ");
+$stmt_biaya_lain_paid->bind_param('i', $id);
+$stmt_biaya_lain_paid->execute();
+$biaya_lain_paid_result = $stmt_biaya_lain_paid->get_result();
 while ($paid = $biaya_lain_paid_result->fetch_assoc()) {
     $biaya_lain_paid[$paid['NO_INDUK']][(int)$paid['master_biaya_lain_id']] = (float)$paid['paid'];
 }
+$stmt_biaya_lain_paid->close();
 
 $master_biaya_lain = $koneksi->query("
     SELECT id, nama, nominal, is_active
@@ -496,7 +536,7 @@ $selectedPaymentMethod = $d['sistem_pembayaran'] ?? 'VA';
           <div class="fields-grid">
             <div class="field-row">
               <label class="field-label">Kelas Daftar Ulang</label>
-              <select class="field-input field-select" name="kelas_du">
+              <select class="field-input field-select" id="kelas-du" name="kelas_du" <?= $selectedDuClass !== '' ? 'data-preserve-default="1"' : '' ?>>
                 <option value="">-- Pilih Kelas --</option>
                 <?php
                 $selectedDuClass = preg_replace('/\D+/', '', (string)$d['kelas_du']);
@@ -508,9 +548,11 @@ $selectedPaymentMethod = $d['sistem_pembayaran'] ?? 'VA';
             </div>
             <div class="field-row">
               <label class="field-label">Tahun Ajaran</label>
-              <select class="field-input field-select" name="tahun_ajaran_du">
+              <select class="field-input field-select" id="tahun-ajaran-du" name="tahun_ajaran_du">
                 <?php foreach($daftar_ulang_years as $ta): ?>
-                <option value="<?= htmlspecialchars($ta) ?>" <?= $d['th_ajaran'] === $ta ? 'selected' : '' ?>><?= htmlspecialchars($ta) ?></option>
+                <option value="<?= htmlspecialchars($ta) ?>" <?= $selectedAcademicYear === $ta ? 'selected' : '' ?>>
+                  <?= htmlspecialchars($ta) ?><?= $activeAcademicYear === $ta ? ' - Tahun ajaran aktif' : '' ?>
+                </option>
                 <?php endforeach; ?>
               </select>
             </div>
@@ -546,7 +588,7 @@ $selectedPaymentMethod = $d['sistem_pembayaran'] ?? 'VA';
       updateTotal();
     });
   </script>
-  <script src="../assets/js/app.js?v=4.1"></script>
+  <script src="../assets/js/app.js?v=4.2"></script>
 </body>
 </html>
 
