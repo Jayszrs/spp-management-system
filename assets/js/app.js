@@ -171,6 +171,38 @@ function selectedPaymentPeriod() {
   return bulan && tahun ? bulan + '-' + tahun : '';
 }
 
+function isAnnualPaymentPlan() {
+  return document.getElementById('payment-plan')?.value === 'annual';
+}
+
+function annualPaidForYear(opt, key) {
+  if (!opt) return 0;
+  const year = document.getElementById('tahun-bayar')?.value || '';
+  try {
+    const datasetKey = key === 'komite' ? 'paidKomitePeriods' : 'paidSppPeriods';
+    const periods = JSON.parse(opt.dataset[datasetKey] || '{}');
+    return Object.entries(periods).reduce((sum, [period, amount]) => {
+      return period.endsWith('-' + year) ? sum + parseNumber(amount) : sum;
+    }, 0);
+  } catch (_) {
+    return 0;
+  }
+}
+
+function annualSppConflictLabels(opt) {
+  if (!opt) return [];
+  const year = document.getElementById('tahun-bayar')?.value || '';
+  const monthNames = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
+  try {
+    const periods = JSON.parse(opt.dataset.paidSppPeriods || '{}');
+    return Object.entries(periods)
+      .filter(([period, amount]) => period.endsWith('-' + year) && parseNumber(amount) > 0)
+      .map(([period]) => monthNames[Math.max(0, parseInt(period.slice(0, 2), 10) - 1)] + ' ' + year);
+  } catch (_) {
+    return [];
+  }
+}
+
 function academicYearFromPaymentPeriod() {
   const month = parseNumber(document.getElementById('bulan-bayar')?.value || 0);
   const year = parseNumber(document.getElementById('tahun-bayar')?.value || 0);
@@ -209,6 +241,7 @@ function selectedStudentOption() {
 
 function paidForPeriod(opt, key) {
   if (!opt) return 0;
+  if (key === 'spp' && isAnnualPaymentPlan()) return annualPaidForYear(opt, key);
   try {
     const datasetKey = key === 'komite' ? 'paidKomitePeriods' : 'paidSppPeriods';
     const periods = JSON.parse(opt.dataset[datasetKey] || '{}');
@@ -293,12 +326,15 @@ function setPaymentComponent(key, total, paid) {
 function applyStudentPaymentDetails(opt) {
   if (!opt) return;
   ['pangkal','bangunan','seragam','kegiatan','spp','komite','makan','sorga','infaq','du'].forEach(key => {
-    const total = key === 'du' ? totalDaftarUlangForContext(opt) : datasetNumber(opt, 'total', key);
+    const total = key === 'du'
+      ? totalDaftarUlangForContext(opt)
+      : datasetNumber(opt, 'total', key) * (key === 'spp' && isAnnualPaymentPlan() ? 12 : 1);
     const paid = key === 'du'
       ? paidDaftarUlangForContext(opt)
       : (['spp', 'komite'].includes(key) ? paidForPeriod(opt, key) : datasetNumber(opt, 'paid', key));
     setPaymentComponent(key, total, paid);
   });
+  refreshAnnualPaymentState(opt);
   refreshDaftarUlangMasterWarning(opt);
   document.querySelectorAll('.biaya-lain-row').forEach(row => refreshBiayaLainRow(row, true));
   updateTotal();
@@ -312,6 +348,7 @@ function clearPaymentDetails() {
     });
   });
   refreshDaftarUlangMasterWarning(null);
+  refreshAnnualPaymentState(null);
   document.querySelectorAll('.biaya-lain-row').forEach(row => refreshBiayaLainRow(row, true));
   updateTotal();
 }
@@ -445,6 +482,7 @@ function clearOverpaidUiState() {
 function refreshSelectedStudentPaymentDetails() {
   const opt = syncDaftarUlangContextFromCurrentState();
   if (opt) applyStudentPaymentDetails(opt);
+  else refreshAnnualPaymentState(null);
 }
 
 function showMonthLabels(select) {
@@ -530,6 +568,23 @@ document.addEventListener('DOMContentLoaded', function () {
     el.addEventListener('change', refreshSelectedStudentPaymentDetails);
   });
 
+  const paymentPlan = document.getElementById('payment-plan');
+  if (paymentPlan) {
+    paymentPlan.addEventListener('change', refreshSelectedStudentPaymentDetails);
+    refreshAnnualPaymentState(selectedStudentOption());
+  }
+  const paymentDate = document.getElementById('tgl-bayar');
+  if (paymentDate) {
+    paymentDate.addEventListener('change', function () {
+      const selectedYear = this.value.slice(0, 4);
+      const yearSelect = document.getElementById('tahun-bayar');
+      if (yearSelect && Array.from(yearSelect.options).some(option => option.value === selectedYear || option.textContent.trim() === selectedYear)) {
+        yearSelect.value = selectedYear;
+      }
+      refreshSelectedStudentPaymentDetails();
+    });
+  }
+
   document.querySelectorAll('.month-code-select').forEach(select => {
     showSelectedMonthCode(select);
     select.addEventListener('pointerdown', () => showMonthLabels(select));
@@ -582,6 +637,48 @@ function paidBiayaLainForSelectedStudent(masterId) {
     return parseNumber(paidMap[masterId] || paidMap[String(masterId)] || 0);
   } catch (_) {
     return 0;
+  }
+}
+
+function refreshAnnualPaymentState(opt) {
+  const plan = document.getElementById('payment-plan');
+  const month = document.getElementById('bulan-bayar');
+  const label = document.getElementById('payment-period-label');
+  const hint = document.getElementById('annual-payment-hint');
+  const submitLabel = document.getElementById('payment-submit-label');
+  const sppInput = document.getElementById('spp-input');
+  const annual = isAnnualPaymentPlan();
+  document.getElementById('form-bayar')?.classList.toggle('is-annual-payment', annual);
+  if (month) month.setAttribute('aria-hidden', annual ? 'true' : 'false');
+  if (label) label.textContent = annual ? 'Tahun Pembayaran (Januari–Desember)' : 'Pembayaran Bulan';
+  if (hint) hint.hidden = !annual;
+  if (submitLabel) submitLabel.textContent = annual ? 'Simpan & Buat 12 Struk' : 'Simpan';
+  if (!sppInput) return;
+
+  const conflicts = annual ? annualSppConflictLabels(opt) : [];
+  if (annual && conflicts.length > 0) {
+    const message = 'Pembayaran tahunan tidak dapat dibuat karena SPP ' + conflicts.join(', ') + ' sudah dibayar.';
+    sppInput.value = '0';
+    sppInput.readOnly = true;
+    if (plan) {
+      plan.setCustomValidity(message);
+      plan.title = message;
+    }
+    if (hint) {
+      hint.textContent = message;
+      hint.classList.add('is-error');
+    }
+  } else {
+    sppInput.readOnly = annual;
+    if (plan) {
+      plan.setCustomValidity('');
+      plan.removeAttribute('title');
+    }
+    if (hint) {
+      hint.textContent = 'SPP Januari–Desember dibagi otomatis menjadi 12 transaksi dan 12 halaman struk.';
+      hint.classList.remove('is-error');
+    }
+    if (annual && opt) sppInput.value = formatRupiahString(datasetNumber(opt, 'total', 'spp') * 12);
   }
 }
 
@@ -852,6 +949,7 @@ function resetForm() {
     refreshBiayaLainAvailability();
   }
   clearOverpaidUiState();
+  refreshAnnualPaymentState(null);
   updateTotal();
 }
 

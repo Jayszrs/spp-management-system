@@ -85,6 +85,26 @@ FROM (
              AND COLUMN_NAME = 'payment_link_version'
          ) AS is_present
   UNION ALL
+  SELECT 'bayar.payment_batch_token',
+         EXISTS(
+           SELECT 1 FROM information_schema.COLUMNS
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'bayar'
+             AND COLUMN_NAME = 'payment_batch_token'
+         )
+  UNION ALL
+  SELECT 'bayar_spp_periode',
+         EXISTS(
+           SELECT 1 FROM information_schema.TABLES
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'bayar_spp_periode'
+         )
+  UNION ALL
+  SELECT 'uk_bayar_spp_siswa_periode',
+         EXISTS(
+           SELECT 1 FROM information_schema.STATISTICS
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'bayar_spp_periode'
+             AND INDEX_NAME = 'uk_bayar_spp_siswa_periode' AND NON_UNIQUE = 0
+         )
+  UNION ALL
   SELECT 'bayar_du.bayar_id',
          EXISTS(
            SELECT 1 FROM information_schema.COLUMNS

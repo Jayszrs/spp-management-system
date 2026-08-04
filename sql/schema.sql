@@ -120,9 +120,27 @@ CREATE TABLE `bayar` (
   `potong_spp`  DOUBLE DEFAULT 0,
   `total_jumlah` DOUBLE DEFAULT 0, -- Kolom bantu kalkulasi total pembayaran
   `payment_link_version` TINYINT UNSIGNED NOT NULL DEFAULT 0,
+  `payment_batch_token` CHAR(32) DEFAULT NULL,
+  `payment_batch_sequence` TINYINT UNSIGNED NOT NULL DEFAULT 1,
+  `payment_batch_count` TINYINT UNSIGNED NOT NULL DEFAULT 1,
   `created_at`  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   `updated_at`  TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+  KEY `idx_bayar_payment_batch` (`payment_batch_token`, `payment_batch_sequence`),
   FOREIGN KEY (`NO_INDUK`) REFERENCES `siswa`(`NO_INDUK`) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB;
+
+-- Klaim unik periode SPP. Transaksi biaya non-SPP tetap boleh memakai bulan
+-- yang sama, tetapi satu siswa hanya bisa memiliki satu SPP per bulan/tahun.
+DROP TABLE IF EXISTS `bayar_spp_periode`;
+CREATE TABLE `bayar_spp_periode` (
+  `bayar_id` INT NOT NULL PRIMARY KEY,
+  `no_induk` VARCHAR(10) NOT NULL,
+  `bulan` CHAR(2) NOT NULL,
+  `tahun` CHAR(4) NOT NULL,
+  `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY `uk_bayar_spp_siswa_periode` (`no_induk`, `tahun`, `bulan`),
+  CONSTRAINT `fk_bayar_spp_periode_bayar` FOREIGN KEY (`bayar_id`) REFERENCES `bayar` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `fk_bayar_spp_periode_siswa` FOREIGN KEY (`no_induk`) REFERENCES `siswa` (`NO_INDUK`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB;
 
 -- Master jenis biaya lain

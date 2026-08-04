@@ -3027,6 +3027,10 @@ input[list]::-webkit-calendar-picker-indicator { display: none !important; }
 }
 .biaya-lain-select option:disabled { color: var(--text-muted); }
 .btn-add-biaya-lain:disabled { cursor: not-allowed; opacity: .48; transform: none; }
+.annual-payment-hint { color: var(--accent); line-height: 1.45; }
+.annual-payment-hint.is-error { color: var(--red); font-weight: 700; }
+.is-annual-payment #bulan-bayar { display: none; }
+.is-annual-payment #tahun-bayar { max-width: none !important; flex: 1; }
 .du-history-card { overflow: hidden; }
 .du-history-filter { align-items: stretch; }
 .du-history-filter .search-box { flex: 1 1 260px; min-width: 210px; }

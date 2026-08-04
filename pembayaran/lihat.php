@@ -15,10 +15,15 @@ $printPaymentId = max(0, (int)($printPayment['id'] ?? 0));
 $printPaymentMonth = str_pad((string)(int)($printPayment['bulan'] ?? 0), 2, '0', STR_PAD_LEFT);
 $printPaymentYear = (string)(int)($printPayment['tahun'] ?? 0);
 $isUpdatedPayment = ($printPayment['source'] ?? '') === 'update';
+$printBatchToken = strtolower(trim((string)($printPayment['batch'] ?? '')));
+$printReceiptCount = max(1, (int)($printPayment['count'] ?? 1));
+$isAnnualPayment = $printReceiptCount === 12 && preg_match('/^[a-f0-9]{32}$/', $printBatchToken);
 $showPrintPrompt = $printPaymentId > 0
     && preg_match('/^(0[1-9]|1[0-2])$/', $printPaymentMonth)
     && preg_match('/^\d{4}$/', $printPaymentYear);
-$printPaymentUrl = '../laporan/cetak_struk.php?' . http_build_query(['id' => $printPaymentId]);
+$printPaymentUrl = $isAnnualPayment
+    ? '../laporan/cetak_struk_tahunan.php?' . http_build_query(['batch' => $printBatchToken])
+    : '../laporan/cetak_struk.php?' . http_build_query(['id' => $printPaymentId]);
 
 function month_code($value) {
     $map = [
@@ -140,13 +145,15 @@ $bln_list = [
       <div class="modal-overlay show" id="receipt-print-modal" role="dialog" aria-modal="true" aria-labelledby="receipt-print-title">
         <div class="modal-box">
           <div class="modal-icon" aria-hidden="true">🧾</div>
-          <h3 class="modal-title" id="receipt-print-title"><?= $isUpdatedPayment ? 'Cetak ulang struk pembayaran?' : 'Cetak struk pembayaran?' ?></h3>
-          <p class="modal-body"><?= $isUpdatedPayment
+          <h3 class="modal-title" id="receipt-print-title"><?= $isAnnualPayment ? 'Cetak 12 struk pembayaran?' : ($isUpdatedPayment ? 'Cetak ulang struk pembayaran?' : 'Cetak struk pembayaran?') ?></h3>
+          <p class="modal-body"><?= $isAnnualPayment
+              ? 'Pembayaran tahunan sudah dibagi menjadi 12 transaksi. Semua struk Januari–Desember dapat dicetak sekaligus.'
+              : ($isUpdatedPayment
               ? 'Perubahan pembayaran sudah tersimpan. Cetak ulang struk agar isinya sesuai dengan data terbaru.'
-              : 'Pembayaran sudah tersimpan. Kamu bisa langsung membuka struk transaksi ini tanpa memilihnya lagi dari halaman Laporan.' ?></p>
+              : 'Pembayaran sudah tersimpan. Kamu bisa langsung membuka struk transaksi ini tanpa memilihnya lagi dari halaman Laporan.') ?></p>
           <div class="modal-actions">
             <button type="button" class="btn btn-ghost" id="receipt-print-later">Tidak, nanti</button>
-            <button type="button" class="btn btn-primary" id="receipt-print-now"><?= $isUpdatedPayment ? 'Ya, cetak ulang' : 'Ya, cetak struk' ?></button>
+            <button type="button" class="btn btn-primary" id="receipt-print-now"><?= $isAnnualPayment ? 'Ya, cetak 12 struk' : ($isUpdatedPayment ? 'Ya, cetak ulang' : 'Ya, cetak struk') ?></button>
           </div>
         </div>
       </div>
@@ -222,7 +229,12 @@ $bln_list = [
                 <td data-label="NIS"><span class="badge-nis"><?= htmlspecialchars($row['NO_INDUK']) ?></span></td>
                 <td data-label="Nama Siswa"><?= htmlspecialchars($row['NAMA']) ?></td>
                 <td data-label="Kelas"><?= htmlspecialchars($row['KELAS']) ?></td>
-                <td data-label="Bulan / Tahun"><?= htmlspecialchars(month_code($row['BULAN'])) ?> <?= $row['TAHUN'] ?></td>
+                <td data-label="Bulan / Tahun">
+                  <?= htmlspecialchars(month_code($row['BULAN'])) ?> <?= $row['TAHUN'] ?>
+                  <?php if ((int)($row['payment_batch_count'] ?? 1) === 12): ?>
+                  <small class="du-history-nis">Struk <?= (int)$row['payment_batch_sequence'] ?>/12</small>
+                  <?php endif; ?>
+                </td>
                 <td data-label="SPP" class="nominal">Rp <?= number_format($row['U_SPP'], 0, ',', '.') ?></td>
                 <td data-label="Sistem"><?= htmlspecialchars($row['sistem_pembayaran'] ?? 'VA') ?></td>
                 <td data-label="Total Bayar" class="nominal">Rp <?= number_format($row['total_jumlah'], 0, ',', '.') ?></td>
@@ -247,6 +259,9 @@ $bln_list = [
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
                     Hapus
                   </a>
+                  <?php if ((int)($row['payment_batch_count'] ?? 1) === 12): ?>
+                  <a href="../laporan/cetak_struk_tahunan.php?batch=<?= urlencode((string)$row['payment_batch_token']) ?>" class="btn-tbl btn-tbl-print" target="_blank" rel="noopener" title="Cetak seluruh struk tahunan">12 Struk</a>
+                  <?php endif; ?>
                   <?php else: ?>
                   <span class="master-status is-inactive" title="Transaksi lama tanpa relasi eksplisit">Legacy — rekonsiliasi manual</span>
                   <?php endif; ?>

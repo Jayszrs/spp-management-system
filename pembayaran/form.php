@@ -198,12 +198,20 @@ unset($_SESSION['flash']);
           <div class="top-info-row">
             <div class="info-group">
               <div class="field-row">
+                <label class="field-label" for="payment-plan">Jenis Pembayaran SPP</label>
+                <select class="field-input field-select" id="payment-plan" name="payment_plan" required>
+                  <option value="monthly" selected>Bulanan — 1 struk</option>
+                  <option value="annual">Tahunan — 12 struk</option>
+                </select>
+                <span class="field-hint annual-payment-hint" id="annual-payment-hint" hidden>SPP Januari–Desember dibagi otomatis menjadi 12 transaksi dan 12 halaman struk.</span>
+              </div>
+              <div class="field-row">
                 <label class="field-label" for="tgl-bayar">Tanggal Bayar</label>
                 <input class="field-input" type="date" id="tgl-bayar" name="tanggal_bayar"
                   value="<?= date('Y-m-d') ?>" required />
               </div>
               <div class="field-row">
-                <label class="field-label" for="bulan-bayar">Pembayaran Bulan</label>
+                <label class="field-label" for="bulan-bayar" id="payment-period-label">Pembayaran Bulan</label>
                 <div class="field-group-inline">
                   <select class="field-input field-select month-code-select" id="bulan-bayar" name="bulan_bayar" required>
                     <?php
@@ -425,7 +433,7 @@ unset($_SESSION['flash']);
           <div class="action-bar">
             <button type="submit" class="btn btn-primary" id="btn-input">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v14a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
-              Simpan
+              <span id="payment-submit-label">Simpan</span>
             </button>
             <button type="reset" class="btn btn-ghost" id="btn-reset" onclick="resetForm()">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.59"/></svg>
@@ -449,7 +457,7 @@ unset($_SESSION['flash']);
     window.sppDaftarUlangMasters = <?= json_encode($master_daftar_ulang, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT) ?>;
     window.sppDaftarUlangHasMasters = <?= $has_master_daftar_ulang ? 'true' : 'false' ?>;
   </script>
-  <script src="../assets/js/app.js?v=4.4"></script>
+  <script src="../assets/js/app.js?v=4.5"></script>
 </body>
 </html>
 
