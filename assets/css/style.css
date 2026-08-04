@@ -2683,15 +2683,12 @@ input[list]::-webkit-calendar-picker-indicator { display: none !important; }
   color: #fff !important;
   text-align: center;
   vertical-align: middle;
-  border-right: 0;
+  border-right: 1px solid rgba(255,255,255,0.18);
   border-bottom: 0;
   box-shadow: none;
 }
 .recap-report-shell .class-recap-table thead tr:first-child th.recap-identity-head:first-child {
   border-top-left-radius: 12px;
-}
-.recap-report-shell .class-recap-table thead tr:first-child th.recap-identity-head:nth-child(3) {
-  border-right: 2px solid rgba(255,255,255,0.14);
 }
 .recap-report-shell .class-recap-table th.recap-number-head {
   width: 64px;
@@ -2702,6 +2699,7 @@ input[list]::-webkit-calendar-picker-indicator { display: none !important; }
   color: #fff !important;
   text-align: center;
   font-size: 13px;
+  border-top-right-radius: 12px;
 }
 .recap-report-shell .class-recap-table th.recap-component-head {
   background: #e8f8f0 !important;
