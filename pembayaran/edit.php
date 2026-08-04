@@ -6,7 +6,7 @@ session_start();
 if (!isset($_SESSION['admin_id'])) { header('Location: ../login.php'); exit; }
 require_once '../koneksi.php';
 require_once '../includes/auth.php';
-requireRole(['admin']);
+requireRole(['admin', 'kasir']);
 
 $id = (int)($_GET['id'] ?? 0);
 if ($id <= 0) { header('Location: lihat.php'); exit; }

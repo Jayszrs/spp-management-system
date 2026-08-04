@@ -3,7 +3,7 @@ session_start();
 if (!isset($_SESSION['admin_id'])) { header('Location: ../login.php'); exit; }
 require_once '../koneksi.php';
 require_once '../includes/auth.php';
-requireRole(['admin', 'bendahara']);
+requireRole(['admin', 'bendahara', 'kasir']);
 
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 
