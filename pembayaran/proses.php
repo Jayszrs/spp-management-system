@@ -554,6 +554,7 @@ if ($aksi === 'input') {
                 'id' => $bayar_id,
                 'bulan' => $bulan_bayar,
                 'tahun' => (string)$tahun_bayar,
+                'source' => 'input',
             ],
         ];
         header('Location: lihat.php');
@@ -683,7 +684,16 @@ if ($aksi === 'update') {
         save_linked_savings($koneksi, $id, $no_induk, $tanggal_bayar, $tabungan_wajib, $user_id);
 
         $koneksi->commit();
-        $_SESSION['flash'] = ['type' => 'success', 'msg' => 'Data pembayaran berhasil diperbarui!'];
+        $_SESSION['flash'] = [
+            'type' => 'success',
+            'msg' => 'Data pembayaran berhasil diperbarui!',
+            'print_payment' => [
+                'id' => $id,
+                'bulan' => $bulan_bayar,
+                'tahun' => (string)$tahun_bayar,
+                'source' => 'update',
+            ],
+        ];
         header('Location: lihat.php');
         exit;
     } catch (Exception $e) {

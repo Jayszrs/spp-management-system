@@ -14,6 +14,7 @@ $printPayment = is_array($flash['print_payment'] ?? null) ? $flash['print_paymen
 $printPaymentId = max(0, (int)($printPayment['id'] ?? 0));
 $printPaymentMonth = str_pad((string)(int)($printPayment['bulan'] ?? 0), 2, '0', STR_PAD_LEFT);
 $printPaymentYear = (string)(int)($printPayment['tahun'] ?? 0);
+$isUpdatedPayment = ($printPayment['source'] ?? '') === 'update';
 $showPrintPrompt = $printPaymentId > 0
     && preg_match('/^(0[1-9]|1[0-2])$/', $printPaymentMonth)
     && preg_match('/^\d{4}$/', $printPaymentYear);
@@ -144,11 +145,13 @@ $bln_list = [
       <div class="modal-overlay show" id="receipt-print-modal" role="dialog" aria-modal="true" aria-labelledby="receipt-print-title">
         <div class="modal-box">
           <div class="modal-icon" aria-hidden="true">🧾</div>
-          <h3 class="modal-title" id="receipt-print-title">Cetak struk pembayaran?</h3>
-          <p class="modal-body">Pembayaran sudah tersimpan. Kamu bisa langsung membuka struk transaksi ini tanpa memilihnya lagi dari halaman Laporan.</p>
+          <h3 class="modal-title" id="receipt-print-title"><?= $isUpdatedPayment ? 'Cetak ulang struk pembayaran?' : 'Cetak struk pembayaran?' ?></h3>
+          <p class="modal-body"><?= $isUpdatedPayment
+              ? 'Perubahan pembayaran sudah tersimpan. Cetak ulang struk agar isinya sesuai dengan data terbaru.'
+              : 'Pembayaran sudah tersimpan. Kamu bisa langsung membuka struk transaksi ini tanpa memilihnya lagi dari halaman Laporan.' ?></p>
           <div class="modal-actions">
             <button type="button" class="btn btn-ghost" id="receipt-print-later">Tidak, nanti</button>
-            <button type="button" class="btn btn-primary" id="receipt-print-now">Ya, cetak struk</button>
+            <button type="button" class="btn btn-primary" id="receipt-print-now"><?= $isUpdatedPayment ? 'Ya, cetak ulang' : 'Ya, cetak struk' ?></button>
           </div>
         </div>
       </div>
