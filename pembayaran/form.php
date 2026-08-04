@@ -81,42 +81,14 @@ while ($master = $master_du_result->fetch_assoc()) {
 }
 $has_master_daftar_ulang = count($master_daftar_ulang) > 0;
 
-function current_academic_year(): string {
+function active_academic_year_from_today(): string {
     $year = (int)date('Y');
     $month = (int)date('n');
     $start = $month >= 7 ? $year : $year - 1;
     return $start . '/' . ($start + 1);
 }
 
-function academic_year_options(array $existingYears = [], array $includeYears = [], int $range = 3): array {
-    $activeYear = current_academic_year();
-    $activeStart = (int)substr($activeYear, 0, 4);
-    $options = [];
-
-    for ($offset = -$range; $offset <= $range; $offset++) {
-        $start = $activeStart + $offset;
-        $label = $start . '/' . ($start + 1);
-        $options[$label] = $label;
-    }
-
-    foreach (array_merge($existingYears, $includeYears) as $year) {
-        $year = trim((string)$year);
-        if (preg_match('/^\d{4}\/\d{4}$/', $year)) {
-            $options[$year] = $year;
-        }
-    }
-
-    krsort($options);
-    return array_values($options);
-}
-
-$master_daftar_ulang_years = [];
-foreach (array_keys($master_daftar_ulang) as $periodKey) {
-    [, $year] = explode('|', $periodKey, 2);
-    $master_daftar_ulang_years[$year] = $year;
-}
-$activeAcademicYear = current_academic_year();
-$daftar_ulang_years = academic_year_options(array_values($master_daftar_ulang_years), [$activeAcademicYear]);
+$activeAcademicYear = active_academic_year_from_today();
 
 $biaya_lain_paid = [];
 $biaya_lain_paid_result = $koneksi->query("
@@ -349,7 +321,7 @@ unset($_SESSION['flash']);
                   ['makan', '🍽️ Uang Makan', 'uang_makan'],
                   ['sorga', '🌅 Uang Sorga', 'uang_sorga'],
                   ['infaq', '🕌 Uang Infaq', 'uang_infaq'],
-                  ['du', '📚 Uang Daftar Ulang', 'uang_du']
+                  ['du', '📚 Daftar Ulang', 'uang_du']
                 ];
                 array_splice($komponen, 5, 0, [[ 'komite', 'Uang Komite', 'uang_komite' ]]);
                 foreach ($komponen as $i => $k):
@@ -440,29 +412,8 @@ unset($_SESSION['flash']);
             </div>
           </div>
 
-          <!-- Daftar Ulang -->
-          <div class="section-divider"><span>Info Daftar Ulang</span></div>
-          <div class="fields-grid">
-            <div class="field-row">
-              <label class="field-label" for="kelas-du">Kelas Daftar Ulang</label>
-              <select class="field-input field-select" id="kelas-du" name="kelas_du">
-                <option value="">-- Pilih Kelas --</option>
-                <?php for ($kl = 1; $kl <= 6; $kl++): ?>
-                <option value="<?= $kl ?>">Kelas <?= $kl ?></option>
-                <?php endfor; ?>
-              </select>
-            </div>
-            <div class="field-row">
-              <label class="field-label" for="tahun-ajaran-du">Tahun Ajaran</label>
-              <select class="field-input field-select" id="tahun-ajaran-du" name="tahun_ajaran_du">
-                <?php foreach ($daftar_ulang_years as $ta): ?>
-                <option value="<?= htmlspecialchars($ta) ?>" <?= $activeAcademicYear === $ta ? 'selected' : '' ?>>
-                  <?= htmlspecialchars($ta) ?><?= $activeAcademicYear === $ta ? ' - Tahun ajaran aktif' : '' ?>
-                </option>
-                <?php endforeach; ?>
-              </select>
-            </div>
-          </div>
+          <input type="hidden" id="kelas-du" name="kelas_du" value="" />
+          <input type="hidden" id="tahun-ajaran-du" name="tahun_ajaran_du" value="<?= htmlspecialchars($activeAcademicYear) ?>" />
           <p class="field-hint du-master-warning" id="du-master-warning" hidden></p>
 
           <!-- Catatan -->
@@ -498,7 +449,7 @@ unset($_SESSION['flash']);
     window.sppDaftarUlangMasters = <?= json_encode($master_daftar_ulang, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT) ?>;
     window.sppDaftarUlangHasMasters = <?= $has_master_daftar_ulang ? 'true' : 'false' ?>;
   </script>
-  <script src="../assets/js/app.js?v=4.2"></script>
+  <script src="../assets/js/app.js?v=4.3"></script>
 </body>
 </html>
 
