@@ -123,16 +123,6 @@ BEGIN
   SET du.tahun_ajaran_id = ta.id
   WHERE du.tahun_ajaran_id IS NULL;
 
-  UPDATE `tahun_ajaran` ta
-  JOIN (
-    SELECT th_ajaran, COUNT(DISTINCT kelas) AS class_count
-    FROM `Daftar_ulang`
-    WHERE Jumlah > 0 AND kelas IN ('1','2','3','4','5','6')
-    GROUP BY th_ajaran
-  ) complete_master ON complete_master.th_ajaran = ta.label AND complete_master.class_count = 6
-  SET ta.status = IF(ta.status = 'closed', 'closed', 'published'),
-      ta.published_at = COALESCE(ta.published_at, NOW());
-
   INSERT IGNORE INTO `siswa_tahun_ajaran` (`tahun_ajaran_id`, `no_induk`, `kelas`, `status`)
   SELECT ta.id, s.NO_INDUK, s.KELAS, 'aktif'
   FROM `siswa` s
@@ -196,4 +186,3 @@ END$$
 CALL `migrate_academic_year_billing`()$$
 DROP PROCEDURE `migrate_academic_year_billing`$$
 DELIMITER ;
-

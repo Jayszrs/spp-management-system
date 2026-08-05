@@ -208,15 +208,14 @@ Tabel `Daftar_ulang` dipakai sebagai master nominal daftar ulang per kombinasi `
 
 ### Master Daftar Ulang
 
-- Admin mengelola nominal daftar ulang resmi pada `master_daftar_ulang.php`.
-- Tahun ajaran master dipilih dari dropdown sistem aktif +/- 3 tahun, bukan input manual bebas.
-- Satu kombinasi `th_ajaran + kelas` hanya boleh memiliki satu nominal aktif melalui unique key `uk_daftar_ulang_period_class`.
-- Format tahun ajaran wajib `YYYY/YYYY` dan tahun kedua harus satu tahun setelah tahun pertama.
-- Master yang sudah dipakai pada `bayar_du` tidak dapat dihapus agar histori tetap dapat diaudit.
-- Form input/edit pembayaran mengambil dropdown tahun ajaran dan nominal daftar ulang dari master ini.
-- Form input pembayaran default ke tahun ajaran aktif; kelas DU default mengikuti kelas siswa yang dipilih, tetapi admin tetap dapat mengubahnya.
-- Jika tabel master kosong total, sistem fallback ke data daftar ulang di tabel siswa untuk kompatibilitas transaksi lama.
-- Jika master sudah ada tetapi kombinasi kelas/tahun yang dipilih belum diatur, form menampilkan warning dan backend menolak pembayaran DU sampai master dilengkapi.
+- Admin mengelola enam tarif kelas per tahun ajaran pada `master_daftar_ulang.php`; kombinasi tahun ajaran dan kelas dijaga unik.
+- Halaman master hanya menampilkan tarif, jumlah siswa aktif per kelas, dan penerbitan tagihan. Daftar penempatan siswa tidak ditampilkan agar tetap ringan untuk ratusan siswa.
+- `siswa.KELAS` menjadi sumber kelas aktif saat penerbitan. Admin harus memperbarui kelas dan status aktif melalui Data Siswa sebelum menekan Terbitkan Tagihan.
+- Penerbitan berjalan dalam satu transaksi: sistem menyelaraskan penempatan internal, membuat satu tagihan per siswa aktif, lalu mengubah tahun ajaran dari `draft` menjadi `published`.
+- Siswa tinggal kelas memakai kelas yang tetap tersimpan pada Data Siswa; siswa tidak aktif tidak menerima tagihan. Siswa baru setelah penerbitan otomatis memperoleh penempatan dan tagihan.
+- Input/edit pembayaran menghitung tahun ajaran dari periode pilihan dan mengambil kelas serta saldo langsung dari tagihan server-side; hidden input kelas/tahun tidak dipercaya.
+- Tagihan yang telah diterbitkan mempertahankan snapshot kelas dan nominal sehingga perubahan Data Siswa berikutnya tidak memindahkan histori.
+- Migrasi tidak boleh menerbitkan tahun ajaran draf secara otomatis. Status `published` hanya diubah oleh aksi penerbitan admin.
 
 ### Tabungan
 

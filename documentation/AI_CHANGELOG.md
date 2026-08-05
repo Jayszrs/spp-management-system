@@ -13,6 +13,29 @@ File ini mencatat perubahan proyek secara reverse chronological. Baca [PROJECT_C
 - Jangan menghapus atau menulis ulang entri lama. Tambahkan entri koreksi bila diperlukan.
 - Perubahan implementasi dan entri changelog wajib masuk commit yang sama.
 
+## 2026-08-05 - Penyederhanaan Penerbitan Daftar Ulang
+
+**AI/Aktor:** Codex berbasis GPT-5, bersama pemilik proyek
+
+**Tujuan:** Menghilangkan pengelolaan penempatan massal dari UI dan mempertahankan penerbitan tagihan yang sederhana untuk sekolah dengan ratusan siswa.
+
+**Perubahan fitur dan perilaku:**
+
+- Master Daftar Ulang tidak lagi memuat atau menampilkan tabel Penempatan Siswa.
+- Kelas pada Data Siswa menjadi sumber penerbitan; siswa tinggal kelas cukup mempertahankan kelasnya dan siswa pindah/lulus dinonaktifkan sebelum penerbitan.
+- Tombol Terbitkan Tagihan membuat penempatan internal serta tagihan secara atomik berdasarkan seluruh siswa aktif kelas 1–6.
+
+**Database dan migrasi:**
+
+- Kolom, indeks, serta workflow konfirmasi penempatan eksperimental dibatalkan dan dibersihkan.
+- Migrasi akademik tidak lagi mengubah tahun draf menjadi terbit hanya karena enam tarif sudah tersedia.
+
+**Verifikasi:**
+
+- Rollback memastikan tagihan tanpa pembayaran hasil migrasi eksperimental dihapus dan `2026/2027` kembali menjadi draf.
+- Migrasi dijalankan dua kali tanpa menerbitkan draf atau membuat tagihan baru.
+- Uji transaksi memastikan kelas mengikuti Data Siswa, siswa tidak aktif tidak ditagih, siswa baru tetap memperoleh tagihan, dan halaman master tidak memuat tabel penempatan.
+
 ## 2026-08-05 - Tagihan Daftar Ulang Berbasis Tahun Ajaran
 
 **AI/Aktor:** Codex berbasis GPT-5, bersama pemilik proyek
