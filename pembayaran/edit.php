@@ -105,24 +105,6 @@ while ($paid = $spp_paid_result->fetch_assoc()) {
 }
 $stmt_period->close();
 
-$du_paid_periods = [];
-$stmt_du_paid = $koneksi->prepare("
-    SELECT no_induk, kelas, th_ajaran, COALESCE(SUM(jumlah), 0) AS paid_du
-    FROM bayar_du
-    WHERE (bayar_id IS NULL OR bayar_id <> ?)
-      AND kelas IS NOT NULL AND kelas <> ''
-      AND th_ajaran IS NOT NULL AND th_ajaran <> ''
-    GROUP BY no_induk, kelas, th_ajaran
-");
-$stmt_du_paid->bind_param('i', $id);
-$stmt_du_paid->execute();
-$du_paid_result = $stmt_du_paid->get_result();
-while ($paid = $du_paid_result->fetch_assoc()) {
-    $periodKey = trim((string)$paid['kelas']) . '|' . trim((string)$paid['th_ajaran']);
-    $du_paid_periods[$paid['no_induk']][$periodKey] = (float)$paid['paid_du'];
-}
-$stmt_du_paid->close();
-
 $du_bills = [];
 $stmt_du_bills = $koneksi->prepare("SELECT tdu.id, tdu.no_induk, tdu.kelas_snapshot, tdu.tahun_ajaran_snapshot,
         tdu.nominal_tagihan, tdu.status, ta.status AS tahun_status,
@@ -143,19 +125,6 @@ while ($bill = $du_bill_result->fetch_assoc()) {
     ];
 }
 $stmt_du_bills->close();
-
-$master_daftar_ulang = [];
-$master_du_result = $koneksi->query("
-    SELECT kelas, th_ajaran, Jumlah
-    FROM Daftar_ulang
-    WHERE kelas IS NOT NULL AND kelas <> '' AND th_ajaran IS NOT NULL AND th_ajaran <> '' AND Jumlah > 0
-    ORDER BY th_ajaran ASC, kelas ASC, id ASC
-");
-while ($master = $master_du_result->fetch_assoc()) {
-    $periodKey = trim((string)$master['kelas']) . '|' . trim((string)$master['th_ajaran']);
-    $master_daftar_ulang[$periodKey] = (float)$master['Jumlah'];
-}
-$has_master_daftar_ulang = count($master_daftar_ulang) > 0;
 
 function active_academic_year_from_payment_period($bulan, $tahun): string {
     $month = (int)month_code($bulan);
@@ -363,7 +332,6 @@ $selectedPaymentMethod = $d['sistem_pembayaran'] ?? 'VA';
                   data-total-makan="0"
                   data-total-sorga="0"
                   data-total-infaq="0"
-                  data-total-du="<?= money_attr(total_after_discount($s['DAFTAR_ULANG'], $s['potong_du'], $s['tot_du'])) ?>"
                   data-paid-pangkal="<?= money_attr($s['paid_pangkal']) ?>"
                   data-paid-bangunan="<?= money_attr($s['paid_bangunan']) ?>"
                   data-paid-seragam="<?= money_attr($s['paid_seragam']) ?>"
@@ -373,7 +341,6 @@ $selectedPaymentMethod = $d['sistem_pembayaran'] ?? 'VA';
                   data-paid-makan="<?= money_attr($s['paid_makan']) ?>"
                   data-paid-sorga="<?= money_attr($s['paid_sorga']) ?>"
                   data-paid-infaq="<?= money_attr($s['paid_infaq']) ?>"
-                  data-paid-du-periods="<?= htmlspecialchars(json_encode($du_paid_periods[$s['NO_INDUK']] ?? []), ENT_QUOTES, 'UTF-8') ?>"
                   data-du-bills="<?= htmlspecialchars(json_encode($du_bills[$s['NO_INDUK']] ?? []), ENT_QUOTES, 'UTF-8') ?>"
                   data-paid-biaya-lain="<?= htmlspecialchars(json_encode($biaya_lain_paid[$s['NO_INDUK']] ?? []), ENT_QUOTES, 'UTF-8') ?>">
                   <?= htmlspecialchars($s['NAMA']) ?> (Kelas <?= htmlspecialchars($s['KELAS']) ?>)
@@ -428,7 +395,7 @@ $selectedPaymentMethod = $d['sistem_pembayaran'] ?? 'VA';
                 foreach ($komp as $i => [$key,$label,$col,$inputName]):
                 ?>
                 <tr class="<?= $i%2===0?'row-highlight':'' ?>">
-                  <td><span class="comp-label"><?=$label?></span></td>
+                  <td><span class="comp-label"><?=$label?></span><?php if($key==='du'): ?><small class="du-inline-context du-context-label" id="du-context-label">Pilih siswa, bulan, dan tahun pembayaran.</small><small class="du-inline-context du-master-warning" id="du-master-warning" hidden></small><?php endif; ?></td>
                   <td data-label="Total Tagihan"><input class="tbl-input tbl-system" type="text" value="0" id="<?=$key?>-total" readonly tabindex="-1" aria-readonly="true" /></td>
                   <td data-label="Sudah Terbayar"><input class="tbl-input tbl-system" type="text" value="0" id="<?=$key?>-bayar" readonly tabindex="-1" aria-readonly="true" /></td>
                   <td data-label="Sisa"><input class="tbl-input tbl-system tbl-system-sisa" type="text" value="0" id="<?=$key?>-sisa" readonly tabindex="-1" aria-readonly="true" /></td>
@@ -440,6 +407,9 @@ $selectedPaymentMethod = $d['sistem_pembayaran'] ?? 'VA';
               </tbody>
             </table>
           </div>
+
+          <input type="hidden" id="kelas-du" name="kelas_du" value="<?= htmlspecialchars(preg_replace('/\D+/', '', (string)$d['KELAS'])) ?>" />
+          <input type="hidden" id="tahun-ajaran-du" name="tahun_ajaran_du" value="<?= htmlspecialchars($selectedAcademicYear) ?>" />
 
           <!-- Lain-lain -->
           <div class="section-divider"><span>Lain-lain</span></div>
@@ -535,11 +505,6 @@ $selectedPaymentMethod = $d['sistem_pembayaran'] ?? 'VA';
                 style="background:rgba(99,102,241,0.08);color:var(--accent)" />
             </div>
           </div>
-
-          <input type="hidden" id="kelas-du" name="kelas_du" value="<?= htmlspecialchars(preg_replace('/\D+/', '', (string)$d['KELAS'])) ?>" />
-          <input type="hidden" id="tahun-ajaran-du" name="tahun_ajaran_du" value="<?= htmlspecialchars($selectedAcademicYear) ?>" />
-          <p class="field-hint du-context-label" id="du-context-label">Daftar Ulang mengikuti bulan dan tahun pembayaran yang dipilih.</p>
-          <p class="field-hint du-master-warning" id="du-master-warning" hidden></p>
 
           <!-- Catatan -->
           <div class="section-divider"><span>Catatan</span></div>

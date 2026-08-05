@@ -13,6 +13,36 @@ File ini mencatat perubahan proyek secara reverse chronological. Baca [PROJECT_C
 - Jangan menghapus atau menulis ulang entri lama. Tambahkan entri koreksi bila diperlukan.
 - Perubahan implementasi dan entri changelog wajib masuk commit yang sama.
 
+## 2026-08-05 - Integrasi Penerbitan dan Cicilan Daftar Ulang
+
+**AI/Aktor:** Codex berbasis GPT-5, bersama pemilik proyek
+
+**Tujuan:** Menghubungkan tarif Master Daftar Ulang langsung dengan rincian pembayaran siswa dan memastikan tagihan dapat dicicil secara konsisten.
+
+**Perubahan fitur dan perilaku:**
+
+- Tahun ajaran draf memakai satu aksi `Simpan & Terbitkan Tagihan`; penyimpanan enam tarif, sinkronisasi penempatan internal, pembuatan tagihan, perubahan status, dan audit berjalan dalam satu transaksi.
+- Form lama yang masih mengirim aksi penerbitan terpisah tetap dipetakan ke proses atomik yang sama.
+- Input dan edit pembayaran hanya membaca `tagihan_daftar_ulang`; total, terbayar, sisa, tahun ajaran, kelas, dan status ditampilkan langsung pada baris Daftar Ulang.
+- Warning tagihan tidak tersedia dipindahkan dari Potongan & Tabungan ke baris Daftar Ulang. Input dikunci bila tagihan tidak tersedia, dibatalkan, atau sudah lunas.
+- Cicilan Daftar Ulang dapat dilakukan berkali-kali sampai sisa nol; pembayaran berlebih tetap ditolak server dan hidden field kelas/tahun ajaran tidak menjadi sumber otoritatif.
+
+**Database dan migrasi:**
+
+- Tidak ada tabel atau kolom baru.
+- Master `2026/2027` dengan enam tarif Rp1.000.000 diterbitkan menjadi tujuh tagihan berdasarkan kelas tujuh siswa aktif.
+
+**Kompatibilitas:**
+
+- Snapshot kelas dan tahun ajaran pada `bayar_du` tetap dipertahankan, tetapi saldo baru selalu dihitung melalui relasi `tagihan_daftar_ulang_id`.
+- Riwayat, edit, hapus, dan cetak transaksi lama tetap memakai kontrak relasi pembayaran yang sudah ada.
+
+**Verifikasi:**
+
+- Uji pemetaan memastikan Agustus 2026 dan Januari 2027 sama-sama memakai `2026/2027`.
+- Uji HTTP terautentikasi membuktikan cicilan Rp400.000 lalu Rp600.000 melunasi tagihan, pembayaran tambahan ditolak, edit mengembalikan saldo, dan hapus kedua transaksi uji mengembalikan saldo ke nol.
+- Syntax check PHP/JavaScript, regression test, pemeriksaan schema, halaman input/edit/master/riwayat, dan kondisi akhir database diperiksa tanpa mengubah transaksi pengguna.
+
 ## 2026-08-05 - Penyederhanaan Penerbitan Daftar Ulang
 
 **AI/Aktor:** Codex berbasis GPT-5, bersama pemilik proyek

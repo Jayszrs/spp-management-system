@@ -151,36 +151,6 @@ function payable_total(float $total, float $discount = 0, float $derivedTotal = 
     return $derivedTotal > 0 ? $derivedTotal : max(0, $total - $discount);
 }
 
-function daftar_ulang_total(mysqli $db, array $student, string $kelasDu, string $tahunAjaran): float {
-    if ($kelasDu !== '' && $tahunAjaran !== '') {
-        $stmt = $db->prepare('
-            SELECT Jumlah
-            FROM Daftar_ulang
-            WHERE kelas = ? AND th_ajaran = ? AND Jumlah > 0
-            ORDER BY id DESC
-            LIMIT 1
-        ');
-        $stmt->bind_param('ss', $kelasDu, $tahunAjaran);
-        $stmt->execute();
-        $master = $stmt->get_result()->fetch_assoc();
-        $stmt->close();
-        if ($master) return (float)$master['Jumlah'];
-    }
-
-    $masterCount = $db->query("
-        SELECT COUNT(*) AS jumlah
-        FROM Daftar_ulang
-        WHERE kelas IS NOT NULL AND kelas <> ''
-          AND th_ajaran IS NOT NULL AND th_ajaran <> ''
-          AND Jumlah > 0
-    ")->fetch_assoc();
-    if ((int)($masterCount['jumlah'] ?? 0) > 0) {
-        return 0.0;
-    }
-
-    return payable_total((float)$student['DAFTAR_ULANG'], (float)$student['potong_du'], (float)$student['tot_du']);
-}
-
 function validate_component_remaining(
     mysqli $db,
     string $noInduk,

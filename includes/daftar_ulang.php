@@ -121,3 +121,64 @@ function du_create_bill_for_placement(mysqli $db, int $placementId): ?int {
     $stmt->close();
     return $id ?: null;
 }
+
+function du_publish_year_from_active_students(mysqli $db, int $yearId, string $label): int {
+    $label = du_normalize_academic_year($label);
+    $stmt = $db->prepare('SELECT id, label, status FROM tahun_ajaran WHERE id = ? LIMIT 1 FOR UPDATE');
+    $stmt->bind_param('i', $yearId); $stmt->execute();
+    $year = $stmt->get_result()->fetch_assoc(); $stmt->close();
+    if (!$year || $year['label'] !== $label) throw new RuntimeException('Tahun ajaran penerbitan tidak valid.');
+    if ($year['status'] === 'closed') throw new RuntimeException('Tahun ajaran yang sudah ditutup tidak dapat diterbitkan ulang.');
+    if ($year['status'] === 'published') {
+        $stmt = $db->prepare('SELECT COUNT(*) total FROM tagihan_daftar_ulang WHERE tahun_ajaran_id = ?');
+        $stmt->bind_param('i', $yearId); $stmt->execute();
+        $total = (int)$stmt->get_result()->fetch_assoc()['total']; $stmt->close();
+        return $total;
+    }
+
+    $stmt = $db->prepare("SELECT COUNT(DISTINCT kelas) total FROM Daftar_ulang
+        WHERE tahun_ajaran_id=? AND kelas IN ('1','2','3','4','5','6') AND Jumlah>0");
+    $stmt->bind_param('i', $yearId); $stmt->execute();
+    $masterCount = (int)$stmt->get_result()->fetch_assoc()['total']; $stmt->close();
+    if ($masterCount !== 6) throw new RuntimeException('Lengkapi nominal Daftar Ulang kelas 1 sampai 6 sebelum menerbitkan.');
+
+    $activeStudents = $db->query('SELECT NO_INDUK, KELAS FROM siswa WHERE is_active=1 FOR UPDATE');
+    $activeCount = $activeStudents->num_rows;
+    if ($activeCount === 0) throw new RuntimeException('Tidak ada siswa aktif kelas 1 sampai 6 yang dapat dibuatkan tagihan.');
+    $invalidCount = 0;
+    while ($activeStudent = $activeStudents->fetch_assoc()) {
+        if (!in_array((string)$activeStudent['KELAS'], ['1','2','3','4','5','6'], true)) $invalidCount++;
+    }
+    if ($invalidCount > 0) throw new RuntimeException($invalidCount . ' siswa aktif memiliki kelas tidak valid. Perbaiki Data Siswa terlebih dahulu.');
+
+    $stmt = $db->prepare('SELECT COUNT(*) total FROM tagihan_daftar_ulang WHERE tahun_ajaran_id=?');
+    $stmt->bind_param('i', $yearId); $stmt->execute();
+    $existingBills = (int)$stmt->get_result()->fetch_assoc()['total']; $stmt->close();
+    if ($existingBills > 0) throw new RuntimeException('Tahun ajaran draf memiliki tagihan lama yang tidak konsisten. Periksa database sebelum menerbitkan ulang.');
+
+    $stmt = $db->prepare("DELETE sta FROM siswa_tahun_ajaran sta
+        LEFT JOIN siswa s ON s.NO_INDUK=sta.no_induk
+        WHERE sta.tahun_ajaran_id=? AND (s.NO_INDUK IS NULL OR s.is_active<>1)");
+    $stmt->bind_param('i', $yearId); $stmt->execute(); $stmt->close();
+    $stmt = $db->prepare("INSERT INTO siswa_tahun_ajaran (tahun_ajaran_id,no_induk,kelas,status)
+        SELECT ?,s.NO_INDUK,s.KELAS,'aktif' FROM siswa s
+        WHERE s.is_active=1 AND s.KELAS IN ('1','2','3','4','5','6')
+        ON DUPLICATE KEY UPDATE kelas=VALUES(kelas),status='aktif'");
+    $stmt->bind_param('i', $yearId); $stmt->execute(); $stmt->close();
+
+    $stmt = $db->prepare("INSERT IGNORE INTO tagihan_daftar_ulang
+        (tahun_ajaran_id,penempatan_id,master_daftar_ulang_id,no_induk,kelas_snapshot,tahun_ajaran_snapshot,nominal_awal,nominal_tagihan)
+        SELECT sta.tahun_ajaran_id,sta.id,du.id,sta.no_induk,sta.kelas,?,du.Jumlah,du.Jumlah
+        FROM siswa_tahun_ajaran sta
+        JOIN Daftar_ulang du ON du.tahun_ajaran_id=sta.tahun_ajaran_id AND du.kelas=sta.kelas
+        WHERE sta.tahun_ajaran_id=? AND sta.status='aktif'");
+    $stmt->bind_param('si', $label, $yearId); $stmt->execute();
+    $created = $stmt->affected_rows; $stmt->close();
+    if ($created !== $activeCount) throw new RuntimeException('Jumlah tagihan yang terbentuk tidak sesuai jumlah siswa aktif. Penerbitan dibatalkan.');
+
+    $stmt = $db->prepare("UPDATE tahun_ajaran SET status='published',published_at=NOW() WHERE id=? AND status='draft'");
+    $stmt->bind_param('i', $yearId); $stmt->execute();
+    if ($stmt->affected_rows !== 1) { $stmt->close(); throw new RuntimeException('Status tahun ajaran gagal diterbitkan.'); }
+    $stmt->close();
+    return $created;
+}

@@ -255,17 +255,21 @@ function selectedDaftarUlangKey() {
   return academicYearFromPaymentPeriod();
 }
 
-function selectedDaftarUlangBill(opt) {
+function selectedDaftarUlangRecord(opt) {
   if (!opt) return null;
   const year = selectedDaftarUlangKey();
   if (!year) return null;
   try {
     const bills = JSON.parse(opt.dataset.duBills || '{}');
-    const bill = bills[year] || null;
-    return bill && bill.status === 'open' ? bill : null;
+    return bills[year] || null;
   } catch (_) {
     return null;
   }
+}
+
+function selectedDaftarUlangBill(opt) {
+  const bill = selectedDaftarUlangRecord(opt);
+  return bill && bill.status === 'open' ? bill : null;
 }
 
 function totalDaftarUlangForContext(opt) {
@@ -278,37 +282,58 @@ function refreshDaftarUlangMasterWarning(opt) {
   if (!warning && !input) return;
 
   const periodKey = selectedDaftarUlangKey();
+  const record = selectedDaftarUlangRecord(opt);
   const bill = selectedDaftarUlangBill(opt);
-  const isMissingMaster = !!opt && !!periodKey && !bill;
+  const hasContext = !!opt && !!periodKey;
+  const total = parseNumber(bill?.total || 0);
+  const paid = parseNumber(bill?.paid || 0);
+  const remaining = Math.max(0, total - paid);
+  const isSettled = !!bill && total > 0 && remaining <= 0.001;
+  const isUnavailable = hasContext && !bill;
   const contextLabel = document.getElementById('du-context-label');
   if (contextLabel) {
-    contextLabel.textContent = bill
-      ? 'Daftar Ulang · Tahun ajaran ' + periodKey + ' · Kelas ' + bill.kelas
-      : 'Daftar Ulang · Tahun ajaran ' + (periodKey || '-') + ' · tagihan belum tersedia';
+    let status = 'Belum Bayar';
+    if (isSettled) status = 'Lunas';
+    else if (paid > 0) status = 'Cicilan';
+    if (!opt || !periodKey) {
+      contextLabel.textContent = 'Pilih siswa, bulan, dan tahun pembayaran.';
+    } else if (bill) {
+      contextLabel.textContent = 'TA ' + periodKey + ' · Kelas ' + bill.kelas + ' · ' + status;
+    } else if (record?.status === 'cancelled') {
+      contextLabel.textContent = 'TA ' + periodKey + ' · Tagihan dibatalkan';
+    } else {
+      contextLabel.textContent = 'TA ' + periodKey + ' · Tagihan belum tersedia';
+    }
   }
 
   if (input) {
-    const missingMessage = 'Tagihan Daftar Ulang siswa untuk tahun ajaran ini belum diterbitkan.';
-    input.readOnly = isMissingMaster;
-    input.classList.toggle('tbl-readonly', isMissingMaster);
-    if (isMissingMaster) {
-      input.title = missingMessage;
-      input.setCustomValidity(parseNumber(input.value || 0) > 0 ? missingMessage : '');
-    } else if (input.title === missingMessage) {
+    const locked = !bill || isSettled;
+    const lockedMessage = isSettled
+      ? 'Tagihan Daftar Ulang sudah lunas.'
+      : 'Tagihan Daftar Ulang siswa untuk tahun ajaran ini belum diterbitkan.';
+    input.readOnly = locked;
+    input.classList.toggle('tbl-readonly', locked);
+    if (locked) {
+      input.value = '0';
+      input.title = lockedMessage;
+      input.setCustomValidity('');
+    } else {
       input.setCustomValidity('');
       input.removeAttribute('title');
     }
   }
 
   if (!warning) return;
-  if (!isMissingMaster) {
+  if (!isUnavailable) {
     warning.hidden = true;
     warning.textContent = '';
     return;
   }
 
   warning.hidden = false;
-  warning.textContent = 'Tagihan Daftar Ulang tahun ajaran ' + periodKey + ' belum tersedia untuk siswa ini. Periksa penempatan dan penerbitan di Master Daftar Ulang.';
+  warning.textContent = record?.status === 'cancelled'
+    ? 'Tagihan siswa ini telah dibatalkan dan tidak dapat dibayar.'
+    : 'Tagihan belum diterbitkan. Buka Master Daftar Ulang lalu gunakan Simpan & Terbitkan Tagihan.';
 }
 
 function paidDaftarUlangForContext(opt) {
@@ -389,7 +414,7 @@ function refreshOverpaidWarnings() {
       overpaid.push(paymentComponentLabels[key] + ' (total Rp ' + formatRupiah(total) + ', sudah terbayar Rp ' + formatRupiah(paid) + ')');
     } else {
       inputEl.disabled = false;
-      inputEl.removeAttribute('title');
+      if (!inputEl.readOnly) inputEl.removeAttribute('title');
     }
   });
 
@@ -439,7 +464,7 @@ function refreshPaymentInputOverlimitWarnings() {
       warnings.push(message);
     } else {
       inputEl.setCustomValidity('');
-      inputEl.removeAttribute('title');
+      if (!inputEl.readOnly) inputEl.removeAttribute('title');
     }
   });
 

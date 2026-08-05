@@ -148,7 +148,7 @@ Detail biaya tambahan per transaksi. Nama dan nominal disimpan sebagai snapshot 
 
 `bayar_du` menyimpan pembayaran daftar ulang per siswa, kelas daftar ulang, dan tahun ajaran. Child yang dibuat oleh pembayaran versi aman menyimpan `bayar_id` unik dengan foreign key `ON DELETE CASCADE` ke `bayar`.
 
-Tabel `Daftar_ulang` dipakai sebagai master nominal daftar ulang per kombinasi `kelas + th_ajaran`. Tahun ajaran mengikuti kalender pendidikan Juli-Juni; tahun ajaran aktif adalah `YYYY/YYYY+1` pada Juli-Desember dan `YYYY-1/YYYY` pada Januari-Juni. Kombinasi kelas+tahun harus unik dan dikelola admin melalui halaman Master Daftar Ulang. Jika tabel master benar-benar kosong, alur pembayaran memakai fallback dari data siswa (`DAFTAR_ULANG`, `potong_du`, `tot_du`) supaya transaksi lama tetap bisa berjalan. Jika master sudah memiliki data tetapi kombinasi kelas/tahun yang dipilih belum tersedia, nominal daftar ulang dianggap belum diatur dan transaksi DU harus ditolak sampai master dilengkapi. Sisa daftar ulang dihitung per `NO_INDUK + kelas + th_ajaran`, bukan total global siswa.
+Tabel `Daftar_ulang` dipakai sebagai template tarif per kombinasi `kelas + th_ajaran`, sedangkan kewajiban nyata siswa disimpan pada `tagihan_daftar_ulang`. Tahun ajaran mengikuti kalender pendidikan Juli-Juni: Juli-Desember memakai `YYYY/YYYY+1`, sedangkan Januari-Juni memakai `YYYY-1/YYYY`. Pembayaran baru tidak memakai fallback nominal dari kolom Daftar Ulang pada `siswa`; total dan saldo selalu dibaca dari tagihan siswa yang sudah diterbitkan. `bayar_du.tagihan_daftar_ulang_id` menjadi referensi saldo utama, sementara kelas dan tahun ajaran tetap disimpan sebagai snapshot kompatibilitas.
 
 ### `tabungan`, `transaksi_m`, dan `transaksi_k`
 
@@ -209,11 +209,12 @@ Tabel `Daftar_ulang` dipakai sebagai master nominal daftar ulang per kombinasi `
 ### Master Daftar Ulang
 
 - Admin mengelola enam tarif kelas per tahun ajaran pada `master_daftar_ulang.php`; kombinasi tahun ajaran dan kelas dijaga unik.
-- Halaman master hanya menampilkan tarif, jumlah siswa aktif per kelas, dan penerbitan tagihan. Daftar penempatan siswa tidak ditampilkan agar tetap ringan untuk ratusan siswa.
-- `siswa.KELAS` menjadi sumber kelas aktif saat penerbitan. Admin harus memperbarui kelas dan status aktif melalui Data Siswa sebelum menekan Terbitkan Tagihan.
-- Penerbitan berjalan dalam satu transaksi: sistem menyelaraskan penempatan internal, membuat satu tagihan per siswa aktif, lalu mengubah tahun ajaran dari `draft` menjadi `published`.
+- Halaman master hanya menampilkan tarif, jumlah siswa aktif per kelas, dan ringkasan penerbitan. Daftar penempatan siswa tidak ditampilkan agar tetap ringan untuk ratusan siswa.
+- `siswa.KELAS` menjadi sumber kelas aktif saat penerbitan. Admin harus memperbarui kelas dan status aktif melalui Data Siswa sebelum memakai `Simpan & Terbitkan Tagihan`.
+- Untuk tahun draf, satu transaksi menyimpan enam tarif, menyelaraskan penempatan internal, membuat satu tagihan per siswa aktif, mengubah status menjadi `published`, dan menulis audit. Kegagalan salah satu tahap membatalkan seluruh perubahan.
+- Tahun yang sudah terbit memakai `Simpan Perubahan Tarif`; tagihan belum lunas mengikuti aturan perubahan nominal, sedangkan tagihan lunas mempertahankan snapshot histori.
 - Siswa tinggal kelas memakai kelas yang tetap tersimpan pada Data Siswa; siswa tidak aktif tidak menerima tagihan. Siswa baru setelah penerbitan otomatis memperoleh penempatan dan tagihan.
-- Input/edit pembayaran menghitung tahun ajaran dari periode pilihan dan mengambil kelas serta saldo langsung dari tagihan server-side; hidden input kelas/tahun tidak dipercaya.
+- Input/edit pembayaran menghitung tahun ajaran dari periode pilihan dan mengambil kelas serta saldo langsung dari tagihan server-side; hidden input kelas/tahun tidak dipercaya. Total, terbayar, sisa, kelas, tahun ajaran, status, dan warning tampil pada baris Daftar Ulang.
 - Tagihan yang telah diterbitkan mempertahankan snapshot kelas dan nominal sehingga perubahan Data Siswa berikutnya tidak memindahkan histori.
 - Migrasi tidak boleh menerbitkan tahun ajaran draf secara otomatis. Status `published` hanya diubah oleh aksi penerbitan admin.
 
