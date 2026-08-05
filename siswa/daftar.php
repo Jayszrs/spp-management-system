@@ -36,6 +36,23 @@ function student_history_count(mysqli $db, string $noInduk): int {
     return $count;
 }
 
+function student_optional_fee_payments(mysqli $db, string $noInduk): array {
+    $stmt = $db->prepare('SELECT
+        COALESCE(SUM(U_MAKAN), 0) AS MAKAN,
+        COALESCE(SUM(U_SORGA), 0) AS SORGA,
+        COALESCE(SUM(U_INFAQ), 0) AS INFAQ
+        FROM bayar WHERE NO_INDUK = ?');
+    $stmt->bind_param('s', $noInduk);
+    $stmt->execute();
+    $paid = $stmt->get_result()->fetch_assoc() ?: [];
+    $stmt->close();
+    return [
+        'MAKAN' => (float)($paid['MAKAN'] ?? 0),
+        'SORGA' => (float)($paid['SORGA'] ?? 0),
+        'INFAQ' => (float)($paid['INFAQ'] ?? 0),
+    ];
+}
+
 function find_student(mysqli $db, int $id, bool $forUpdate = false): ?array {
     $stmt = $db->prepare('SELECT * FROM siswa WHERE id = ? LIMIT 1' . ($forUpdate ? ' FOR UPDATE' : ''));
     $stmt->bind_param('i', $id);
@@ -49,7 +66,8 @@ function find_student(mysqli $db, int $id, bool $forUpdate = false): ?array {
 function student_snapshot(array $student): array {
     $keys = [
         'id', 'NO_INDUK', 'NAMA', 'KELAS', 'SPP_PERBULAN', 'PANGKAL', 'BANGUNAN',
-        'SERAGAM', 'KEGIATAN', 'PANGKAL_BAYAR', 'BANGUNAN_BAYAR', 'SERAGAM_BAYAR',
+        'SERAGAM', 'KEGIATAN', 'MAKAN', 'SORGA', 'INFAQ',
+        'PANGKAL_BAYAR', 'BANGUNAN_BAYAR', 'SERAGAM_BAYAR',
         'KEGIATAN_BAYAR', 'POMG', 'DAFTAR_ULANG', 'NO_induk_diknas',
         'potong_pangkal', 'tot_pangkal', 'tot_du', 'potong_du', 'is_active'
     ];
@@ -144,12 +162,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $advanced = isset($_POST['advanced_enabled']) && $_POST['advanced_enabled'] === '1';
             $advancedColumns = [
                 'SPP_PERBULAN', 'PANGKAL', 'BANGUNAN', 'SERAGAM', 'KEGIATAN',
-                'POMG', 'DAFTAR_ULANG', 'potong_pangkal', 'potong_du'
+                'MAKAN', 'SORGA', 'INFAQ', 'POMG', 'DAFTAR_ULANG',
+                'potong_pangkal', 'potong_du'
             ];
             $postMap = [
                 'SPP_PERBULAN' => 'spp_perbulan', 'PANGKAL' => 'pangkal',
                 'BANGUNAN' => 'bangunan', 'SERAGAM' => 'seragam',
-                'KEGIATAN' => 'kegiatan', 'POMG' => 'pomg',
+                'KEGIATAN' => 'kegiatan', 'MAKAN' => 'makan',
+                'SORGA' => 'sorga', 'INFAQ' => 'infaq', 'POMG' => 'pomg',
                 'DAFTAR_ULANG' => 'daftar_ulang', 'potong_pangkal' => 'potong_pangkal',
                 'potong_du' => 'potong_du'
             ];
@@ -173,6 +193,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
             $values['tot_pangkal'] = max(0, $values['PANGKAL'] - $values['potong_pangkal']);
             $values['tot_du'] = max(0, $values['DAFTAR_ULANG'] - $values['potong_du']);
+
+            if ($advanced && $oldStudent) {
+                $paidOptional = student_optional_fee_payments($koneksi, (string)$oldStudent['NO_INDUK']);
+                $optionalLabels = ['MAKAN'=>'Uang Makan', 'SORGA'=>'Uang Sorga', 'INFAQ'=>'Uang Infaq'];
+                foreach ($optionalLabels as $column => $label) {
+                    if ($values[$column] + .001 < $paidOptional[$column]) {
+                        throw new RuntimeException($label . ' tidak boleh lebih kecil dari total yang sudah dibayar, yaitu Rp ' . number_format($paidOptional[$column], 0, ',', '.') . '.');
+                    }
+                }
+            }
 
             $openingMap = [
                 'PANGKAL_BAYAR' => 'pangkal_bayar', 'BANGUNAN_BAYAR' => 'bangunan_bayar',
@@ -205,6 +235,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $bangunan = $values['BANGUNAN'];
             $seragam = $values['SERAGAM'];
             $kegiatan = $values['KEGIATAN'];
+            $makan = $values['MAKAN'];
+            $sorga = $values['SORGA'];
+            $infaq = $values['INFAQ'];
             $pangkalBayar = $values['PANGKAL_BAYAR'];
             $bangunanBayar = $values['BANGUNAN_BAYAR'];
             $seragamBayar = $values['SERAGAM_BAYAR'];
@@ -221,15 +254,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $stmt = $koneksi->prepare("
                     INSERT INTO siswa (
                       NO_INDUK, NAMA, KELAS, SPP_PERBULAN, PANGKAL, BANGUNAN, SERAGAM,
-                      KEGIATAN, PANGKAL_BAYAR, BANGUNAN_BAYAR, SERAGAM_BAYAR, KEGIATAN_BAYAR,
+                      KEGIATAN, MAKAN, SORGA, INFAQ,
+                      PANGKAL_BAYAR, BANGUNAN_BAYAR, SERAGAM_BAYAR, KEGIATAN_BAYAR,
                       POMG, DAFTAR_ULANG, NO_induk_diknas, potong_pangkal, tot_pangkal,
                       tot_du, potong_du, is_active
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULLIF(?, ''), ?, ?, ?, ?, ?)
+                    ) VALUES (
+                      ?, ?, ?,
+                      ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                      NULLIF(?, ''), ?, ?, ?, ?, ?
+                    )
                 ");
                 $stmt->bind_param(
-                    'sssdddddddddddsddddi',
+                    'sssddddddddddddddsddddi',
                     $noInduk, $name, $class, $spp, $pangkal, $bangunan, $seragam, $kegiatan,
-                    $pangkalBayar, $bangunanBayar, $seragamBayar, $kegiatanBayar, $pomg,
+                    $makan, $sorga, $infaq, $pangkalBayar, $bangunanBayar, $seragamBayar, $kegiatanBayar, $pomg,
                     $daftarUlang, $nisDiknas, $potongPangkal, $totPangkal, $totDu, $potongDu, $active
                 );
                 $stmt->execute();
@@ -244,15 +282,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $stmt = $koneksi->prepare("
                     UPDATE siswa SET
                       NO_INDUK=?, NAMA=?, KELAS=?, SPP_PERBULAN=?, PANGKAL=?, BANGUNAN=?,
-                      SERAGAM=?, KEGIATAN=?, PANGKAL_BAYAR=?, BANGUNAN_BAYAR=?,
+                      SERAGAM=?, KEGIATAN=?, MAKAN=?, SORGA=?, INFAQ=?,
+                      PANGKAL_BAYAR=?, BANGUNAN_BAYAR=?,
                       SERAGAM_BAYAR=?, KEGIATAN_BAYAR=?, POMG=?, DAFTAR_ULANG=?,
                       NO_induk_diknas=NULLIF(?, ''), potong_pangkal=?, tot_pangkal=?,
                       tot_du=?, potong_du=? WHERE id=?
                 ");
                 $stmt->bind_param(
-                    'sssdddddddddddsddddi',
+                    'sssddddddddddddddsddddi',
                     $noInduk, $name, $class, $spp, $pangkal, $bangunan, $seragam, $kegiatan,
-                    $pangkalBayar, $bangunanBayar, $seragamBayar, $kegiatanBayar, $pomg,
+                    $makan, $sorga, $infaq, $pangkalBayar, $bangunanBayar, $seragamBayar, $kegiatanBayar, $pomg,
                     $daftarUlang, $nisDiknas, $potongPangkal, $totPangkal, $totDu, $potongDu, $id
                 );
                 $stmt->execute();
@@ -331,7 +370,8 @@ $fieldMap = [
     'no_induk' => 'NO_INDUK', 'nama' => 'NAMA', 'kelas' => 'KELAS',
     'no_induk_diknas' => 'NO_induk_diknas', 'spp_perbulan' => 'SPP_PERBULAN',
     'pangkal' => 'PANGKAL', 'bangunan' => 'BANGUNAN', 'seragam' => 'SERAGAM',
-    'kegiatan' => 'KEGIATAN', 'pomg' => 'POMG', 'daftar_ulang' => 'DAFTAR_ULANG',
+    'kegiatan' => 'KEGIATAN', 'makan' => 'MAKAN', 'sorga' => 'SORGA',
+    'infaq' => 'INFAQ', 'pomg' => 'POMG', 'daftar_ulang' => 'DAFTAR_ULANG',
     'potong_pangkal' => 'potong_pangkal', 'potong_du' => 'potong_du',
     'pangkal_bayar' => 'PANGKAL_BAYAR', 'bangunan_bayar' => 'BANGUNAN_BAYAR',
     'seragam_bayar' => 'SERAGAM_BAYAR', 'kegiatan_bayar' => 'KEGIATAN_BAYAR'
@@ -435,7 +475,8 @@ $canEditOpening = !$editStudent || (int)($editStudent['history_count'] ?? 0) ===
               $feeFields = [
                 'spp_perbulan' => 'SPP per Bulan', 'pangkal' => 'Uang Pangkal',
                 'bangunan' => 'Uang Bangunan', 'seragam' => 'Uang Seragam',
-                'kegiatan' => 'Uang Kegiatan', 'pomg' => 'Uang Komite',
+                'kegiatan' => 'Uang Kegiatan', 'makan' => 'Uang Makan',
+                'sorga' => 'Uang Sorga', 'infaq' => 'Uang Infaq', 'pomg' => 'Uang Komite',
                 'daftar_ulang' => 'Uang Daftar Ulang'
               ];
               foreach ($feeFields as $key => $label):

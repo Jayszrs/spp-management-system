@@ -119,6 +119,7 @@ Menyimpan identitas, kelas, tarif per siswa, potongan, saldo awal pembayaran, da
 - `tot_pangkal = MAX(0, PANGKAL - potong_pangkal)`;
 - `tot_du = MAX(0, DAFTAR_ULANG - potong_du)`;
 - `POMG` adalah tarif dasar Uang Komite bulanan.
+- `MAKAN`, `SORGA`, dan `INFAQ` adalah total tagihan satu kali per siswa dan dapat dicicil.
 
 ### `siswa_audit_log`
 
@@ -160,6 +161,7 @@ Tabel `Daftar_ulang` dipakai sebagai template tarif per kombinasi `kelas + th_aj
 
 - Form dasar memuat nomor induk, nama, dan kelas.
 - Switch `Advance` membuka NIS Diknas, tarif, Komite, potongan, total turunan, dan saldo awal.
+- Tarif Makan, Sorga, dan Infaq di Advance disimpan per siswa. Nilai Rp0 berarti belum diatur dan tidak dapat dibayar.
 - Menutup Advance saat edit tidak boleh menimpa field lanjutan dengan nol.
 - NIS Diknas harus tepat 10 digit bila diisi.
 - Nominal tidak boleh negatif dan potongan tidak boleh melebihi tagihan.
@@ -168,6 +170,7 @@ Tabel `Daftar_ulang` dipakai sebagai template tarif per kombinasi `kelas + th_aj
 - Aksi hapus pada UI diganti menjadi Arsipkan/Pulihkan.
 - Siswa arsip tetap tersedia untuk histori dan laporan, tetapi tidak boleh dipakai pada transaksi baru.
 - Tambah, edit, perubahan tarif, perubahan nomor induk, arsip, dan pemulihan dicatat pada audit log.
+- Tarif Makan, Sorga, atau Infaq tidak boleh diturunkan di bawah akumulasi transaksi yang sudah dibayar.
 
 ### Pembayaran
 
@@ -186,6 +189,14 @@ Tabel `Daftar_ulang` dipakai sebagai template tarif per kombinasi `kelas + th_aj
 - Pembayaran baru menyimpan relasi eksplisit ke Daftar Ulang dan setoran Tabungan Wajib melalui `bayar_id`. Edit atau hapus hanya boleh mengubah child dengan `bayar_id` yang sama, bukan child dengan NIS, tanggal, atau tahun ajaran yang kebetulan sama.
 - Pembayaran `payment_link_version=0` adalah legacy. Sistem menandainya di daftar dan menolak edit/hapus, termasuk akses endpoint langsung; rekonsiliasi harus dilakukan manual tanpa pencocokan otomatis.
 - Sebelum edit/hapus membalikkan setoran Tabungan Wajib, baris saldo dikunci. Bila pembalikan membuat saldo negatif, seluruh transaction ditolak dan di-rollback.
+
+### Makan, Sorga, dan Infaq
+
+- Total tagihan berasal dari `siswa.MAKAN`, `siswa.SORGA`, dan `siswa.INFAQ`; nominal transaksi aktual disimpan pada kolom `U_*` di `bayar`.
+- Ketiganya merupakan tagihan satu kali sepanjang histori siswa, bukan tagihan per bulan atau tahun ajaran.
+- Sudah dibayar dihitung dari seluruh transaksi siswa dan input dapat dicicil maksimal sebesar sisa.
+- Tarif nol dan tagihan lunas tetap ditampilkan tetapi input dikunci. Backend juga menolak manipulasi input untuk tarif yang belum tersedia atau pembayaran di atas sisa.
+- Edit transaksi mengecualikan transaksi aktif dari akumulasi; hapus transaksi mengembalikan saldo secara otomatis.
 
 ### Uang Komite
 
@@ -255,9 +266,10 @@ Schema ini bersifat destruktif untuk sebagian tabel karena memakai `DROP TABLE`.
 4. Jalankan `sql/add_master_daftar_ulang.sql`.
 5. Jalankan `sql/add_academic_year_billing.sql`.
 6. Jalankan `sql/add_student_advanced.sql`.
-7. Jalankan `sql/add_payment_references.sql`.
-8. Jalankan `sql/add_payment_method.sql`.
-9. Jalankan `sql/verify_schema.sql` dan uji aplikasi.
+7. Jalankan `sql/add_student_optional_fees.sql`.
+8. Jalankan `sql/add_payment_references.sql`.
+9. Jalankan `sql/add_payment_method.sql`.
+10. Jalankan `sql/verify_schema.sql` dan uji aplikasi.
 
 Contoh PowerShell:
 
@@ -266,6 +278,7 @@ Get-Content sql\add_master_biaya_lain.sql -Raw | C:\xampp\mysql\bin\mysql.exe -u
 Get-Content sql\add_master_daftar_ulang.sql -Raw | C:\xampp\mysql\bin\mysql.exe -u root
 Get-Content sql\add_academic_year_billing.sql -Raw | C:\xampp\mysql\bin\mysql.exe -u root
 Get-Content sql\add_student_advanced.sql -Raw | C:\xampp\mysql\bin\mysql.exe -u root
+Get-Content sql\add_student_optional_fees.sql -Raw | C:\xampp\mysql\bin\mysql.exe -u root
 Get-Content sql\add_payment_references.sql -Raw | C:\xampp\mysql\bin\mysql.exe -u root
 Get-Content sql\add_payment_method.sql -Raw | C:\xampp\mysql\bin\mysql.exe -u root
 Get-Content sql\verify_schema.sql -Raw | C:\xampp\mysql\bin\mysql.exe -u root

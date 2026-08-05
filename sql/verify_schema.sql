@@ -64,6 +64,27 @@ FROM (
              AND COLUMN_NAME = 'is_active'
          )
   UNION ALL
+  SELECT 'siswa.MAKAN',
+         EXISTS(
+           SELECT 1 FROM information_schema.COLUMNS
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'siswa'
+             AND COLUMN_NAME = 'MAKAN'
+         )
+  UNION ALL
+  SELECT 'siswa.SORGA',
+         EXISTS(
+           SELECT 1 FROM information_schema.COLUMNS
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'siswa'
+             AND COLUMN_NAME = 'SORGA'
+         )
+  UNION ALL
+  SELECT 'siswa.INFAQ',
+         EXISTS(
+           SELECT 1 FROM information_schema.COLUMNS
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'siswa'
+             AND COLUMN_NAME = 'INFAQ'
+         )
+  UNION ALL
   SELECT 'bayar.U_KOMITE',
          EXISTS(
            SELECT 1 FROM information_schema.COLUMNS

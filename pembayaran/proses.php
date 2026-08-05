@@ -164,7 +164,7 @@ function validate_component_remaining(
 ): void {
     $stmt = $db->prepare('
         SELECT PANGKAL, potong_pangkal, tot_pangkal, BANGUNAN, SERAGAM, KEGIATAN,
-               SPP_PERBULAN, POMG, DAFTAR_ULANG, potong_du, tot_du
+               MAKAN, SORGA, INFAQ, SPP_PERBULAN, POMG, DAFTAR_ULANG, potong_du, tot_du
         FROM siswa
         WHERE NO_INDUK = ?
         FOR UPDATE
@@ -214,9 +214,9 @@ function validate_component_remaining(
         'kegiatan' => ['label' => 'Uang Kegiatan', 'total' => (float)$student['KEGIATAN'], 'paid' => (float)($paid['kegiatan'] ?? 0), 'input' => (float)($components['kegiatan'] ?? 0)],
         'spp' => ['label' => 'Uang SPP', 'total' => (float)$student['SPP_PERBULAN'], 'paid' => (float)($paid['spp'] ?? 0), 'input' => (float)($components['spp'] ?? 0)],
         'komite' => ['label' => 'Uang Komite', 'total' => (float)$student['POMG'], 'paid' => (float)($paid['komite'] ?? 0), 'input' => (float)($components['komite'] ?? 0)],
-        'makan' => ['label' => 'Uang Makan', 'total' => 0.0, 'paid' => (float)($paid['makan'] ?? 0), 'input' => (float)($components['makan'] ?? 0)],
-        'sorga' => ['label' => 'Uang Sorga', 'total' => 0.0, 'paid' => (float)($paid['sorga'] ?? 0), 'input' => (float)($components['sorga'] ?? 0)],
-        'infaq' => ['label' => 'Uang Infaq', 'total' => 0.0, 'paid' => (float)($paid['infaq'] ?? 0), 'input' => (float)($components['infaq'] ?? 0)],
+        'makan' => ['label' => 'Uang Makan', 'total' => (float)$student['MAKAN'], 'paid' => (float)($paid['makan'] ?? 0), 'input' => (float)($components['makan'] ?? 0)],
+        'sorga' => ['label' => 'Uang Sorga', 'total' => (float)$student['SORGA'], 'paid' => (float)($paid['sorga'] ?? 0), 'input' => (float)($components['sorga'] ?? 0)],
+        'infaq' => ['label' => 'Uang Infaq', 'total' => (float)$student['INFAQ'], 'paid' => (float)($paid['infaq'] ?? 0), 'input' => (float)($components['infaq'] ?? 0)],
         'du' => ['label' => 'Daftar Ulang', 'total' => $duTotal, 'paid' => (float)($paid['du'] ?? 0), 'input' => $uangDu],
     ];
 

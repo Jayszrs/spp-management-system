@@ -259,9 +259,9 @@ unset($_SESSION['flash']);
                   data-total-kegiatan="<?= money_attr($s['KEGIATAN']) ?>"
                   data-total-spp="<?= money_attr($s['SPP_PERBULAN']) ?>"
                   data-total-komite="<?= money_attr($s['POMG']) ?>"
-                  data-total-makan="0"
-                  data-total-sorga="0"
-                  data-total-infaq="0"
+                  data-total-makan="<?= money_attr($s['MAKAN']) ?>"
+                  data-total-sorga="<?= money_attr($s['SORGA']) ?>"
+                  data-total-infaq="<?= money_attr($s['INFAQ']) ?>"
                   data-paid-pangkal="<?= money_attr($s['paid_pangkal']) ?>"
                   data-paid-bangunan="<?= money_attr($s['paid_bangunan']) ?>"
                   data-paid-seragam="<?= money_attr($s['paid_seragam']) ?>"
@@ -326,7 +326,7 @@ unset($_SESSION['flash']);
                   [$key, $label, $name] = $k;
                 ?>
                 <tr class="<?= $i % 2 === 0 ? 'row-highlight' : '' ?>">
-                  <td><span class="comp-label"><?= $label ?></span><?php if($key==='du'): ?><small class="du-inline-context du-context-label" id="du-context-label">Pilih siswa, bulan, dan tahun pembayaran.</small><small class="du-inline-context du-master-warning" id="du-master-warning" hidden></small><?php endif; ?></td>
+                  <td><span class="comp-label"><?= $label ?></span><?php if(in_array($key,['makan','sorga','infaq'],true)): ?><small class="du-inline-context du-context-label" id="<?= $key ?>-context-label">Tagihan satu kali · dapat dicicil</small><?php endif; ?><?php if($key==='du'): ?><small class="du-inline-context du-context-label" id="du-context-label">Pilih siswa, bulan, dan tahun pembayaran.</small><small class="du-inline-context du-master-warning" id="du-master-warning" hidden></small><?php endif; ?></td>
                   <td data-label="Total Tagihan"><input class="tbl-input tbl-system" type="text" value="0" id="<?=$key?>-total" readonly tabindex="-1" aria-readonly="true" /></td>
                   <td data-label="Sudah Terbayar"><input class="tbl-input tbl-system" type="text" value="0" id="<?=$key?>-bayar" readonly tabindex="-1" aria-readonly="true" /></td>
                   <td data-label="Sisa"><input class="tbl-input tbl-system tbl-system-sisa" type="text" value="0" id="<?=$key?>-sisa" readonly tabindex="-1" aria-readonly="true" /></td>
@@ -446,7 +446,7 @@ unset($_SESSION['flash']);
     window.sppDaftarUlangMasters = {};
     window.sppDaftarUlangHasMasters = true;
   </script>
-  <script src="../assets/js/app.js?v=4.7"></script>
+  <script src="../assets/js/app.js?v=4.8"></script>
 </body>
 </html>
 

@@ -391,6 +391,37 @@ const paymentComponentLabels = {
   du: 'Uang Daftar Ulang'
 };
 
+function refreshOptionalOneTimeFeeAvailability() {
+  const hasStudent = !!document.getElementById('disp-nis')?.value;
+  ['makan', 'sorga', 'infaq'].forEach(key => {
+    const total = parseNumber(document.getElementById(key + '-total')?.value || 0);
+    const paid = parseNumber(document.getElementById(key + '-bayar')?.value || 0);
+    const inputEl = document.getElementById(key + '-input');
+    const contextEl = document.getElementById(key + '-context-label');
+    if (!inputEl) return;
+
+    let message = '';
+    if (!hasStudent) message = 'Pilih siswa terlebih dahulu';
+    else if (total <= 0) message = 'Tarif belum diatur di Data Siswa';
+    else if (paid + 0.001 >= total) message = 'Lunas';
+
+    const locked = message !== '';
+    inputEl.readOnly = locked;
+    inputEl.classList.toggle('tbl-readonly', locked);
+    if (locked) {
+      inputEl.value = '0';
+      inputEl.title = message;
+      inputEl.setCustomValidity('');
+    } else {
+      inputEl.removeAttribute('title');
+    }
+    if (contextEl) {
+      contextEl.textContent = locked ? message : 'Tagihan satu kali · dapat dicicil';
+    }
+    hitungSisa(key);
+  });
+}
+
 function refreshOverpaidWarnings() {
   const alertEl = document.getElementById('payment-overpaid-alert');
   const overpaid = [];
@@ -908,6 +939,7 @@ function hitungSisa(key) {
 
 /* ── Update Total ────────────────────────── */
 function updateTotal() {
+  refreshOptionalOneTimeFeeAvailability();
   refreshOverpaidWarnings();
   refreshPaymentInputOverlimitWarnings();
   refreshBiayaLainAvailability();

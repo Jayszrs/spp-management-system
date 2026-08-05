@@ -13,6 +13,35 @@ File ini mencatat perubahan proyek secara reverse chronological. Baca [PROJECT_C
 - Jangan menghapus atau menulis ulang entri lama. Tambahkan entri koreksi bila diperlukan.
 - Perubahan implementasi dan entri changelog wajib masuk commit yang sama.
 
+## 2026-08-06 - Tarif Manual Makan, Sorga, dan Infaq
+
+**AI/Aktor:** Codex berbasis GPT-5, bersama pemilik proyek
+
+**Tujuan:** Menyediakan sumber tagihan per siswa untuk Uang Makan, Sorga, dan Infaq agar ketiga komponen dapat dibayar serta dicicil melalui alur pembayaran resmi.
+
+**Perubahan fitur dan perilaku:**
+
+- Data Siswa Advance memperoleh tarif manual Makan, Sorga, dan Infaq sebagai tagihan satu kali per siswa.
+- Input dan edit pembayaran menampilkan total, terbayar, dan sisa dari tarif siswa serta seluruh transaksi; tarif nol dan tagihan lunas mengunci input.
+- Penurunan tarif di bawah akumulasi pembayaran ditolak. Nilai Advance tetap dipertahankan ketika panel ditutup saat edit.
+- `bayar.U_MAKAN`, `U_SORGA`, dan `U_INFAQ` tetap hanya menyimpan nominal transaksi aktual; laporan dan struk memakai nilai tersebut seperti sebelumnya.
+
+**Database dan migrasi:**
+
+- Menambahkan kolom `siswa.MAKAN`, `siswa.SORGA`, dan `siswa.INFAQ` melalui `sql/add_student_optional_fees.sql` yang idempoten.
+- Migrasi dijalankan dua kali. Seluruh siswa lama mendapat default Rp0 dan tidak ada transaksi lama yang diubah atau di-backfill.
+
+**Kompatibilitas:**
+
+- Master Biaya Lain dan sistem Tagihan Daftar Ulang tidak berubah.
+- Bulan/tahun transaksi hanya mencatat waktu cicilan; saldo ketiga komponen dihitung sepanjang histori siswa.
+
+**Verifikasi:**
+
+- Uji HTTP terautentikasi mencakup tambah/edit siswa, preservasi Advance, cicilan Makan, Sorga, Infaq, penolakan tarif nol dan pembayaran berlebih, edit/hapus cicilan, penolakan penurunan tarif, struk, serta laporan.
+- Data uji dibersihkan dan database kembali berisi tujuh siswa serta satu transaksi awal tanpa perubahan nominal.
+- Syntax check PHP/JavaScript, regression test, migrasi dua kali, dan seluruh pemeriksaan schema berhasil.
+
 ## 2026-08-05 - Integrasi Penerbitan dan Cicilan Daftar Ulang
 
 **AI/Aktor:** Codex berbasis GPT-5, bersama pemilik proyek
