@@ -6,6 +6,7 @@ session_start();
 if (!isset($_SESSION['admin_id'])) { header('Location: ../login.php'); exit; }
 require_once '../koneksi.php';
 require_once '../includes/auth.php';
+require_once '../includes/daftar_ulang.php';
 requireRole(['admin', 'kasir']);
 
 $aksi = $_POST['aksi'] ?? $_GET['aksi'] ?? '';
@@ -34,8 +35,10 @@ function validate_payment_context(string $tanggal, string $bulan, string $tahun)
     if (!$parsedDate || $parsedDate->format('Y-m-d') !== $datePart) {
         throw new RuntimeException('Tanggal pembayaran tidak valid.');
     }
-    if ($parsedDate->format('Y') !== $tahun) {
-        throw new RuntimeException('Tahun periode pembayaran harus sama dengan tahun pada tanggal bayar. Pembayaran untuk tahun depan belum dapat dicatat tahun ini.');
+    $periodStart = DateTime::createFromFormat('!Y-m-d', $tahun . '-' . $bulan . '-01');
+    $paymentMonth = DateTime::createFromFormat('!Y-m-d', $parsedDate->format('Y-m-01'));
+    if (!$periodStart || $periodStart > $paymentMonth) {
+        throw new RuntimeException('Periode pembayaran masa depan belum dapat dicatat. Pilih bulan yang sama atau lebih lama dari tanggal bayar.');
     }
 }
 
@@ -221,17 +224,18 @@ function validate_component_remaining(
     $paid = $stmtPaid->get_result()->fetch_assoc() ?: [];
     $stmtPaid->close();
 
-    $stmtDu = $db->prepare('
-        SELECT COALESCE(SUM(jumlah), 0) AS du
-        FROM bayar_du
-        WHERE no_induk = ? AND kelas = ? AND th_ajaran = ? AND (bayar_id IS NULL OR bayar_id <> ?)
-    ');
-    $stmtDu->bind_param('sssi', $noInduk, $kelasDu, $tahunAjaran, $excludePaymentId);
-    $stmtDu->execute();
-    $paid['du'] = (float)($stmtDu->get_result()->fetch_assoc()['du'] ?? 0);
-    $stmtDu->close();
-
-    $duTotal = daftar_ulang_total($db, $student, $kelasDu, $tahunAjaran);
+    $duTotal = 0.0;
+    $paid['du'] = 0.0;
+    if ($uangDu > 0) {
+        $bill = du_require_bill($db, $noInduk, (int)$bulan, (int)$tahun, true);
+        $duTotal = (float)$bill['nominal_tagihan'];
+        $billId = (int)$bill['id'];
+        $stmtDu = $db->prepare('SELECT COALESCE(SUM(jumlah), 0) AS du FROM bayar_du WHERE tagihan_daftar_ulang_id = ? AND (bayar_id IS NULL OR bayar_id <> ?)');
+        $stmtDu->bind_param('ii', $billId, $excludePaymentId);
+        $stmtDu->execute();
+        $paid['du'] = (float)($stmtDu->get_result()->fetch_assoc()['du'] ?? 0);
+        $stmtDu->close();
+    }
 
     $limits = [
         'pangkal' => ['label' => 'Uang Pangkal', 'total' => payable_total((float)$student['PANGKAL'], (float)$student['potong_pangkal'], (float)$student['tot_pangkal']), 'paid' => (float)($paid['pangkal'] ?? 0), 'input' => (float)($components['pangkal'] ?? 0)],
@@ -539,9 +543,7 @@ if ($aksi === 'input') {
     $koneksi->begin_transaction();
 
     try {
-        if (!in_array($payment_plan, ['monthly', 'annual'], true)) {
-            throw new RuntimeException('Jenis periode pembayaran tidak valid.');
-        }
+        if ($payment_plan !== 'monthly') throw new RuntimeException('Pembayaran banyak bulan sedang ditangguhkan. Gunakan transaksi bulanan.');
         $sistem_pembayaran = normalize_payment_method($sistem_pembayaran);
         validate_payment_amounts([
             'Pangkal' => $uang_pangkal, 'Bangunan' => $uang_bangunan,
@@ -554,6 +556,15 @@ if ($aksi === 'input') {
         if ($potongan_spp > $uang_spp) throw new RuntimeException('Potongan SPP tidak boleh melebihi pembayaran SPP.');
         $siswa_data = validate_student_and_komite($koneksi, $no_induk, $bulan_bayar, $tahun_bayar, $uang_komite);
         $kelas_siswa = $siswa_data['KELAS'];
+        $du_bill_id = null;
+        $tahun_ajaran_du = du_academic_year_label((int)$bulan_bayar, (int)$tahun_bayar);
+        $kelas_du = '';
+        if ($uang_du > 0) {
+            $du_bill = du_require_bill($koneksi, $no_induk, (int)$bulan_bayar, (int)$tahun_bayar, true);
+            $du_bill_id = (int)$du_bill['id'];
+            $kelas_du = (string)$du_bill['kelas'];
+            $tahun_ajaran_du = (string)$du_bill['tahun_ajaran'];
+        }
 
         $periods = [['bulan' => $bulan_bayar, 'tahun' => (string)$tahun_bayar]];
         $spp_parts = [$uang_spp];
@@ -652,8 +663,8 @@ if ($aksi === 'input') {
             if (!$isFirst) continue;
             save_biaya_lain($koneksi, $bayar_id, $biaya_lain);
             if ($uang_du > 0) {
-                $stmt_du = $koneksi->prepare("INSERT INTO bayar_du (bayar_id, no_induk, kelas, th_ajaran, jumlah) VALUES (?, ?, ?, ?, ?)");
-                $stmt_du->bind_param('isssd', $bayar_id, $no_induk, $kelas_du, $tahun_ajaran_du, $uang_du);
+                $stmt_du = $koneksi->prepare("INSERT INTO bayar_du (bayar_id, tagihan_daftar_ulang_id, no_induk, kelas, th_ajaran, jumlah) VALUES (?, ?, ?, ?, ?, ?)");
+                $stmt_du->bind_param('iisssd', $bayar_id, $du_bill_id, $no_induk, $kelas_du, $tahun_ajaran_du, $uang_du);
                 $stmt_du->execute();
                 $stmt_du->close();
             }
@@ -742,6 +753,15 @@ if ($aksi === 'update') {
         if ($potongan_spp > $uang_spp) throw new RuntimeException('Potongan SPP tidak boleh melebihi pembayaran SPP.');
         $allowedArchived = $no_induk === $old_bayar['NO_INDUK'] ? $old_bayar['NO_INDUK'] : null;
         $siswa_data = validate_student_and_komite($koneksi, $no_induk, $bulan_bayar, $tahun_bayar, $uang_komite, $id, $allowedArchived);
+        $du_bill_id = null;
+        $tahun_ajaran_du = du_academic_year_label((int)$bulan_bayar, (int)$tahun_bayar);
+        $kelas_du = '';
+        if ($uang_du > 0) {
+            $du_bill = du_require_bill($koneksi, $no_induk, (int)$bulan_bayar, (int)$tahun_bayar, true);
+            $du_bill_id = (int)$du_bill['id'];
+            $kelas_du = (string)$du_bill['kelas'];
+            $tahun_ajaran_du = (string)$du_bill['tahun_ajaran'];
+        }
         validate_component_remaining($koneksi, $no_induk, $bulan_bayar, (string)$tahun_bayar, [
             'pangkal' => $uang_pangkal,
             'bangunan' => $uang_bangunan,
@@ -796,8 +816,8 @@ if ($aksi === 'update') {
         $stmt_del_du->close();
 
         if ($uang_du > 0) {
-            $stmt_ins_du = $koneksi->prepare("INSERT INTO bayar_du (bayar_id, no_induk, kelas, th_ajaran, jumlah) VALUES (?, ?, ?, ?, ?)");
-            $stmt_ins_du->bind_param('isssd', $id, $no_induk, $kelas_du, $tahun_ajaran_du, $uang_du);
+            $stmt_ins_du = $koneksi->prepare("INSERT INTO bayar_du (bayar_id, tagihan_daftar_ulang_id, no_induk, kelas, th_ajaran, jumlah) VALUES (?, ?, ?, ?, ?, ?)");
+            $stmt_ins_du->bind_param('iisssd', $id, $du_bill_id, $no_induk, $kelas_du, $tahun_ajaran_du, $uang_du);
             $stmt_ins_du->execute();
             $stmt_ins_du->close();
         }

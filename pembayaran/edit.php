@@ -6,6 +6,7 @@ session_start();
 if (!isset($_SESSION['admin_id'])) { header('Location: ../login.php'); exit; }
 require_once '../koneksi.php';
 require_once '../includes/auth.php';
+require_once '../includes/daftar_ulang.php';
 requireRole(['admin', 'kasir']);
 
 $id = (int)($_GET['id'] ?? 0);
@@ -122,6 +123,27 @@ while ($paid = $du_paid_result->fetch_assoc()) {
 }
 $stmt_du_paid->close();
 
+$du_bills = [];
+$stmt_du_bills = $koneksi->prepare("SELECT tdu.id, tdu.no_induk, tdu.kelas_snapshot, tdu.tahun_ajaran_snapshot,
+        tdu.nominal_tagihan, tdu.status, ta.status AS tahun_status,
+        COALESCE(SUM(CASE WHEN bd.bayar_id IS NULL OR bd.bayar_id <> ? THEN bd.jumlah ELSE 0 END), 0) AS paid
+    FROM tagihan_daftar_ulang tdu
+    JOIN tahun_ajaran ta ON ta.id = tdu.tahun_ajaran_id
+    LEFT JOIN bayar_du bd ON bd.tagihan_daftar_ulang_id = tdu.id
+    GROUP BY tdu.id, tdu.no_induk, tdu.kelas_snapshot, tdu.tahun_ajaran_snapshot,
+             tdu.nominal_tagihan, tdu.status, ta.status");
+$stmt_du_bills->bind_param('i', $id);
+$stmt_du_bills->execute();
+$du_bill_result = $stmt_du_bills->get_result();
+while ($bill = $du_bill_result->fetch_assoc()) {
+    $du_bills[$bill['no_induk']][$bill['tahun_ajaran_snapshot']] = [
+        'id' => (int)$bill['id'], 'kelas' => (string)$bill['kelas_snapshot'],
+        'total' => (float)$bill['nominal_tagihan'], 'paid' => (float)$bill['paid'],
+        'status' => (string)$bill['status'], 'tahun_status' => (string)$bill['tahun_status'],
+    ];
+}
+$stmt_du_bills->close();
+
 $master_daftar_ulang = [];
 $master_du_result = $koneksi->query("
     SELECT kelas, th_ajaran, Jumlah
@@ -230,7 +252,7 @@ $selectedPaymentMethod = $d['sistem_pembayaran'] ?? 'VA';
   <meta name="description" content="Edit data transaksi pembayaran siswa." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="../assets/css/style.css?v=4.7" />
+  <link rel="stylesheet" href="../assets/css/style.css?v=5.5" />
   <!-- Prevent theme flash -->
   <script>(function(){var t=localStorage.getItem('spp_theme')||'dark';document.documentElement.setAttribute('data-theme',t);})();</script>
 </head>
@@ -293,7 +315,7 @@ $selectedPaymentMethod = $d['sistem_pembayaran'] ?? 'VA';
                     <?php endforeach; ?>
                   </select>
                   <select class="field-input field-select" name="tahun_bayar" id="tahun-bayar" style="max-width:90px">
-                    <?php for ($y = date('Y')-1; $y <= date('Y')+1; $y++): ?>
+                    <?php for ($y = min((int)date('Y')-7, (int)$d['TAHUN']); $y <= (int)date('Y'); $y++): ?>
                     <option <?= $d['TAHUN'] == $y ? 'selected' : '' ?>><?=$y?></option>
                     <?php endfor; ?>
                   </select>
@@ -352,6 +374,7 @@ $selectedPaymentMethod = $d['sistem_pembayaran'] ?? 'VA';
                   data-paid-sorga="<?= money_attr($s['paid_sorga']) ?>"
                   data-paid-infaq="<?= money_attr($s['paid_infaq']) ?>"
                   data-paid-du-periods="<?= htmlspecialchars(json_encode($du_paid_periods[$s['NO_INDUK']] ?? []), ENT_QUOTES, 'UTF-8') ?>"
+                  data-du-bills="<?= htmlspecialchars(json_encode($du_bills[$s['NO_INDUK']] ?? []), ENT_QUOTES, 'UTF-8') ?>"
                   data-paid-biaya-lain="<?= htmlspecialchars(json_encode($biaya_lain_paid[$s['NO_INDUK']] ?? []), ENT_QUOTES, 'UTF-8') ?>">
                   <?= htmlspecialchars($s['NAMA']) ?> (Kelas <?= htmlspecialchars($s['KELAS']) ?>)
                 </option>
@@ -515,6 +538,7 @@ $selectedPaymentMethod = $d['sistem_pembayaran'] ?? 'VA';
 
           <input type="hidden" id="kelas-du" name="kelas_du" value="<?= htmlspecialchars(preg_replace('/\D+/', '', (string)$d['KELAS'])) ?>" />
           <input type="hidden" id="tahun-ajaran-du" name="tahun_ajaran_du" value="<?= htmlspecialchars($selectedAcademicYear) ?>" />
+          <p class="field-hint du-context-label" id="du-context-label">Daftar Ulang mengikuti bulan dan tahun pembayaran yang dipilih.</p>
           <p class="field-hint du-master-warning" id="du-master-warning" hidden></p>
 
           <!-- Catatan -->
@@ -539,14 +563,14 @@ $selectedPaymentMethod = $d['sistem_pembayaran'] ?? 'VA';
   </div>
 
   <script>
-    window.sppDaftarUlangMasters = <?= json_encode($master_daftar_ulang, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT) ?>;
-    window.sppDaftarUlangHasMasters = <?= $has_master_daftar_ulang ? 'true' : 'false' ?>;
+    window.sppDaftarUlangMasters = {};
+    window.sppDaftarUlangHasMasters = true;
     // Pre-fill total on load
     window.addEventListener('DOMContentLoaded', function() {
       updateTotal();
     });
   </script>
-  <script src="../assets/js/app.js?v=4.5"></script>
+  <script src="../assets/js/app.js?v=4.7"></script>
 </body>
 </html>
 

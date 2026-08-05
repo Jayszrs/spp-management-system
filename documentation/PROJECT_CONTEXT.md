@@ -253,23 +253,25 @@ Schema ini bersifat destruktif untuk sebagian tabel karena memakai `DROP TABLE`.
 2. Periksa nilai `siswa.KELAS`. Label lama maksimal 5 karakter akan dipertahankan untuk kompatibilitas; siswa baru tetap dibatasi kelas `1` sampai `6`.
 3. Jalankan `sql/add_master_biaya_lain.sql`.
 4. Jalankan `sql/add_master_daftar_ulang.sql`.
-5. Jalankan `sql/add_student_advanced.sql`.
-6. Jalankan `sql/add_payment_references.sql`.
-7. Jalankan `sql/add_payment_method.sql`.
-8. Jalankan `sql/verify_schema.sql` dan uji aplikasi.
+5. Jalankan `sql/add_academic_year_billing.sql`.
+6. Jalankan `sql/add_student_advanced.sql`.
+7. Jalankan `sql/add_payment_references.sql`.
+8. Jalankan `sql/add_payment_method.sql`.
+9. Jalankan `sql/verify_schema.sql` dan uji aplikasi.
 
 Contoh PowerShell:
 
 ```powershell
 Get-Content sql\add_master_biaya_lain.sql -Raw | C:\xampp\mysql\bin\mysql.exe -u root
 Get-Content sql\add_master_daftar_ulang.sql -Raw | C:\xampp\mysql\bin\mysql.exe -u root
+Get-Content sql\add_academic_year_billing.sql -Raw | C:\xampp\mysql\bin\mysql.exe -u root
 Get-Content sql\add_student_advanced.sql -Raw | C:\xampp\mysql\bin\mysql.exe -u root
 Get-Content sql\add_payment_references.sql -Raw | C:\xampp\mysql\bin\mysql.exe -u root
 Get-Content sql\add_payment_method.sql -Raw | C:\xampp\mysql\bin\mysql.exe -u root
 Get-Content sql\verify_schema.sql -Raw | C:\xampp\mysql\bin\mysql.exe -u root
 ```
 
-Seluruh migrasi bertahap dirancang idempotent. Migrasi siswa melakukan preflight dan berhenti bila menemukan kelas kosong atau lebih dari 5 karakter. Label kelas legacy dipertahankan pada upgrade, tetapi siswa baru tetap dibatasi kelas `1` sampai `6`; constraint kelas SD hanya ditambahkan bila seluruh data sudah sesuai. Migrasi biaya lain menyalin data legacy secara idempotent melalui `legacy_key` dan tidak mengubah `bayar.total_jumlah`. Migrasi daftar ulang membuat/menormalkan tabel `Daftar_ulang`, menghapus duplikat kelas+tahun ajaran dengan mempertahankan id terbaru, lalu menambahkan unique key resmi. Migrasi relasi pembayaran menambahkan kolom, index, dan foreign key tanpa menghubungkan histori lama: data lama tetap `payment_link_version=0` dan `bayar_id=NULL` sampai direkonsiliasi manual. Migrasi sistem pembayaran menambahkan default `VA` untuk transaksi lama.
+Seluruh migrasi bertahap dirancang idempotent. Migrasi siswa melakukan preflight dan berhenti bila menemukan kelas kosong atau lebih dari 5 karakter. Migrasi tahun ajaran menambahkan penempatan dan tagihan siswa, lalu menghubungkan histori `bayar_du` yang memiliki kelas+tahun ajaran valid tanpa mengubah nominal transaksi. Tahun ajaran memakai batas Juli–Juni dan tagihan terbit menjadi sumber saldo Daftar Ulang baru. Migrasi relasi pembayaran lain tetap mempertahankan data legacy yang belum dapat dibuktikan relasinya.
 
 ## 9. Konvensi Keamanan
 

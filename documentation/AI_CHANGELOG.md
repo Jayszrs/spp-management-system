@@ -13,6 +13,31 @@ File ini mencatat perubahan proyek secara reverse chronological. Baca [PROJECT_C
 - Jangan menghapus atau menulis ulang entri lama. Tambahkan entri koreksi bila diperlukan.
 - Perubahan implementasi dan entri changelog wajib masuk commit yang sama.
 
+## 2026-08-05 - Tagihan Daftar Ulang Berbasis Tahun Ajaran
+
+**AI/Aktor:** Codex berbasis GPT-5, bersama pemilik proyek
+
+**Tujuan:** Memisahkan tarif master dari tagihan siswa, menyimpan kelas per tahun ajaran Juli–Juni, dan menghubungkan cicilan Daftar Ulang ke tagihan yang diterbitkan.
+
+**Perubahan fitur dan perilaku:**
+
+- Master Daftar Ulang mengelola enam tarif kelas, pratinjau kenaikan kelas, status tahun ajaran, dan penerbitan tagihan massal.
+- Input/edit pembayaran menghitung tahun ajaran dari periode pilihan, mengambil kelas dan saldo tagihan dari server, serta tidak mempercayai hidden field konteks DU.
+- Riwayat Daftar Ulang sekarang menampilkan tagihan belum bayar, cicilan, dan lunas.
+- Periode tunggakan dapat dibayar; periode masa depan ditolak.
+- Mode tahunan Januari–Desember ditangguhkan untuk transaksi baru, tanpa menghapus histori batch lama.
+
+**Database dan migrasi:**
+
+- Menambahkan tabel tahun ajaran, penempatan, tagihan, audit DU, dan relasi tagihan pada `bayar_du` melalui `sql/add_academic_year_billing.sql`.
+- Migrasi melakukan backfill aman untuk master, penempatan, tagihan, dan pembayaran DU lama serta dapat dijalankan ulang.
+
+**Verifikasi:**
+
+- Migrasi dijalankan dua kali dan seluruh pemeriksaan `sql/verify_schema.sql` berstatus `OK`.
+- Regression test mencakup batas Juni/Juli, penerbitan idempoten, cicilan, dan pemulihan saldo setelah hapus.
+- Halaman master, input, edit, serta riwayat dimuat melalui Apache tanpa fatal error; request tahunan dan periode masa depan ditolak server.
+
 ## 2026-08-04 - Tahun Ajaran Sistem dan Cicilan Daftar Ulang
 
 **AI/Aktor:** Codex berbasis GPT-5, bersama pemilik proyek

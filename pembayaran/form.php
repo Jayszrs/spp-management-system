@@ -6,6 +6,7 @@ session_start();
 if (!isset($_SESSION['admin_id'])) { header('Location: ../login.php'); exit; }
 require_once '../koneksi.php';
 require_once '../includes/auth.php';
+require_once '../includes/daftar_ulang.php';
 requireRole(['admin', 'kasir']);
 
 $siswa_sql = "
@@ -66,6 +67,23 @@ $du_paid_result = $koneksi->query("
 while ($paid = $du_paid_result->fetch_assoc()) {
     $periodKey = trim((string)$paid['kelas']) . '|' . trim((string)$paid['th_ajaran']);
     $du_paid_periods[$paid['no_induk']][$periodKey] = (float)$paid['paid_du'];
+}
+
+$du_bills = [];
+$du_bill_result = $koneksi->query("SELECT tdu.id, tdu.no_induk, tdu.kelas_snapshot, tdu.tahun_ajaran_snapshot,
+        tdu.nominal_tagihan, tdu.status, ta.status AS tahun_status,
+        COALESCE(SUM(bd.jumlah), 0) AS paid
+    FROM tagihan_daftar_ulang tdu
+    JOIN tahun_ajaran ta ON ta.id = tdu.tahun_ajaran_id
+    LEFT JOIN bayar_du bd ON bd.tagihan_daftar_ulang_id = tdu.id
+    GROUP BY tdu.id, tdu.no_induk, tdu.kelas_snapshot, tdu.tahun_ajaran_snapshot,
+             tdu.nominal_tagihan, tdu.status, ta.status");
+while ($bill = $du_bill_result->fetch_assoc()) {
+    $du_bills[$bill['no_induk']][$bill['tahun_ajaran_snapshot']] = [
+        'id' => (int)$bill['id'], 'kelas' => (string)$bill['kelas_snapshot'],
+        'total' => (float)$bill['nominal_tagihan'], 'paid' => (float)$bill['paid'],
+        'status' => (string)$bill['status'], 'tahun_status' => (string)$bill['tahun_status'],
+    ];
 }
 
 $master_daftar_ulang = [];
@@ -143,7 +161,7 @@ unset($_SESSION['flash']);
   <meta name="description" content="Form input transaksi pembayaran siswa." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="../assets/css/style.css?v=4.7" />
+  <link rel="stylesheet" href="../assets/css/style.css?v=5.5" />
   <!-- Prevent theme flash -->
   <script>(function(){var t=localStorage.getItem('spp_theme')||'dark';document.documentElement.setAttribute('data-theme',t);})();</script>
 </head>
@@ -197,13 +215,11 @@ unset($_SESSION['flash']);
           <!-- Tanggal + Jumlah Box -->
           <div class="top-info-row">
             <div class="info-group">
+              <input type="hidden" name="payment_plan" value="monthly" />
               <div class="field-row">
-                <label class="field-label" for="payment-plan">Jenis Pembayaran SPP</label>
-                <select class="field-input field-select" id="payment-plan" name="payment_plan" required>
-                  <option value="monthly" selected>Bulanan — 1 struk</option>
-                  <option value="annual">Tahunan — 12 struk</option>
-                </select>
-                <span class="field-hint annual-payment-hint" id="annual-payment-hint" hidden>SPP Januari–Desember dibagi otomatis menjadi 12 transaksi dan 12 halaman struk.</span>
+                <span class="field-label">Jenis Transaksi</span>
+                <div class="field-input tbl-readonly">Pembayaran per bulan · 1 struk</div>
+                <span class="field-hint">Pembayaran banyak bulan ditangguhkan sampai alur pemilihan periode barunya tersedia.</span>
               </div>
               <div class="field-row">
                 <label class="field-label" for="tgl-bayar">Tanggal Bayar</label>
@@ -227,7 +243,7 @@ unset($_SESSION['flash']);
                     ?>
                   </select>
                   <select class="field-input field-select" id="tahun-bayar" name="tahun_bayar" style="max-width:90px">
-                    <?php for ($y = date('Y')-1; $y <= date('Y')+1; $y++) echo "<option" . ($y == date('Y') ? ' selected' : '') . ">$y</option>"; ?>
+                    <?php for ($y = date('Y')-7; $y <= date('Y'); $y++) echo "<option" . ($y == date('Y') ? ' selected' : '') . ">$y</option>"; ?>
                   </select>
                 </div>
               </div>
@@ -282,6 +298,7 @@ unset($_SESSION['flash']);
                   data-paid-sorga="<?= money_attr($s['paid_sorga']) ?>"
                   data-paid-infaq="<?= money_attr($s['paid_infaq']) ?>"
                   data-paid-du-periods="<?= htmlspecialchars(json_encode($du_paid_periods[$s['NO_INDUK']] ?? []), ENT_QUOTES, 'UTF-8') ?>"
+                  data-du-bills="<?= htmlspecialchars(json_encode($du_bills[$s['NO_INDUK']] ?? []), ENT_QUOTES, 'UTF-8') ?>"
                   data-paid-biaya-lain="<?= htmlspecialchars(json_encode($biaya_lain_paid[$s['NO_INDUK']] ?? []), ENT_QUOTES, 'UTF-8') ?>">
                   <?= htmlspecialchars($s['NAMA']) ?> (Kelas <?= htmlspecialchars($s['KELAS']) ?>)
                 </option>
@@ -422,6 +439,7 @@ unset($_SESSION['flash']);
 
           <input type="hidden" id="kelas-du" name="kelas_du" value="" />
           <input type="hidden" id="tahun-ajaran-du" name="tahun_ajaran_du" value="<?= htmlspecialchars($activeAcademicYear) ?>" />
+          <p class="field-hint du-context-label" id="du-context-label">Daftar Ulang mengikuti bulan dan tahun pembayaran yang dipilih.</p>
           <p class="field-hint du-master-warning" id="du-master-warning" hidden></p>
 
           <!-- Catatan -->
@@ -454,10 +472,10 @@ unset($_SESSION['flash']);
   </div>
 
   <script>
-    window.sppDaftarUlangMasters = <?= json_encode($master_daftar_ulang, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT) ?>;
-    window.sppDaftarUlangHasMasters = <?= $has_master_daftar_ulang ? 'true' : 'false' ?>;
+    window.sppDaftarUlangMasters = {};
+    window.sppDaftarUlangHasMasters = true;
   </script>
-  <script src="../assets/js/app.js?v=4.5"></script>
+  <script src="../assets/js/app.js?v=4.7"></script>
 </body>
 </html>
 

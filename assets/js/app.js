@@ -220,8 +220,8 @@ function setDaftarUlangContext(kelas, tahunAjaran) {
 
 function syncDaftarUlangContextFromCurrentState() {
   const opt = selectedStudentOption();
-  const kelas = opt ? String(opt.dataset.kelas || '').match(/[1-6]/)?.[0] || '' : '';
-  setDaftarUlangContext(kelas, academicYearFromPaymentPeriod());
+  const bill = selectedDaftarUlangBill(opt);
+  setDaftarUlangContext(bill?.kelas || '', academicYearFromPaymentPeriod());
   return opt;
 }
 
@@ -252,19 +252,24 @@ function paidForPeriod(opt, key) {
 }
 
 function selectedDaftarUlangKey() {
-  const kelas = document.getElementById('kelas-du')?.value || document.querySelector('[name="kelas_du"]')?.value || '';
-  const tahun = document.getElementById('tahun-ajaran-du')?.value || document.querySelector('[name="tahun_ajaran_du"]')?.value || academicYearFromPaymentPeriod();
-  return kelas && tahun ? kelas + '|' + tahun : '';
+  return academicYearFromPaymentPeriod();
+}
+
+function selectedDaftarUlangBill(opt) {
+  if (!opt) return null;
+  const year = selectedDaftarUlangKey();
+  if (!year) return null;
+  try {
+    const bills = JSON.parse(opt.dataset.duBills || '{}');
+    const bill = bills[year] || null;
+    return bill && bill.status === 'open' ? bill : null;
+  } catch (_) {
+    return null;
+  }
 }
 
 function totalDaftarUlangForContext(opt) {
-  const fallbackTotal = datasetNumber(opt, 'total', 'du');
-  const periodKey = selectedDaftarUlangKey();
-  const masters = window.sppDaftarUlangMasters || {};
-  const hasMasters = window.sppDaftarUlangHasMasters === true;
-  const masterTotal = periodKey ? parseNumber(masters[periodKey] || 0) : 0;
-  if (hasMasters) return masterTotal > 0 ? masterTotal : 0;
-  return masterTotal > 0 ? masterTotal : fallbackTotal;
+  return parseNumber(selectedDaftarUlangBill(opt)?.total || 0);
 }
 
 function refreshDaftarUlangMasterWarning(opt) {
@@ -272,14 +277,18 @@ function refreshDaftarUlangMasterWarning(opt) {
   const input = document.getElementById('du-input');
   if (!warning && !input) return;
 
-  const hasMasters = window.sppDaftarUlangHasMasters === true;
   const periodKey = selectedDaftarUlangKey();
-  const masters = window.sppDaftarUlangMasters || {};
-  const masterTotal = periodKey ? parseNumber(masters[periodKey] || 0) : 0;
-  const isMissingMaster = !!opt && hasMasters && !!periodKey && masterTotal <= 0;
+  const bill = selectedDaftarUlangBill(opt);
+  const isMissingMaster = !!opt && !!periodKey && !bill;
+  const contextLabel = document.getElementById('du-context-label');
+  if (contextLabel) {
+    contextLabel.textContent = bill
+      ? 'Daftar Ulang · Tahun ajaran ' + periodKey + ' · Kelas ' + bill.kelas
+      : 'Daftar Ulang · Tahun ajaran ' + (periodKey || '-') + ' · tagihan belum tersedia';
+  }
 
   if (input) {
-    const missingMessage = 'Master daftar ulang untuk pilihan kelas dan tahun ajaran ini belum diatur.';
+    const missingMessage = 'Tagihan Daftar Ulang siswa untuk tahun ajaran ini belum diterbitkan.';
     input.readOnly = isMissingMaster;
     input.classList.toggle('tbl-readonly', isMissingMaster);
     if (isMissingMaster) {
@@ -298,21 +307,12 @@ function refreshDaftarUlangMasterWarning(opt) {
     return;
   }
 
-  const [kelas, tahun] = periodKey.split('|');
   warning.hidden = false;
-  warning.textContent = 'Master daftar ulang kelas ' + kelas + ' tahun ajaran ' + tahun + ' belum diatur. Lengkapi Master Daftar Ulang agar cicilan bisa dicatat.';
+  warning.textContent = 'Tagihan Daftar Ulang tahun ajaran ' + periodKey + ' belum tersedia untuk siswa ini. Periksa penempatan dan penerbitan di Master Daftar Ulang.';
 }
 
 function paidDaftarUlangForContext(opt) {
-  if (!opt) return 0;
-  const periodKey = selectedDaftarUlangKey();
-  if (!periodKey) return 0;
-  try {
-    const paidPeriods = JSON.parse(opt.dataset.paidDuPeriods || '{}');
-    return parseNumber(paidPeriods[periodKey] || 0);
-  } catch (_) {
-    return 0;
-  }
+  return parseNumber(selectedDaftarUlangBill(opt)?.paid || 0);
 }
 
 function setPaymentComponent(key, total, paid) {

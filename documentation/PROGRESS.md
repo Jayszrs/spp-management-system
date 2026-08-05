@@ -15,7 +15,7 @@ Dokumen kerja ini melacak pekerjaan teknis yang sedang dan sudah dilakukan. Perb
 | --- | --- | --- |
 | Database pengembangan | Tersedia | `db_spp` lokal; saat migrasi ini diterapkan, tabel transaksi pembayaran dan tabungan tidak berisi data. |
 | Instalasi baru | Siap | `sql/schema.sql` sudah memuat relasi pembayaran aman. File ini destruktif dan tidak boleh dijalankan pada database berisi data. |
-| Upgrade database berhistori | Siap | Jalankan migrasi bertahap setelah backup, termasuk `sql/add_master_daftar_ulang.sql`. Migrasi bersifat idempoten dan tidak melakukan backfill relasi legacy. |
+| Upgrade database berhistori | Siap | Jalankan migrasi bertahap setelah backup, termasuk `sql/add_academic_year_billing.sql`. Migrasi idempoten dan melakukan backfill DU yang memiliki konteks valid. |
 | Pemeriksaan schema | Siap | Jalankan `sql/verify_schema.sql`; hasil harus seluruhnya `OK`. |
 
 ## Register temuan dan progres
@@ -31,7 +31,9 @@ Dokumen kerja ini melacak pekerjaan teknis yang sedang dan sudah dilakukan. Perb
 | PAY-001 | Input pembayaran sebelumnya belum mencegah komponen yang sudah terbayar lebih dari total tagihan. | Tinggi | Selesai | Form menampilkan alert, sisa dianggap nol, input komponen dikunci, dan backend menolak input yang melebihi sisa. |
 | PAY-002 | Biaya lain sebelumnya harus lunas sesuai nominal master dan belum mendukung cicilan. | Tinggi | Selesai | Baris biaya lain menampilkan `Total`, `Sudah`, `Sisa`, dan `Bayar`; nominal snapshot menyimpan nilai cicilan transaksi. |
 | PAY-003 | Reset form masih dapat meninggalkan alert overpayment. | Sedang | Selesai | Reset membersihkan alert, state row overpaid, custom validity, dan baris biaya lain. |
-| PAY-004 | Pencatatan daftar ulang belum memakai master `Daftar_ulang` secara kontekstual. | Tinggi | Selesai | Nominal DU memakai master per `kelas + th_ajaran` bila tersedia, fallback ke data siswa bila master kosong, dan sisa DU dihitung per `NO_INDUK + kelas + th_ajaran`. |
+| PAY-004 | Pencatatan daftar ulang belum memakai tagihan siswa secara kontekstual. | Tinggi | Selesai | Backend menghitung tahun ajaran dari periode, mengambil tagihan server-side, dan menghitung sisa melalui relasi `bayar_du.tagihan_daftar_ulang_id`. |
+| PAY-006 | Master DU belum menerbitkan kewajiban nyata sehingga siswa nol pembayaran tidak muncul. | Kritis | Selesai | Tahun ajaran, penempatan, dan tagihan materialized ditambahkan; riwayat membaca tagihan lalu `LEFT JOIN` pembayaran. |
+| PAY-007 | Mode tahunan Januari–Desember melintasi dua tahun ajaran. | Tinggi | Selesai | Opsi transaksi baru ditangguhkan dan backend menolak `annual`; histori batch lama tetap dapat dibaca dan dicetak. |
 | PAY-005 | Daftar pembayaran, dashboard, dan data siswa masih mengharuskan klik tombol edit. | Rendah | Selesai | Baris tabel dapat diklik langsung untuk masuk edit; tombol aksi tetap berjalan sendiri. |
 | PAY-006 | Master daftar ulang belum punya CRUD admin dan belum menjadi sumber tarif resmi. | Tinggi | Selesai | `master_daftar_ulang.php`, unique key `Daftar_ulang(th_ajaran, kelas)`, migrasi idempoten, dropdown tahun ajaran sistem Juli-Juni, dan validasi backend pembayaran DU sudah disiapkan. |
 | PAY-007 | Edit pembayaran dari riwayat belum otomatis mengikat data siswa dan histori terbaru saat halaman dibuka. | Tinggi | Selesai | Edit sekarang auto-bind konteks siswa, mengecualikan transaksi aktif dari histori, memakai master/tarif terbaru, dan query histori edit memakai prepared statement. |

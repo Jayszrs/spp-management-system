@@ -92,6 +92,16 @@ FROM (
              AND COLUMN_NAME = 'payment_batch_token'
          )
   UNION ALL
+  SELECT 'table.tahun_ajaran', EXISTS(SELECT 1 FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='tahun_ajaran')
+  UNION ALL
+  SELECT 'table.siswa_tahun_ajaran', EXISTS(SELECT 1 FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='siswa_tahun_ajaran')
+  UNION ALL
+  SELECT 'table.tagihan_daftar_ulang', EXISTS(SELECT 1 FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='tagihan_daftar_ulang')
+  UNION ALL
+  SELECT 'table.daftar_ulang_audit_log', EXISTS(SELECT 1 FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='daftar_ulang_audit_log')
+  UNION ALL
+  SELECT 'bayar_du.tagihan_daftar_ulang_id', EXISTS(SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='bayar_du' AND COLUMN_NAME='tagihan_daftar_ulang_id')
+  UNION ALL
   SELECT 'bayar_spp_periode',
          EXISTS(
            SELECT 1 FROM information_schema.TABLES
@@ -139,6 +149,21 @@ FROM (
            WHERE TABLE_SCHEMA = DATABASE() AND LOWER(TABLE_NAME) = 'daftar_ulang'
              AND INDEX_NAME = 'uk_daftar_ulang_period_class' AND NON_UNIQUE = 0
          )
+  UNION ALL
+  SELECT 'uk_siswa_tahun_ajaran', EXISTS(
+    SELECT 1 FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=DATABASE()
+      AND TABLE_NAME='siswa_tahun_ajaran' AND INDEX_NAME='uk_siswa_tahun_ajaran' AND NON_UNIQUE=0
+  )
+  UNION ALL
+  SELECT 'uk_tagihan_du_siswa_tahun', EXISTS(
+    SELECT 1 FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=DATABASE()
+      AND TABLE_NAME='tagihan_daftar_ulang' AND INDEX_NAME='uk_tagihan_du_siswa_tahun' AND NON_UNIQUE=0
+  )
+  UNION ALL
+  SELECT 'fk_bayar_du_tagihan', EXISTS(
+    SELECT 1 FROM information_schema.TABLE_CONSTRAINTS WHERE CONSTRAINT_SCHEMA=DATABASE()
+      AND TABLE_NAME='bayar_du' AND CONSTRAINT_NAME='fk_bayar_du_tagihan' AND CONSTRAINT_TYPE='FOREIGN KEY'
+  )
   UNION ALL
   SELECT 'idx_siswa_status_kelas_nama',
          EXISTS(

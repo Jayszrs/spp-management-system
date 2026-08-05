@@ -2820,6 +2820,33 @@ input[list]::-webkit-calendar-picker-indicator { display: none !important; }
 .recap-report-shell .class-recap-table thead .recap-identity-head:nth-child(3) { left: 334px; width: 122px; min-width: 122px; box-shadow: none; }
 .recap-mobile-list { display: none; }
 
+/* Tahun ajaran dan Master Daftar Ulang */
+.du-master-hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+}
+.du-master-hero h1 { margin: 5px 0 6px; color: var(--text-primary); font-size: clamp(26px, 4vw, 40px); }
+.du-master-hero p { margin: 0; color: var(--text-muted); }
+.du-master-year-tools { display: flex; align-items: center; gap: 12px; }
+.du-master-year-tools select { min-width: 225px; }
+.du-rate-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.du-rate-grid .field-row {
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: rgba(15,107,72,.035);
+}
+.du-rate-grid small { color: var(--text-muted); font-size: 11px; }
+.du-context-label { margin: 10px 0 0; color: var(--green); font-weight: 750; }
+@media (max-width: 760px) {
+  .du-master-hero { align-items: flex-start; flex-direction: column; }
+  .du-master-year-tools { width: 100%; align-items: stretch; flex-direction: column; }
+  .du-master-year-tools select { width: 100%; min-width: 0; }
+  .du-rate-grid { grid-template-columns: 1fr; }
+}
+
 /* Riwayat pembayaran lengkap per siswa */
 .student-history-card { overflow: hidden; }
 .history-back-link {

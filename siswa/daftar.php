@@ -3,6 +3,7 @@ session_start();
 if (!isset($_SESSION['admin_id'])) { header('Location: ../login.php'); exit; }
 require_once '../koneksi.php';
 require_once '../includes/auth.php';
+require_once '../includes/daftar_ulang.php';
 requireRole(['admin']);
 
 if (empty($_SESSION['csrf_student'])) {
@@ -73,6 +74,19 @@ function write_student_audit(mysqli $db, int $studentId, string $noInduk, string
 function student_redirect(string $location = 'daftar.php'): void {
     header('Location: ' . $location);
     exit;
+}
+
+function add_student_to_current_academic_year(mysqli $db, string $noInduk, string $class): void {
+    $label = du_current_academic_year();
+    $stmt = $db->prepare('SELECT id, status FROM tahun_ajaran WHERE label = ? LIMIT 1 FOR UPDATE');
+    $stmt->bind_param('s', $label); $stmt->execute();
+    $year = $stmt->get_result()->fetch_assoc(); $stmt->close();
+    if (!$year) return;
+    $yearId = (int)$year['id'];
+    $stmt = $db->prepare("INSERT INTO siswa_tahun_ajaran (tahun_ajaran_id,no_induk,kelas,status) VALUES (?,?,?,'aktif') ON DUPLICATE KEY UPDATE id=LAST_INSERT_ID(id)");
+    $stmt->bind_param('iss', $yearId, $noInduk, $class); $stmt->execute();
+    $placementId = (int)$db->insert_id; $stmt->close();
+    if ($placementId > 0 && in_array($year['status'], ['published','closed'], true)) du_create_bill_for_placement($db, $placementId);
 }
 
 function fail_student(string $message, array $oldInput, string $location): void {
@@ -221,6 +235,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $stmt->execute();
                 $id = $koneksi->insert_id;
                 $stmt->close();
+                add_student_to_current_academic_year($koneksi, $noInduk, $class);
                 $after = find_student($koneksi, $id);
                 write_student_audit($koneksi, $id, $noInduk, 'tambah', null, student_snapshot($after));
                 $successMessage = "Siswa $name berhasil ditambahkan.";

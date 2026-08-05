@@ -35,37 +35,38 @@ if (!in_array($filterStatus, $allowedStatuses, true)) $filterStatus = '';
 if ($filterYear !== '' && !preg_match('/^\d{4}\/\d{4}$/', $filterYear)) $filterYear = '';
 
 $academicYears = [];
-$yearResult = $koneksi->query("SELECT th_ajaran FROM Daftar_ulang WHERE th_ajaran IS NOT NULL AND th_ajaran <> '' UNION SELECT th_ajaran FROM bayar_du WHERE th_ajaran IS NOT NULL AND th_ajaran <> '' ORDER BY th_ajaran DESC");
+$yearResult = $koneksi->query("SELECT label FROM tahun_ajaran WHERE status IN ('published','closed') ORDER BY label DESC");
 while ($year = $yearResult->fetch_row()) $academicYears[] = $year[0];
 
-$where = ["bd.bayar_id IS NOT NULL", "bd.jumlah > 0"];
+$where = ["tdu.status = 'open'"];
 $params = [];
 $types = '';
 if ($search !== '') {
     $like = '%' . $search . '%';
-    $where[] = '(s.NO_INDUK LIKE ? OR s.NAMA LIKE ?)';
+    $where[] = '(tdu.no_induk LIKE ? OR s.NAMA LIKE ?)';
     $params[] = $like; $params[] = $like; $types .= 'ss';
 }
 if ($filterClass !== '') {
-    $where[] = 'bd.kelas = ?';
+    $where[] = 'tdu.kelas_snapshot = ?';
     $params[] = $filterClass; $types .= 's';
 }
 if ($filterYear !== '') {
-    $where[] = 'bd.th_ajaran = ?';
+    $where[] = 'ta.label = ?';
     $params[] = $filterYear; $types .= 's';
 }
 
 $sql = "
-    SELECT bd.id AS detail_id, bd.bayar_id, bd.no_induk, bd.kelas, bd.th_ajaran, bd.jumlah,
+    SELECT tdu.id AS tagihan_id, bd.id AS detail_id, bd.bayar_id, tdu.no_induk,
+           tdu.kelas_snapshot AS kelas, ta.label AS th_ajaran, COALESCE(bd.jumlah,0) AS jumlah,
            b.TGL_BYR, b.BULAN, b.TAHUN, b.sistem_pembayaran, b.payment_link_version,
-           s.NAMA, s.KELAS AS kelas_siswa, s.DAFTAR_ULANG, s.potong_du, s.tot_du,
-           COALESCE(m.Jumlah, 0) AS master_total
-    FROM bayar_du bd
-    JOIN bayar b ON b.id = bd.bayar_id
-    JOIN siswa s ON s.NO_INDUK = bd.no_induk
-    LEFT JOIN Daftar_ulang m ON m.kelas = bd.kelas AND m.th_ajaran = bd.th_ajaran
+           s.NAMA, s.KELAS AS kelas_siswa, tdu.nominal_tagihan AS master_total
+    FROM tagihan_daftar_ulang tdu
+    JOIN tahun_ajaran ta ON ta.id = tdu.tahun_ajaran_id
+    JOIN siswa s ON s.NO_INDUK = tdu.no_induk
+    LEFT JOIN bayar_du bd ON bd.tagihan_daftar_ulang_id = tdu.id
+    LEFT JOIN bayar b ON b.id = bd.bayar_id
     WHERE " . implode(' AND ', $where) . "
-    ORDER BY b.TGL_BYR DESC, b.id DESC
+    ORDER BY ta.label DESC, CAST(tdu.kelas_snapshot AS UNSIGNED), s.NAMA, b.TGL_BYR DESC, b.id DESC
 ";
 $stmt = $koneksi->prepare($sql);
 if ($params) $stmt->bind_param($types, ...$params);
@@ -75,25 +76,24 @@ $stmt->close();
 
 $groups = [];
 foreach ($rawRows as $row) {
-    $key = $row['no_induk'] . '|' . $row['kelas'] . '|' . $row['th_ajaran'];
+    $key = (string)$row['tagihan_id'];
     if (!isset($groups[$key])) {
-        $fallback = (float)$row['tot_du'];
-        if ($fallback <= 0) $fallback = max(0, (float)$row['DAFTAR_ULANG'] - (float)$row['potong_du']);
         $groups[$key] = [
             'no_induk' => $row['no_induk'], 'nama' => $row['NAMA'], 'kelas' => $row['kelas'],
             'kelas_siswa' => $row['kelas_siswa'], 'th_ajaran' => $row['th_ajaran'],
-            'total' => (float)$row['master_total'] > 0 ? (float)$row['master_total'] : $fallback,
+            'total' => (float)$row['master_total'],
             'paid' => 0.0, 'transactions' => [],
         ];
     }
-    $row['full_date'] = du_full_date($row['TGL_BYR']);
-    $groups[$key]['paid'] += (float)$row['jumlah'];
-    $groups[$key]['transactions'][] = $row;
+    if (!empty($row['detail_id'])) {
+        $row['full_date'] = du_full_date($row['TGL_BYR']);
+        $groups[$key]['paid'] += (float)$row['jumlah'];
+        $groups[$key]['transactions'][] = $row;
+    }
 }
 
 $visibleGroups = [];
 foreach ($groups as $group) {
-    if ($group['total'] <= 0) $group['total'] = $group['paid'];
     $group['remaining'] = max(0, $group['total'] - $group['paid']);
     $group['status'] = $group['remaining'] <= 0.001 ? 'lunas' : 'cicilan';
     if ($filterStatus !== '' && $group['status'] !== $filterStatus) continue;
@@ -120,7 +120,7 @@ unset($_SESSION['flash']);
   <meta name="description" content="Rekap pembayaran dan cicilan daftar ulang siswa." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="../assets/css/style.css?v=5.0" />
+  <link rel="stylesheet" href="../assets/css/style.css?v=5.5" />
   <script>(function(){var t=localStorage.getItem('spp_theme')||'dark';document.documentElement.setAttribute('data-theme',t);})();</script>
 </head>
 <body>
@@ -161,7 +161,7 @@ unset($_SESSION['flash']);
           <table class="payment-table responsive-table du-history-table">
             <thead><tr><th>No</th><th>Siswa</th><th>Kelas / Tahun Ajaran</th><th>Tagihan</th><th>Terbayar</th><th>Sisa</th><th>Status</th><th>Rincian Pembayaran</th></tr></thead>
             <tbody>
-            <?php if (!$visibleGroups): ?><tr><td colspan="8" class="text-center recap-empty">Belum ada pembayaran daftar ulang untuk filter ini.</td></tr>
+            <?php if (!$visibleGroups): ?><tr><td colspan="8" class="text-center recap-empty">Belum ada tagihan Daftar Ulang yang diterbitkan untuk filter ini.</td></tr>
             <?php else: foreach ($visibleGroups as $index => $group): ?>
               <tr>
                 <td data-label="No"><?= $index + 1 ?></td>
