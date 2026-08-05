@@ -13,6 +13,34 @@ File ini mencatat perubahan proyek secara reverse chronological. Baca [PROJECT_C
 - Jangan menghapus atau menulis ulang entri lama. Tambahkan entri koreksi bila diperlukan.
 - Perubahan implementasi dan entri changelog wajib masuk commit yang sama.
 
+## 2026-08-06 - Pagination Riwayat Daftar Ulang
+
+**AI/Aktor:** Codex berbasis GPT-5, bersama pemilik proyek
+
+**Tujuan:** Menjaga halaman Riwayat Daftar Ulang tetap ringan dan mudah dinavigasi ketika data sekolah mencapai ratusan siswa.
+
+**Perubahan fitur dan perilaku:**
+
+- Riwayat memakai pagination server-side per tagihan siswa/tahun ajaran dengan pilihan 25, 50, atau 100 baris.
+- Ringkasan jumlah siswa, tagihan, pembayaran, dan sisa tetap menghitung seluruh hasil filter, bukan hanya halaman aktif.
+- Detail cicilan diambil sekaligus hanya untuk tagihan pada halaman aktif; pencarian, kelas, tahun ajaran, status, dan ukuran halaman dipertahankan saat navigasi.
+- Navigasi desktop menyediakan Awal, Sebelumnya, nomor halaman, Berikutnya, dan Akhir; tampilan mobile diringkas menjadi tiga kontrol.
+
+**Database dan migrasi:**
+
+- Tidak ada perubahan schema atau data permanen. Indeks tagihan dan relasi cicilan yang sudah tersedia digunakan kembali.
+
+**Kompatibilitas:**
+
+- Urutan, filter, status Lunas/Belum Lunas, rincian transaksi, cetak, dan edit tetap dipertahankan.
+- Parameter `page` dinormalisasi ke rentang valid dan `per_page` dibatasi pada `25`, `50`, atau `100`.
+
+**Verifikasi:**
+
+- Fixture sementara 105 tagihan menguji halaman 25/50/100, nomor global, tanpa duplikasi, ringkasan global, filter status, detail halaman aktif, preservasi query, serta parameter invalid; seluruh fixture kemudian dibersihkan.
+- Regression test database 105 tagihan berjalan dalam transaction dan di-rollback.
+- Syntax check, HTTP terautentikasi, tampilan data kosong/satu halaman, dan regression pembayaran Daftar Ulang berhasil.
+
 ## 2026-08-06 - Tarif Manual Makan, Sorga, dan Infaq
 
 **AI/Aktor:** Codex berbasis GPT-5, bersama pemilik proyek

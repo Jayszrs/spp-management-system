@@ -24,10 +24,20 @@ function du_full_date($value): array {
     ];
 }
 
+function du_history_page_url(array $query, int $page): string {
+    $query['page'] = max(1, $page);
+    return 'riwayat_daftar_ulang.php?' . http_build_query($query);
+}
+
 $search = trim((string)($_GET['q'] ?? ''));
 $filterClass = trim((string)($_GET['kelas'] ?? ''));
 $filterYear = trim((string)($_GET['tahun_ajaran'] ?? ''));
 $filterStatus = trim((string)($_GET['status'] ?? ''));
+$allowedPageSizes = [25, 50, 100];
+$requestedPage = (int)($_GET['page'] ?? 1);
+$requestedPageSize = (int)($_GET['per_page'] ?? 25);
+$perPage = in_array($requestedPageSize, $allowedPageSizes, true) ? $requestedPageSize : 25;
+$page = max(1, $requestedPage);
 $allowedClasses = ['1', '2', '3', '4', '5', '6'];
 $allowedStatuses = ['', 'lunas', 'cicilan'];
 if (!in_array($filterClass, array_merge([''], $allowedClasses), true)) $filterClass = '';
@@ -55,57 +65,110 @@ if ($filterYear !== '') {
     $params[] = $filterYear; $types .= 's';
 }
 
-$sql = "
-    SELECT tdu.id AS tagihan_id, bd.id AS detail_id, bd.bayar_id, tdu.no_induk,
-           tdu.kelas_snapshot AS kelas, ta.label AS th_ajaran, COALESCE(bd.jumlah,0) AS jumlah,
-           b.TGL_BYR, b.BULAN, b.TAHUN, b.sistem_pembayaran, b.payment_link_version,
-           s.NAMA, s.KELAS AS kelas_siswa, tdu.nominal_tagihan AS master_total
+$aggregateSql = "
+    SELECT tdu.id AS tagihan_id, tdu.no_induk, tdu.kelas_snapshot AS kelas,
+           ta.label AS th_ajaran, s.NAMA AS nama, s.KELAS AS kelas_siswa,
+           tdu.nominal_tagihan AS master_total,
+           COALESCE(SUM(bd.jumlah), 0) AS paid,
+           GREATEST(0, tdu.nominal_tagihan - COALESCE(SUM(bd.jumlah), 0)) AS remaining,
+           CASE WHEN tdu.nominal_tagihan - COALESCE(SUM(bd.jumlah), 0) <= 0.001
+                THEN 'lunas' ELSE 'cicilan' END AS payment_status
     FROM tagihan_daftar_ulang tdu
     JOIN tahun_ajaran ta ON ta.id = tdu.tahun_ajaran_id
     JOIN siswa s ON s.NO_INDUK = tdu.no_induk
     LEFT JOIN bayar_du bd ON bd.tagihan_daftar_ulang_id = tdu.id
-    LEFT JOIN bayar b ON b.id = bd.bayar_id
     WHERE " . implode(' AND ', $where) . "
-    ORDER BY ta.label DESC, CAST(tdu.kelas_snapshot AS UNSIGNED), s.NAMA, b.TGL_BYR DESC, b.id DESC
+    GROUP BY tdu.id, tdu.no_induk, tdu.kelas_snapshot, ta.label, s.NAMA,
+             s.KELAS, tdu.nominal_tagihan
 ";
-$stmt = $koneksi->prepare($sql);
+$havingSql = '';
+if ($filterStatus === 'lunas') $havingSql = ' HAVING remaining <= 0.001';
+if ($filterStatus === 'cicilan') $havingSql = ' HAVING remaining > 0.001';
+
+$summarySql = "SELECT COUNT(*) AS students,
+        COALESCE(SUM(master_total), 0) AS bill,
+        COALESCE(SUM(paid), 0) AS paid,
+        COALESCE(SUM(remaining), 0) AS remaining
+    FROM (" . $aggregateSql . $havingSql . ") filtered_bills";
+$stmt = $koneksi->prepare($summarySql);
 if ($params) $stmt->bind_param($types, ...$params);
 $stmt->execute();
-$rawRows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+$summary = $stmt->get_result()->fetch_assoc() ?: ['students'=>0, 'bill'=>0, 'paid'=>0, 'remaining'=>0];
+$stmt->close();
+$summary['students'] = (int)$summary['students'];
+$summary['bill'] = (float)$summary['bill'];
+$summary['paid'] = (float)$summary['paid'];
+$summary['remaining'] = (float)$summary['remaining'];
+
+$totalPages = max(1, (int)ceil($summary['students'] / $perPage));
+$page = min($page, $totalPages);
+$offset = ($page - 1) * $perPage;
+
+$pageSql = $aggregateSql . $havingSql . "
+    ORDER BY ta.label DESC, CAST(tdu.kelas_snapshot AS UNSIGNED), s.NAMA, tdu.id
+    LIMIT ? OFFSET ?";
+$pageParams = $params;
+$pageParams[] = $perPage;
+$pageParams[] = $offset;
+$stmt = $koneksi->prepare($pageSql);
+if (!$stmt) throw new RuntimeException('Query halaman Riwayat Daftar Ulang tidak dapat disiapkan: ' . $koneksi->error);
+$pageTypes = $types . 'ii';
+$stmt->bind_param($pageTypes, ...$pageParams);
+$stmt->execute();
+$pageRows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
 $stmt->close();
 
-$groups = [];
-foreach ($rawRows as $row) {
-    $key = (string)$row['tagihan_id'];
-    if (!isset($groups[$key])) {
-        $groups[$key] = [
-            'no_induk' => $row['no_induk'], 'nama' => $row['NAMA'], 'kelas' => $row['kelas'],
-            'kelas_siswa' => $row['kelas_siswa'], 'th_ajaran' => $row['th_ajaran'],
-            'total' => (float)$row['master_total'],
-            'paid' => 0.0, 'transactions' => [],
-        ];
-    }
-    if (!empty($row['detail_id'])) {
-        $row['full_date'] = du_full_date($row['TGL_BYR']);
-        $groups[$key]['paid'] += (float)$row['jumlah'];
-        $groups[$key]['transactions'][] = $row;
-    }
-}
-
 $visibleGroups = [];
-foreach ($groups as $group) {
-    $group['remaining'] = max(0, $group['total'] - $group['paid']);
-    $group['status'] = $group['remaining'] <= 0.001 ? 'lunas' : 'cicilan';
-    if ($filterStatus !== '' && $group['status'] !== $filterStatus) continue;
+foreach ($pageRows as $row) {
+    $group = [
+        'tagihan_id' => (int)$row['tagihan_id'],
+        'no_induk' => $row['no_induk'], 'nama' => $row['nama'],
+        'kelas' => $row['kelas'], 'kelas_siswa' => $row['kelas_siswa'],
+        'th_ajaran' => $row['th_ajaran'], 'total' => (float)$row['master_total'],
+        'paid' => (float)$row['paid'], 'remaining' => (float)$row['remaining'],
+        'status' => $row['payment_status'], 'transactions' => [],
+    ];
     $visibleGroups[] = $group;
 }
 
-$summary = ['students' => count($visibleGroups), 'bill' => 0.0, 'paid' => 0.0, 'remaining' => 0.0];
-foreach ($visibleGroups as $group) {
-    $summary['bill'] += $group['total'];
-    $summary['paid'] += $group['paid'];
-    $summary['remaining'] += $group['remaining'];
+if ($visibleGroups) {
+    $groupIndexes = [];
+    $tagihanIds = [];
+    foreach ($visibleGroups as $index => $group) {
+        $groupIndexes[$group['tagihan_id']] = $index;
+        $tagihanIds[] = $group['tagihan_id'];
+    }
+    $placeholders = implode(',', array_fill(0, count($tagihanIds), '?'));
+    $detailSql = "SELECT bd.id AS detail_id, bd.tagihan_daftar_ulang_id AS tagihan_id,
+            bd.bayar_id, bd.jumlah, b.TGL_BYR, b.BULAN, b.TAHUN,
+            b.sistem_pembayaran, b.payment_link_version
+        FROM bayar_du bd
+        LEFT JOIN bayar b ON b.id = bd.bayar_id
+        WHERE bd.tagihan_daftar_ulang_id IN ($placeholders)
+        ORDER BY bd.tagihan_daftar_ulang_id, b.TGL_BYR DESC, b.id DESC, bd.id DESC";
+    $stmt = $koneksi->prepare($detailSql);
+    $detailTypes = str_repeat('i', count($tagihanIds));
+    $stmt->bind_param($detailTypes, ...$tagihanIds);
+    $stmt->execute();
+    $detailRows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+    $stmt->close();
+    foreach ($detailRows as $transaction) {
+        $tagihanId = (int)$transaction['tagihan_id'];
+        if (!isset($groupIndexes[$tagihanId])) continue;
+        $transaction['full_date'] = du_full_date($transaction['TGL_BYR']);
+        $visibleGroups[$groupIndexes[$tagihanId]]['transactions'][] = $transaction;
+    }
 }
+
+$firstShown = $summary['students'] > 0 ? $offset + 1 : 0;
+$lastShown = $summary['students'] > 0 ? min($offset + count($visibleGroups), $summary['students']) : 0;
+$pageWindowStart = max(1, $page - 2);
+$pageWindowEnd = min($totalPages, $pageWindowStart + 4);
+$pageWindowStart = max(1, $pageWindowEnd - 4);
+$paginationQuery = array_filter([
+    'q'=>$search, 'kelas'=>$filterClass, 'tahun_ajaran'=>$filterYear,
+    'status'=>$filterStatus, 'per_page'=>$perPage,
+], static fn($value) => $value !== '');
 
 $flash = $_SESSION['flash'] ?? null;
 unset($_SESSION['flash']);
@@ -120,7 +183,7 @@ unset($_SESSION['flash']);
   <meta name="description" content="Rekap pembayaran dan cicilan daftar ulang siswa." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="../assets/css/style.css?v=5.5" />
+  <link rel="stylesheet" href="../assets/css/style.css?v=5.6" />
   <script>(function(){var t=localStorage.getItem('spp_theme')||'dark';document.documentElement.setAttribute('data-theme',t);})();</script>
 </head>
 <body>
@@ -147,6 +210,7 @@ unset($_SESSION['flash']);
           <select class="field-input field-select filter-sel" name="kelas"><option value="">Kelas 1–6</option><?php foreach ($allowedClasses as $class): ?><option value="<?= $class ?>" <?= $filterClass === $class ? 'selected' : '' ?>>Kelas <?= $class ?></option><?php endforeach; ?></select>
           <select class="field-input field-select filter-sel" name="tahun_ajaran"><option value="">Semua Tahun Ajaran</option><?php foreach ($academicYears as $year): ?><option value="<?= du_e($year) ?>" <?= $filterYear === $year ? 'selected' : '' ?>><?= du_e($year) ?></option><?php endforeach; ?></select>
           <select class="field-input field-select filter-sel" name="status"><option value="">Semua Status</option><option value="cicilan" <?= $filterStatus === 'cicilan' ? 'selected' : '' ?>>Belum Lunas</option><option value="lunas" <?= $filterStatus === 'lunas' ? 'selected' : '' ?>>Lunas</option></select>
+          <select class="field-input field-select filter-sel du-page-size" name="per_page" aria-label="Jumlah data per halaman"><?php foreach ($allowedPageSizes as $pageSize): ?><option value="<?= $pageSize ?>" <?= $perPage === $pageSize ? 'selected' : '' ?>><?= $pageSize ?> / halaman</option><?php endforeach; ?></select>
           <button class="btn btn-primary" type="submit">Tampilkan</button><a class="btn btn-ghost" href="riwayat_daftar_ulang.php">Reset</a>
         </form>
 
@@ -164,7 +228,7 @@ unset($_SESSION['flash']);
             <?php if (!$visibleGroups): ?><tr><td colspan="8" class="text-center recap-empty">Belum ada tagihan Daftar Ulang yang diterbitkan untuk filter ini.</td></tr>
             <?php else: foreach ($visibleGroups as $index => $group): ?>
               <tr>
-                <td data-label="No"><?= $index + 1 ?></td>
+                <td data-label="No"><?= $offset + $index + 1 ?></td>
                 <td data-label="Siswa"><strong><?= du_e($group['nama']) ?></strong><small class="du-history-nis">NIS <?= du_e($group['no_induk']) ?></small></td>
                 <td data-label="Kelas / Tahun"><strong>Kelas <?= du_e($group['kelas']) ?></strong><small class="du-history-nis"><?= du_e($group['th_ajaran']) ?></small></td>
                 <td data-label="Tagihan" class="nominal"><?= du_money($group['total']) ?></td>
@@ -189,6 +253,39 @@ unset($_SESSION['flash']);
             </tbody>
           </table>
         </div>
+
+        <?php if ($summary['students'] > 0): ?>
+        <div class="du-pagination-footer">
+          <p class="du-pagination-info">Menampilkan <strong><?= number_format($firstShown) ?>–<?= number_format($lastShown) ?></strong> dari <strong><?= number_format($summary['students']) ?></strong> siswa/periode</p>
+          <?php if ($totalPages > 1): ?>
+          <nav class="du-pagination" aria-label="Navigasi halaman Riwayat Daftar Ulang">
+            <?php if ($page > 1): ?>
+              <a class="du-page-link du-page-desktop-only" href="<?= du_e(du_history_page_url($paginationQuery, 1)) ?>">Awal</a>
+              <a class="du-page-link du-page-prev" href="<?= du_e(du_history_page_url($paginationQuery, $page - 1)) ?>" rel="prev">Sebelumnya</a>
+            <?php else: ?>
+              <span class="du-page-link du-page-desktop-only is-disabled" aria-disabled="true">Awal</span>
+              <span class="du-page-link du-page-prev is-disabled" aria-disabled="true">Sebelumnya</span>
+            <?php endif; ?>
+
+            <span class="du-page-mobile-label">Halaman <?= $page ?> dari <?= $totalPages ?></span>
+            <span class="du-page-numbers">
+              <?php for ($pageNumber = $pageWindowStart; $pageNumber <= $pageWindowEnd; $pageNumber++): ?>
+                <?php if ($pageNumber === $page): ?><span class="du-page-link is-active" aria-current="page"><?= $pageNumber ?></span>
+                <?php else: ?><a class="du-page-link" href="<?= du_e(du_history_page_url($paginationQuery, $pageNumber)) ?>"><?= $pageNumber ?></a><?php endif; ?>
+              <?php endfor; ?>
+            </span>
+
+            <?php if ($page < $totalPages): ?>
+              <a class="du-page-link du-page-next" href="<?= du_e(du_history_page_url($paginationQuery, $page + 1)) ?>" rel="next">Berikutnya</a>
+              <a class="du-page-link du-page-desktop-only" href="<?= du_e(du_history_page_url($paginationQuery, $totalPages)) ?>">Akhir</a>
+            <?php else: ?>
+              <span class="du-page-link du-page-next is-disabled" aria-disabled="true">Berikutnya</span>
+              <span class="du-page-link du-page-desktop-only is-disabled" aria-disabled="true">Akhir</span>
+            <?php endif; ?>
+          </nav>
+          <?php endif; ?>
+        </div>
+        <?php endif; ?>
       </div>
     </main>
   </div>

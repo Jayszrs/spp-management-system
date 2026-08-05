@@ -226,6 +226,8 @@ Tabel `Daftar_ulang` dipakai sebagai template tarif per kombinasi `kelas + th_aj
 - Tahun yang sudah terbit memakai `Simpan Perubahan Tarif`; tagihan belum lunas mengikuti aturan perubahan nominal, sedangkan tagihan lunas mempertahankan snapshot histori.
 - Siswa tinggal kelas memakai kelas yang tetap tersimpan pada Data Siswa; siswa tidak aktif tidak menerima tagihan. Siswa baru setelah penerbitan otomatis memperoleh penempatan dan tagihan.
 - Input/edit pembayaran menghitung tahun ajaran dari periode pilihan dan mengambil kelas serta saldo langsung dari tagihan server-side; hidden input kelas/tahun tidak dipercaya. Total, terbayar, sisa, kelas, tahun ajaran, status, dan warning tampil pada baris Daftar Ulang.
+- Riwayat Daftar Ulang dipaginasi server-side per tagihan siswa/tahun ajaran. Default 25 baris dengan pilihan 25/50/100; ringkasan tetap mencakup seluruh hasil filter dan detail cicilan hanya diambil untuk halaman aktif.
+- Link pagination mempertahankan pencarian, kelas, tahun ajaran, status, dan ukuran halaman. Nomor baris memakai offset global dan parameter halaman di luar batas dinormalisasi.
 - Tagihan yang telah diterbitkan mempertahankan snapshot kelas dan nominal sehingga perubahan Data Siswa berikutnya tidak memindahkan histori.
 - Migrasi tidak boleh menerbitkan tahun ajaran draf secara otomatis. Status `published` hanya diubah oleh aksi penerbitan admin.
 
