@@ -164,6 +164,7 @@ function studentSearchText(opt) {
   return [
     opt.value || '',
     opt.dataset.nis || '',
+    opt.dataset.diknas || '',
     opt.dataset.nama || '',
     opt.dataset.kelas || ''
   ].join(' ').toLowerCase();
@@ -243,7 +244,8 @@ function renderStudentSearchPanel(input, forceAll) {
     const name = document.createElement('strong');
     name.textContent = opt.dataset.nama || opt.textContent.trim() || opt.value || '-';
     const nis = document.createElement('small');
-    nis.textContent = 'NIS ' + (opt.dataset.nis || '-');
+    nis.textContent = 'NIS ' + (opt.dataset.nis || '-')
+      + (opt.dataset.diknas ? ' · NIS Diknas ' + opt.dataset.diknas : '');
     const classBadge = document.createElement('span');
     classBadge.className = 'student-search-class';
     classBadge.textContent = 'Kelas ' + (opt.dataset.kelas || '-');

@@ -53,6 +53,7 @@ do {
 } while ($targetExists);
 
 $failure = null;
+$otherFeeMasterIds = [];
 try {
     $name = 'UJI INTEGRASI CICILAN';
     $class = '1';
@@ -66,6 +67,16 @@ try {
     $stmtTarget->bind_param('sssd', $targetNoInduk, $targetName, $class, $monthlyFee);
     $stmtTarget->execute();
     $stmtTarget->close();
+
+    $stmtOtherFee = $koneksi->prepare('INSERT INTO master_biaya_lain (nama, nominal, is_active) VALUES (?, ?, 1)');
+    for ($index = 1; $index <= 5; $index++) {
+        $otherFeeName = 'UJI BIAYA LEGACY ' . $noInduk . ' #' . $index;
+        $otherFeeLimit = 100000.0;
+        $stmtOtherFee->bind_param('sd', $otherFeeName, $otherFeeLimit);
+        $stmtOtherFee->execute();
+        $otherFeeMasterIds[] = (int)$koneksi->insert_id;
+    }
+    $stmtOtherFee->close();
 
     $baseUrl = getenv('SPP_TEST_BASE_URL') ?: 'http://127.0.0.1/Project%20PHP';
     $password = getenv('SPP_TEST_ADMIN_PASSWORD') ?: 'admin123';
@@ -88,6 +99,10 @@ try {
     $response = payment_process_request($baseUrl . '/pembayaran/proses.php', $common + [
         'uang_spp' => 100000,
         'tabungan_wajib' => 20000,
+        'biaya_lain_detail_id' => [0, 0, 0, 0, 0],
+        'biaya_lain_master_id' => $otherFeeMasterIds,
+        'biaya_lain_nominal' => [11000, 12000, 13000, 14000, 15000],
+        'biaya_lain_keterangan' => ['', '', '', '', ''],
     ], $cookies);
     payment_process_assert($response['status'] === 302, 'Endpoint pembayaran tidak mengembalikan redirect yang diharapkan.');
     foreach ([150000, 10000] as $amount) {
@@ -126,6 +141,20 @@ try {
     $firstPaymentId = (int)$stmtFirst->get_result()->fetch_assoc()['id'];
     $stmtFirst->close();
 
+    $stmtLegacyOther = $koneksi->prepare("\n        SELECT U_LAIN, LAIN_LAIN1, JUMLAH1, LAIN_LAIN2, JUMLAH2,\n               LAIN_LAIN3, JUMLAH3, LAIN_LAIN4, JUMLAH4,\n               (SELECT COUNT(*) FROM bayar_biaya_lain WHERE bayar_id = bayar.id) AS detail_count\n        FROM bayar WHERE id = ?\n    ");
+    $stmtLegacyOther->bind_param('i', $firstPaymentId);
+    $stmtLegacyOther->execute();
+    $legacyOther = $stmtLegacyOther->get_result()->fetch_assoc();
+    $stmtLegacyOther->close();
+    payment_process_assert(
+        abs((float)$legacyOther['U_LAIN'] - 65000.0) < 0.001
+        && (int)$legacyOther['detail_count'] === 5
+        && str_ends_with((string)$legacyOther['LAIN_LAIN1'], '#1')
+        && str_ends_with((string)$legacyOther['LAIN_LAIN4'], '#4')
+        && abs((float)$legacyOther['JUMLAH4'] - 14000.0) < 0.001,
+        'Input Biaya Lain tidak mencerminkan total dan empat detail pertama ke kolom legacy.'
+    );
+
     $stmtSavings = $koneksi->prepare("
         SELECT
             COALESCE((SELECT SALDO FROM tabungan WHERE NO_INDUK = ?), 0) AS saldo,
@@ -153,6 +182,10 @@ try {
         'tanggal_bayar' => date('Y-m-d'),
         'uang_spp' => 50000,
         'tabungan_wajib' => 5000,
+        'biaya_lain_detail_id' => [0, 0],
+        'biaya_lain_master_id' => array_slice($otherFeeMasterIds, 0, 2),
+        'biaya_lain_nominal' => [21000, 22000],
+        'biaya_lain_keterangan' => ['', ''],
     ]), $cookies);
     payment_process_assert($update['status'] === 302, 'Edit cicilan tidak mengembalikan redirect yang diharapkan.');
 
@@ -162,6 +195,22 @@ try {
     $afterEdit = $stmtAfterEdit->get_result()->fetch_assoc();
     $stmtAfterEdit->close();
     payment_process_assert((int)$afterEdit['total'] === 2 && abs((float)$afterEdit['paid'] - 200000.0) < 0.001, 'Edit cicilan tidak menyesuaikan total menjadi Rp200.000.');
+
+    $stmtLegacyEdit = $koneksi->prepare("\n        SELECT U_LAIN, LAIN_LAIN1, JUMLAH1, LAIN_LAIN2, JUMLAH2,\n               LAIN_LAIN3, JUMLAH3, LAIN_LAIN4, JUMLAH4,\n               (SELECT COUNT(*) FROM bayar_biaya_lain WHERE bayar_id = bayar.id) AS detail_count\n        FROM bayar WHERE id = ?\n    ");
+    $stmtLegacyEdit->bind_param('i', $firstPaymentId);
+    $stmtLegacyEdit->execute();
+    $legacyEdit = $stmtLegacyEdit->get_result()->fetch_assoc();
+    $stmtLegacyEdit->close();
+    payment_process_assert(
+        abs((float)$legacyEdit['U_LAIN'] - 43000.0) < 0.001
+        && (int)$legacyEdit['detail_count'] === 2
+        && abs((float)$legacyEdit['JUMLAH2'] - 22000.0) < 0.001
+        && $legacyEdit['LAIN_LAIN3'] === null
+        && abs((float)$legacyEdit['JUMLAH3']) < 0.001
+        && $legacyEdit['LAIN_LAIN4'] === null
+        && abs((float)$legacyEdit['JUMLAH4']) < 0.001,
+        'Edit Biaya Lain tidak memperbarui total atau membersihkan slot legacy yang tidak dipakai.'
+    );
 
     $stmtSavingsEdit = $koneksi->prepare("
         SELECT
@@ -285,6 +334,14 @@ try {
     $stmtCleanup->bind_param('ss', $noInduk, $targetNoInduk);
     $stmtCleanup->execute();
     $stmtCleanup->close();
+    if ($otherFeeMasterIds) {
+        $placeholders = implode(',', array_fill(0, count($otherFeeMasterIds), '?'));
+        $types = str_repeat('i', count($otherFeeMasterIds));
+        $stmtMasterCleanup = $koneksi->prepare("DELETE FROM master_biaya_lain WHERE id IN ($placeholders)");
+        $stmtMasterCleanup->bind_param($types, ...$otherFeeMasterIds);
+        $stmtMasterCleanup->execute();
+        $stmtMasterCleanup->close();
+    }
 }
 
 $stmtRemaining = $koneksi->prepare('SELECT COUNT(*) AS total FROM siswa WHERE NO_INDUK IN (?, ?)');
@@ -301,4 +358,4 @@ if ($failure) {
     exit(1);
 }
 
-echo "OK: endpoint cicilan menangani input, overlimit, edit, pindah periode/siswa, hapus, tanggal server, tabungan, dan struk.\n";
+echo "OK: endpoint cicilan menangani input, overlimit, edit, pindah periode/siswa, hapus, tanggal server, tabungan, Biaya Lain legacy, dan struk.\n";

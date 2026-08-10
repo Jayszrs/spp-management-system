@@ -185,6 +185,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($nisDiknas !== '' && !preg_match('/^[0-9]{10}$/', $nisDiknas)) {
                 throw new RuntimeException('No. Induk Diknas harus tepat 10 digit jika diisi.');
             }
+            if ($nisDiknas !== '') {
+                $stmtDiknas = $koneksi->prepare('SELECT id FROM siswa WHERE NO_induk_diknas = ? AND id <> ? LIMIT 1');
+                $stmtDiknas->bind_param('si', $nisDiknas, $id);
+                $stmtDiknas->execute();
+                $duplicateDiknas = $stmtDiknas->get_result()->fetch_assoc();
+                $stmtDiknas->close();
+                if ($duplicateDiknas) throw new RuntimeException('No. Induk Diknas sudah digunakan siswa lain.');
+            }
             if ($values['potong_pangkal'] > $values['PANGKAL']) {
                 throw new RuntimeException('Potongan uang pangkal tidak boleh melebihi tagihan pangkal.');
             }
@@ -296,6 +304,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 );
                 $stmt->execute();
                 $stmt->close();
+                $duChanged =
+                    abs((float)$oldStudent['DAFTAR_ULANG'] - $daftarUlang) > .001 ||
+                    abs((float)$oldStudent['potong_du'] - $potongDu) > .001 ||
+                    abs((float)$oldStudent['tot_du'] - $totDu) > .001;
+                if ($duChanged) du_apply_current_student_override($koneksi, $noInduk);
                 $after = find_student($koneksi, $id);
                 write_student_audit($koneksi, $id, $noInduk, 'update', $before, student_snapshot($after));
                 $successMessage = "Data siswa $name berhasil diperbarui.";
@@ -353,14 +366,14 @@ $stmtList = $koneksi->prepare("
        (SELECT COUNT(*) FROM transaksi_m tm WHERE tm.NO_INDUK = s.NO_INDUK) +
        (SELECT COUNT(*) FROM transaksi_k tk WHERE tk.NO_INDUK = s.NO_INDUK)) AS history_count
     FROM siswa s
-    WHERE (? = '' OR s.NO_INDUK LIKE CONCAT('%', ?, '%') OR s.NAMA LIKE CONCAT('%', ?, '%'))
+    WHERE (? = '' OR s.NO_INDUK LIKE CONCAT('%', ?, '%') OR s.NAMA LIKE CONCAT('%', ?, '%') OR s.NO_induk_diknas LIKE CONCAT('%', ?, '%'))
       AND (? = '' OR s.KELAS = ?)
       AND (? = 'all' OR s.is_active = IF(? = 'archived', 0, 1))
     ORDER BY s.is_active DESC,
       CASE WHEN s.KELAS REGEXP '^[1-6]$' THEN 0 ELSE 1 END,
       CAST(s.KELAS AS UNSIGNED), s.KELAS, s.NAMA ASC
 ");
-$stmtList->bind_param('sssssss', $query, $query, $query, $filterClass, $filterClass, $filterStatus, $filterStatus);
+$stmtList->bind_param('ssssssss', $query, $query, $query, $query, $filterClass, $filterClass, $filterStatus, $filterStatus);
 $stmtList->execute();
 $studentRows = $stmtList->get_result()->fetch_all(MYSQLI_ASSOC);
 $stmtList->close();
@@ -541,7 +554,7 @@ $canEditOpening = !$editStudent || (int)($editStudent['history_count'] ?? 0) ===
         <form method="GET" action="daftar.php" class="filter-bar student-filter-bar">
           <div class="search-box">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-            <input type="search" name="q" value="<?= htmlspecialchars($query) ?>" placeholder="Cari nama atau No. Induk..." />
+            <input type="search" name="q" value="<?= htmlspecialchars($query) ?>" placeholder="Cari nama, NIS, atau NIS Diknas..." />
           </div>
           <select class="field-input field-select filter-sel" name="kelas">
             <option value="">Semua Kelas</option>
@@ -565,7 +578,7 @@ $canEditOpening = !$editStudent || (int)($editStudent['history_count'] ?? 0) ===
               ?>
               <tr class="clickable-payment-row" data-edit-url="<?= htmlspecialchars($editUrl, ENT_QUOTES, 'UTF-8') ?>" tabindex="0" role="link" aria-label="Edit siswa <?= htmlspecialchars($student['NAMA'], ENT_QUOTES, 'UTF-8') ?>">
                 <td data-label="No"><?= $index + 1 ?></td>
-                <td data-label="No. Induk"><span class="badge-nis"><?= htmlspecialchars($student['NO_INDUK']) ?></span></td>
+                <td data-label="No. Induk"><span class="badge-nis"><?= htmlspecialchars($student['NO_INDUK']) ?></span><?php if (!empty($student['NO_induk_diknas'])): ?><small class="du-history-nis">Diknas <?= htmlspecialchars($student['NO_induk_diknas']) ?></small><?php endif; ?></td>
                 <td data-label="Nama Siswa"><?= htmlspecialchars($student['NAMA']) ?></td>
                 <td data-label="Kelas">Kelas <?= htmlspecialchars($student['KELAS']) ?></td>
                 <td data-label="SPP/Bulan" class="nominal">Rp <?= number_format((float)$student['SPP_PERBULAN'], 0, ',', '.') ?></td>

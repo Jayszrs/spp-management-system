@@ -11,7 +11,7 @@ $flash = $_SESSION['flash'] ?? null;
 unset($_SESSION['flash']);
 
 $prefill_nis = preg_replace('/[^\w.-]/', '', trim($_GET['nis'] ?? ''));
-$siswa_list = $koneksi->query("SELECT id, NO_INDUK, NAMA, KELAS FROM siswa WHERE is_active = 1 ORDER BY NAMA ASC");
+$siswa_list = $koneksi->query("SELECT id, NO_INDUK, NO_induk_diknas, NAMA, KELAS FROM siswa WHERE is_active = 1 ORDER BY NAMA ASC");
 ?>
 <!DOCTYPE html>
 <html lang="id">
@@ -69,17 +69,18 @@ $siswa_list = $koneksi->query("SELECT id, NO_INDUK, NAMA, KELAS FROM siswa WHERE
             <div class="section-divider"><span>Data Siswa</span></div>
             <div class="fields-grid">
               <div class="field-row full-span">
-                <label class="field-label" for="siswa-search">Cari Siswa (Ketik Nama / No. Induk)</label>
+                <label class="field-label" for="siswa-search">Cari Siswa (Nama / NIS / NIS Diknas)</label>
                 <div class="search-box">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
                   <input type="text" id="siswa-search" list="siswa-list"
                     value="<?= htmlspecialchars($prefill_nis) ?>"
-                    placeholder="Ketik nama atau No. Induk..." oninput="pilihSiswaDatalist(this)" autocomplete="off" />
+                    placeholder="Ketik nama, NIS, atau NIS Diknas..." oninput="pilihSiswaDatalist(this)" autocomplete="off" />
                 </div>
                 <datalist id="siswa-list">
                   <?php while ($s = $siswa_list->fetch_assoc()): ?>
                   <option value="<?= htmlspecialchars($s['NO_INDUK']) ?> — <?= htmlspecialchars($s['NAMA']) ?>"
                     data-nis="<?= htmlspecialchars($s['NO_INDUK']) ?>"
+                    data-diknas="<?= htmlspecialchars((string)($s['NO_induk_diknas'] ?? '')) ?>"
                     data-nama="<?= htmlspecialchars($s['NAMA']) ?>"
                     data-kelas="<?= htmlspecialchars($s['KELAS']) ?>">
                   <?php endwhile; ?>
@@ -156,7 +157,7 @@ $siswa_list = $koneksi->query("SELECT id, NO_INDUK, NAMA, KELAS FROM siswa WHERE
     </div>
   </div>
 
-  <script src="../assets/js/app.js?v=5.2"></script>
+  <script src="../assets/js/app.js?v=6.2"></script>
   <script>
     document.addEventListener('DOMContentLoaded', function () {
       const tgl = document.getElementById('tgl-keluar');

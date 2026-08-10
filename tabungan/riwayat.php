@@ -15,6 +15,15 @@ $filter_nis = trim($_GET['nis'] ?? '');
 $filter_bulan = $_GET['bulan'] ?? date('m');
 $filter_tahun = $_GET['tahun'] ?? date('Y');
 
+if ($filter_nis !== '') {
+    $stmtIdentity = $koneksi->prepare('SELECT NO_INDUK FROM siswa WHERE NO_INDUK=? OR NO_induk_diknas=? LIMIT 1');
+    $stmtIdentity->bind_param('ss', $filter_nis, $filter_nis);
+    $stmtIdentity->execute();
+    $identity = $stmtIdentity->get_result()->fetch_assoc();
+    $stmtIdentity->close();
+    if ($identity) $filter_nis = (string)$identity['NO_INDUK'];
+}
+
 // Query gabungan masuk + keluar. Filter NIS selalu diparameterkan agar
 // input URL tidak pernah menjadi bagian dari SQL.
 $where_nis_masuk = $filter_nis !== '' ? ' AND tm.NO_INDUK = ?' : '';
@@ -57,7 +66,7 @@ $stmt->close();
 // Rekap saldo semua siswa aktif. Siswa yang belum punya tabungan tetap tampil
 // agar admin bisa langsung menemukan nama dan mulai setoran pertama.
 $saldo_list = $koneksi->query("
-    SELECT s.NO_INDUK, s.NAMA, s.KELAS, COALESCE(t.SALDO, 0) AS SALDO,
+    SELECT s.NO_INDUK, s.NO_induk_diknas, s.NAMA, s.KELAS, COALESCE(t.SALDO, 0) AS SALDO,
            COALESCE(m.total_masuk, 0) AS total_masuk,
            COALESCE(k.total_keluar, 0) AS total_keluar,
            CASE
@@ -279,7 +288,7 @@ $bln_names = ['01'=>'Januari','02'=>'Februari','03'=>'Maret','04'=>'April','05'=
         <div class="savings-search-panel">
           <div class="search-box savings-search-main">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-            <input type="search" id="savings-student-search" placeholder="Cari nama siswa atau No. Induk..." autocomplete="off" />
+            <input type="search" id="savings-student-search" placeholder="Cari nama, NIS, atau NIS Diknas..." autocomplete="off" />
           </div>
           <select class="field-input field-select" id="savings-class-filter" aria-label="Filter kelas">
             <option value="">Semua kelas</option>
@@ -320,7 +329,7 @@ $bln_names = ['01'=>'Januari','02'=>'Februari','03'=>'Maret','04'=>'April','05'=
               <?php
                 $saldo = (float)$sl['SALDO'];
                 $lastActivity = $sl['last_activity'] ? date('d/m/Y', strtotime($sl['last_activity'])) : 'Belum ada';
-                $searchText = strtolower($sl['NO_INDUK'] . ' ' . $sl['NAMA'] . ' kelas ' . $sl['KELAS']);
+                $searchText = strtolower($sl['NO_INDUK'] . ' ' . ($sl['NO_induk_diknas'] ?? '') . ' ' . $sl['NAMA'] . ' kelas ' . $sl['KELAS']);
               ?>
               <tr class="<?= $i%2===0?'row-highlight':'' ?>"
                   data-search="<?= htmlspecialchars($searchText, ENT_QUOTES, 'UTF-8') ?>"
@@ -330,7 +339,7 @@ $bln_names = ['01'=>'Januari','02'=>'Februari','03'=>'Maret','04'=>'April','05'=
                 <td data-label="Siswa">
                   <div class="savings-student-cell">
                     <strong><?= htmlspecialchars($sl['NAMA']) ?></strong>
-                    <span>NIS <?= htmlspecialchars($sl['NO_INDUK']) ?></span>
+                    <span>NIS <?= htmlspecialchars($sl['NO_INDUK']) ?><?= !empty($sl['NO_induk_diknas']) ? ' · Diknas ' . htmlspecialchars($sl['NO_induk_diknas']) : '' ?></span>
                   </div>
                 </td>
                 <td data-label="Kelas" class="savings-class-col"><span class="savings-class-badge">Kelas <?= htmlspecialchars($sl['KELAS']) ?></span></td>

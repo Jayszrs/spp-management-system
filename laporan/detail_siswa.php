@@ -197,7 +197,7 @@ $schoolPeriod = $summary['first_date']
           <div class="student-history-identity">
             <span>REKAP SELAMA SEKOLAH</span>
             <h1><?= history_e($student['NAMA']) ?></h1>
-            <p>NIS <?= history_e($student['NO_INDUK']) ?> · Kelas <?= history_e($student['KELAS']) ?> · Periode <?= history_e($schoolPeriod) ?></p>
+            <p>NIS <?= history_e($student['NO_INDUK']) ?><?= !empty($student['NO_induk_diknas']) ? ' · NIS Diknas ' . history_e($student['NO_induk_diknas']) : '' ?> · Kelas <?= history_e($student['KELAS']) ?> · Periode <?= history_e($schoolPeriod) ?></p>
           </div>
           <span class="master-status <?= (int)$student['is_active'] === 1 ? 'is-active' : 'is-inactive' ?>"><?= (int)$student['is_active'] === 1 ? 'Siswa Aktif' : 'Diarsipkan' ?></span>
         </div>

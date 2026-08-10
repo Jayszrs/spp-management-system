@@ -17,7 +17,7 @@ $bulan_label = $bln_names[$filter_bulan] ?? 'Unknown';
 
 // Ambil data pembayaran
 $stmt = $koneksi->prepare("
-    SELECT s.NO_INDUK, s.NAMA, s.KELAS, b.BULAN, b.TAHUN,
+    SELECT s.NO_INDUK, s.NO_induk_diknas, s.NAMA, s.KELAS, b.BULAN, b.TAHUN,
            b.U_PANGKAL, b.U_BANGUNAN, b.U_SERAGAM, b.U_KEGIATAN,
            b.U_SPP, b.U_MAKAN, b.U_SORGA, b.U_INFAQ, b.U_KOMITE,
            b.sistem_pembayaran, b.total_jumlah, b.TGL_BYR
@@ -69,11 +69,11 @@ $stmtBiayaLain->close();
 
 // Ambil data tabungan periode ini
 $stmt2 = $koneksi->prepare("
-    SELECT tm.NO_INDUK, s.NAMA, s.KELAS, tm.TANGGAL, tm.MASUK as nominal, 'masuk' as jenis
+    SELECT tm.NO_INDUK, s.NO_induk_diknas, s.NAMA, s.KELAS, tm.TANGGAL, tm.MASUK as nominal, 'masuk' as jenis
     FROM transaksi_m tm JOIN siswa s ON s.NO_INDUK = tm.NO_INDUK
     WHERE MONTH(tm.TANGGAL) = ? AND YEAR(tm.TANGGAL) = ?
     UNION ALL
-    SELECT tk.NO_INDUK, s.NAMA, s.KELAS, tk.TANGGAL, tk.KELUAR as nominal, 'keluar' as jenis
+    SELECT tk.NO_INDUK, s.NO_induk_diknas, s.NAMA, s.KELAS, tk.TANGGAL, tk.KELUAR as nominal, 'keluar' as jenis
     FROM transaksi_k tk JOIN siswa s ON s.NO_INDUK = tk.NO_INDUK
     WHERE MONTH(tk.TANGGAL) = ? AND YEAR(tk.TANGGAL) = ?
     ORDER BY TANGGAL DESC
@@ -377,7 +377,7 @@ if ($download) {
   ?>
   <tr>
     <td><?= $i+1 ?></td>
-    <td><?= htmlspecialchars($r['NO_INDUK']) ?></td>
+    <td><?= htmlspecialchars($r['NO_INDUK']) ?><?= !empty($r['NO_induk_diknas']) ? '<br>Diknas: ' . htmlspecialchars($r['NO_induk_diknas']) : '' ?></td>
     <td><?= htmlspecialchars($r['NAMA']) ?></td>
     <td><?= htmlspecialchars($r['KELAS']) ?></td>
     <td><?= htmlspecialchars($r['BULAN']) ?> <?= htmlspecialchars($r['TAHUN']) ?><br>Sistem: <?= htmlspecialchars($r['sistem_pembayaran'] ?? 'VA') ?></td>
@@ -415,7 +415,7 @@ if ($download) {
   ?>
   <tr>
     <td><?= $i+1 ?></td>
-    <td><?= htmlspecialchars($t['NO_INDUK']) ?></td>
+    <td><?= htmlspecialchars($t['NO_INDUK']) ?><?= !empty($t['NO_induk_diknas']) ? '<br>Diknas: ' . htmlspecialchars($t['NO_induk_diknas']) : '' ?></td>
     <td><?= htmlspecialchars($t['NAMA']) ?></td>
     <td><?= htmlspecialchars($t['KELAS']) ?></td>
     <td><?= date('d M Y H:i', strtotime($t['TANGGAL'])) ?></td>

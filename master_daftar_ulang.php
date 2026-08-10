@@ -70,20 +70,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $affected = 0;
                 if ($year['status'] === 'published') {
                     $existingId = (int)$existing['id'];
-                    $stmt = $koneksi->prepare("SELECT tdu.id,tdu.nominal_tagihan,COALESCE(SUM(bd.jumlah),0) paid
-                        FROM tagihan_daftar_ulang tdu LEFT JOIN bayar_du bd ON bd.tagihan_daftar_ulang_id=tdu.id
-                        WHERE tdu.master_daftar_ulang_id=? AND tdu.status='open'
-                        GROUP BY tdu.id,tdu.nominal_tagihan FOR UPDATE");
-                    $stmt->bind_param('i', $existingId); $stmt->execute();
-                    $bills = $stmt->get_result()->fetch_all(MYSQLI_ASSOC); $stmt->close();
-                    foreach ($bills as $bill) {
-                        $paid = (float)$bill['paid']; $current = (float)$bill['nominal_tagihan'];
-                        if ($paid + .001 >= $current) continue;
-                        if ($paid > $amount + .001) throw new RuntimeException('Nominal baru kelas ' . $class . ' lebih kecil daripada cicilan siswa yang sudah masuk.');
-                        $billId = (int)$bill['id'];
-                        $stmt = $koneksi->prepare('UPDATE tagihan_daftar_ulang SET nominal_tagihan=? WHERE id=?');
-                        $stmt->bind_param('di', $amount, $billId); $stmt->execute(); $stmt->close();
-                        $affected++;
+                    try {
+                        $affected = du_sync_open_bills_for_master_rate(
+                            $koneksi,
+                            $existingId,
+                            $selectedYear,
+                            $oldAmount,
+                            $amount
+                        );
+                    } catch (RuntimeException $error) {
+                        if (str_contains($error->getMessage(), 'lebih kecil daripada cicilan')) {
+                            throw new RuntimeException('Nominal baru kelas ' . $class . ' lebih kecil daripada cicilan siswa yang sudah masuk.');
+                        }
+                        throw $error;
                     }
                 }
                 $existingId = (int)$existing['id'];

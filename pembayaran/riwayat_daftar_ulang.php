@@ -53,8 +53,8 @@ $params = [];
 $types = '';
 if ($search !== '') {
     $like = '%' . $search . '%';
-    $where[] = '(tdu.no_induk LIKE ? OR s.NAMA LIKE ?)';
-    $params[] = $like; $params[] = $like; $types .= 'ss';
+    $where[] = '(tdu.no_induk LIKE ? OR s.NAMA LIKE ? OR s.NO_induk_diknas LIKE ?)';
+    $params[] = $like; $params[] = $like; $params[] = $like; $types .= 'sss';
 }
 if ($filterClass !== '') {
     $where[] = 'tdu.kelas_snapshot = ?';
@@ -67,7 +67,7 @@ if ($filterYear !== '') {
 
 $aggregateSql = "
     SELECT tdu.id AS tagihan_id, tdu.no_induk, tdu.kelas_snapshot AS kelas,
-           ta.label AS th_ajaran, s.NAMA AS nama, s.KELAS AS kelas_siswa,
+           ta.label AS th_ajaran, s.NAMA AS nama, s.NO_induk_diknas, s.KELAS AS kelas_siswa,
            tdu.nominal_tagihan AS master_total,
            COALESCE(SUM(bd.jumlah), 0) AS paid,
            GREATEST(0, tdu.nominal_tagihan - COALESCE(SUM(bd.jumlah), 0)) AS remaining,
@@ -78,7 +78,7 @@ $aggregateSql = "
     JOIN siswa s ON s.NO_INDUK = tdu.no_induk
     LEFT JOIN bayar_du bd ON bd.tagihan_daftar_ulang_id = tdu.id
     WHERE " . implode(' AND ', $where) . "
-    GROUP BY tdu.id, tdu.no_induk, tdu.kelas_snapshot, ta.label, s.NAMA,
+    GROUP BY tdu.id, tdu.no_induk, tdu.kelas_snapshot, ta.label, s.NAMA, s.NO_induk_diknas,
              s.KELAS, tdu.nominal_tagihan
 ";
 $havingSql = '';
@@ -122,7 +122,7 @@ $visibleGroups = [];
 foreach ($pageRows as $row) {
     $group = [
         'tagihan_id' => (int)$row['tagihan_id'],
-        'no_induk' => $row['no_induk'], 'nama' => $row['nama'],
+        'no_induk' => $row['no_induk'], 'no_induk_diknas' => $row['NO_induk_diknas'], 'nama' => $row['nama'],
         'kelas' => $row['kelas'], 'kelas_siswa' => $row['kelas_siswa'],
         'th_ajaran' => $row['th_ajaran'], 'total' => (float)$row['master_total'],
         'paid' => (float)$row['paid'], 'remaining' => (float)$row['remaining'],
@@ -206,7 +206,7 @@ unset($_SESSION['flash']);
         </div>
 
         <form method="GET" class="filter-bar du-history-filter">
-          <div class="search-box"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input type="text" name="q" value="<?= du_e($search) ?>" placeholder="Cari nama / NIS..." /></div>
+          <div class="search-box"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input type="text" name="q" value="<?= du_e($search) ?>" placeholder="Cari nama / NIS / NIS Diknas..." /></div>
           <select class="field-input field-select filter-sel" name="kelas"><option value="">Kelas 1–6</option><?php foreach ($allowedClasses as $class): ?><option value="<?= $class ?>" <?= $filterClass === $class ? 'selected' : '' ?>>Kelas <?= $class ?></option><?php endforeach; ?></select>
           <select class="field-input field-select filter-sel" name="tahun_ajaran"><option value="">Semua Tahun Ajaran</option><?php foreach ($academicYears as $year): ?><option value="<?= du_e($year) ?>" <?= $filterYear === $year ? 'selected' : '' ?>><?= du_e($year) ?></option><?php endforeach; ?></select>
           <select class="field-input field-select filter-sel" name="status"><option value="">Semua Status</option><option value="cicilan" <?= $filterStatus === 'cicilan' ? 'selected' : '' ?>>Belum Lunas</option><option value="lunas" <?= $filterStatus === 'lunas' ? 'selected' : '' ?>>Lunas</option></select>
@@ -229,7 +229,7 @@ unset($_SESSION['flash']);
             <?php else: foreach ($visibleGroups as $index => $group): ?>
               <tr>
                 <td data-label="No"><?= $offset + $index + 1 ?></td>
-                <td data-label="Siswa"><strong><?= du_e($group['nama']) ?></strong><small class="du-history-nis">NIS <?= du_e($group['no_induk']) ?></small></td>
+                <td data-label="Siswa"><strong><?= du_e($group['nama']) ?></strong><small class="du-history-nis">NIS <?= du_e($group['no_induk']) ?><?= !empty($group['no_induk_diknas']) ? ' · Diknas ' . du_e($group['no_induk_diknas']) : '' ?></small></td>
                 <td data-label="Kelas / Tahun"><strong>Kelas <?= du_e($group['kelas']) ?></strong><small class="du-history-nis"><?= du_e($group['th_ajaran']) ?></small></td>
                 <td data-label="Tagihan" class="nominal"><?= du_money($group['total']) ?></td>
                 <td data-label="Terbayar" class="nominal"><?= du_money($group['paid']) ?></td>

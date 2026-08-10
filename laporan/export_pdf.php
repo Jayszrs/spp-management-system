@@ -96,6 +96,7 @@ $stmt = $koneksi->prepare("
     SELECT
         b.*,
         s.NAMA,
+        s.NO_induk_diknas,
         s.KELAS AS KELAS_SISWA,
         s.PANGKAL,
         s.PANGKAL_BAYAR,
@@ -461,6 +462,13 @@ ob_start();
               <td class="sep">:</td>
               <td><?= e($row['NO_INDUK']) ?></td>
             </tr>
+            <?php if (!empty($row['NO_induk_diknas'])): ?>
+            <tr>
+              <td class="label">NIS Diknas</td>
+              <td class="sep">:</td>
+              <td><?= e($row['NO_induk_diknas']) ?></td>
+            </tr>
+            <?php endif; ?>
             <tr>
               <td class="label">Nama Siswa</td>
               <td class="sep">:</td>

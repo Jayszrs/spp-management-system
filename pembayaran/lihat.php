@@ -60,9 +60,9 @@ $params = [];
 $types  = '';
 if ($search) {
     $like = "%$search%";
-    $where .= " AND (s.NAMA LIKE ? OR s.NO_INDUK LIKE ?)";
-    $params[] = $like; $params[] = $like;
-    $types .= 'ss';
+    $where .= " AND (s.NAMA LIKE ? OR s.NO_INDUK LIKE ? OR s.NO_induk_diknas LIKE ?)";
+    $params[] = $like; $params[] = $like; $params[] = $like;
+    $types .= 'sss';
 }
 if ($filter_bln) {
     $month_names = [
@@ -79,7 +79,7 @@ if ($filter_thn) {
     $params[] = $filter_thn; $types .= 's';
 }
 
-$sql = "SELECT p.*, s.NO_INDUK, s.NAMA, s.KELAS FROM bayar p
+$sql = "SELECT p.*, s.NO_INDUK, s.NO_induk_diknas, s.NAMA, s.KELAS FROM bayar p
         JOIN siswa s ON s.NO_INDUK = p.NO_INDUK
         $where ORDER BY p.created_at DESC";
 
@@ -175,7 +175,7 @@ $bln_list = [
         <form method="GET" action="lihat.php" class="filter-bar">
           <div class="search-box">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-            <input type="text" id="search-lihat" name="search" placeholder="Cari nama / NIS..."
+            <input type="text" id="search-lihat" name="search" placeholder="Cari nama / NIS / NIS Diknas..."
               value="<?= htmlspecialchars($search) ?>" />
           </div>
           <select class="field-input field-select filter-sel month-code-select" name="bulan" id="filter-bulan">
@@ -226,7 +226,7 @@ $bln_list = [
                 ?>
               <tr<?= $rowAttrs ?>>
                 <td data-label="No"><?= $no++ ?></td>
-                <td data-label="NIS"><span class="badge-nis"><?= htmlspecialchars($row['NO_INDUK']) ?></span></td>
+                <td data-label="NIS"><span class="badge-nis"><?= htmlspecialchars($row['NO_INDUK']) ?></span><?php if (!empty($row['NO_induk_diknas'])): ?><small class="du-history-nis">Diknas <?= htmlspecialchars($row['NO_induk_diknas']) ?></small><?php endif; ?></td>
                 <td data-label="Nama Siswa"><?= htmlspecialchars($row['NAMA']) ?></td>
                 <td data-label="Kelas" class="kelas-col"><span class="kelas-badge">Kelas <?= htmlspecialchars($row['KELAS']) ?></span></td>
                 <td data-label="Bulan / Tahun">

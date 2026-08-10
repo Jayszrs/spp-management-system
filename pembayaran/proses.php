@@ -407,6 +407,21 @@ function calculate_payment_total(array $components, float $uangDu, float $potong
     return max(0, $total - $potonganSpp);
 }
 
+function legacy_biaya_lain_values(array $lines): array {
+    $values = [
+        'total' => 0.0,
+        'names' => [null, null, null, null],
+        'amounts' => [0.0, 0.0, 0.0, 0.0],
+    ];
+    foreach ($lines as $index => $line) {
+        $values['total'] += (float)$line['nominal'];
+        if ($index >= 4) continue;
+        $values['names'][$index] = mb_substr((string)$line['nama'], 0, 100);
+        $values['amounts'][$index] = (float)$line['nominal'];
+    }
+    return $values;
+}
+
 function sync_student_initial_fee_paid(
     mysqli $db,
     string $noInduk,
@@ -560,7 +575,12 @@ if ($aksi === 'input') {
     $potongan_spp    = parse_amount($_POST['potongan_spp'] ?? 0);
     $tabungan_wajib  = parse_amount($_POST['tabungan_wajib'] ?? 0);
     $total_jumlah    = 0.0;
-    $catatan         = $_POST['catatan'] ?? '';
+    $catatan         = trim((string)($_POST['catatan'] ?? ''));
+    if (mb_strlen($catatan) > 255) {
+        $_SESSION['flash'] = ['type' => 'error', 'msg' => 'Catatan maksimal 255 karakter.'];
+        header('Location: form.php');
+        exit;
+    }
     $kelas_du        = $_POST['kelas_du'] ?? '';
     $tahun_ajaran_du = $_POST['tahun_ajaran_du'] ?? '';
     $payment_plan    = $_POST['payment_plan'] ?? 'monthly';
@@ -635,6 +655,7 @@ if ($aksi === 'input') {
         }
 
         $biaya_lain = collect_biaya_lain($koneksi, $no_induk);
+        $legacy_biaya_lain = legacy_biaya_lain_values($biaya_lain);
 
         // Satu pembayaran tahunan disimpan sebagai 12 header transaksi agar
         // setiap bulan memiliki nomor dan halaman struk sendiri.
@@ -664,6 +685,10 @@ if ($aksi === 'input') {
             $row_du = $isFirst ? $uang_du : 0.0;
             $row_discount = $discount_parts[$index];
             $row_other = $isFirst ? $biaya_lain : [];
+            $row_legacy_other = $isFirst ? $legacy_biaya_lain : legacy_biaya_lain_values([]);
+            $uang_lain = $row_legacy_other['total'];
+            [$ll_1_ket, $ll_2_ket, $ll_3_ket, $ll_4_ket] = $row_legacy_other['names'];
+            [$ll_1_nom, $ll_2_nom, $ll_3_nom, $ll_4_nom] = $row_legacy_other['amounts'];
             $row_total = calculate_payment_total([
                 $row_pangkal, $row_bangunan, $row_seragam, $row_kegiatan, $row_spp,
                 $row_komite, $row_makan, $row_sorga, $row_infaq
@@ -755,7 +780,12 @@ if ($aksi === 'update') {
     $potongan_spp    = parse_amount($_POST['potongan_spp'] ?? 0);
     $tabungan_wajib  = parse_amount($_POST['tabungan_wajib'] ?? 0);
     $total_jumlah    = 0.0;
-    $catatan         = $_POST['catatan'] ?? '';
+    $catatan         = trim((string)($_POST['catatan'] ?? ''));
+    if (mb_strlen($catatan) > 255) {
+        $_SESSION['flash'] = ['type' => 'error', 'msg' => 'Catatan maksimal 255 karakter.'];
+        header('Location: edit.php?id=' . $id);
+        exit;
+    }
     $kelas_du        = $_POST['kelas_du'] ?? '';
     $tahun_ajaran_du = $_POST['tahun_ajaran_du'] ?? '';
 
@@ -802,6 +832,10 @@ if ($aksi === 'update') {
         ], $uang_du, $kelas_du, $tahun_ajaran_du, $id);
         $kelas_siswa = $siswa_data['KELAS'];
         $biaya_lain = collect_biaya_lain($koneksi, $no_induk, $id);
+        $legacy_biaya_lain = legacy_biaya_lain_values($biaya_lain);
+        $uang_lain = $legacy_biaya_lain['total'];
+        [$ll_1_ket, $ll_2_ket, $ll_3_ket, $ll_4_ket] = $legacy_biaya_lain['names'];
+        [$ll_1_nom, $ll_2_nom, $ll_3_nom, $ll_4_nom] = $legacy_biaya_lain['amounts'];
         $total_jumlah = calculate_payment_total([
             $uang_pangkal, $uang_bangunan, $uang_seragam, $uang_kegiatan,
             $uang_spp, $uang_komite, $uang_makan, $uang_sorga, $uang_infaq

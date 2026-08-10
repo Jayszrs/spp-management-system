@@ -179,6 +179,7 @@ $stmt = $koneksi->prepare("
         s.NAMA,
         s.KELAS AS KELAS_SISWA,
         s.PANGKAL,
+        s.NO_induk_diknas,
         s.PANGKAL_BAYAR,
         s.BANGUNAN,
         s.BANGUNAN_BAYAR,
@@ -328,6 +329,7 @@ $signer = $_SESSION['admin_nama'] ?? 'Bagian Keuangan';
     <table class="info"><tr>
       <td><table class="mini">
         <tr><td class="label">No. Induk</td><td class="separator">:</td><td><?= receipt_e($payment['NO_INDUK']) ?></td></tr>
+        <?php if (!empty($payment['NO_induk_diknas'])): ?><tr><td class="label">NIS Diknas</td><td class="separator">:</td><td><?= receipt_e($payment['NO_induk_diknas']) ?></td></tr><?php endif; ?>
         <tr><td class="label">Nama Siswa</td><td class="separator">:</td><td><?= receipt_e($payment['NAMA']) ?></td></tr>
       </table></td>
       <td><table class="mini">

@@ -57,6 +57,7 @@ $periodSql = "b.TAHUN = '$yearSql' AND b.BULAN IN ($monthSql)";
 $sql = "
     SELECT
         s.NO_INDUK,
+        s.NO_induk_diknas,
         s.NAMA,
         s.KELAS,
         s.SPP_PERBULAN,
@@ -114,11 +115,12 @@ $sql = "
 $params = [$filterClass];
 $types = 's';
 if ($search !== '') {
-    $sql .= ' AND (s.NAMA LIKE ? OR s.NO_INDUK LIKE ?)';
+    $sql .= ' AND (s.NAMA LIKE ? OR s.NO_INDUK LIKE ? OR s.NO_induk_diknas LIKE ?)';
     $like = '%' . $search . '%';
     $params[] = $like;
     $params[] = $like;
-    $types .= 'ss';
+    $params[] = $like;
+    $types .= 'sss';
 }
 $sql .= ' ORDER BY s.NAMA, s.NO_INDUK';
 
@@ -228,7 +230,7 @@ unset($row);
             <div class="recap-search-row">
               <label class="recap-header-search">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-                <input type="text" name="q" placeholder="Cari nama / NIS..." value="<?= recap_e($search) ?>" />
+                <input type="text" name="q" placeholder="Cari nama / NIS / NIS Diknas..." value="<?= recap_e($search) ?>" />
               </label>
               <a href="rekap_kelas.php" class="recap-reset-link">Reset</a>
             </div>
@@ -290,7 +292,7 @@ unset($row);
               ]); ?>
               <tr>
                 <td class="text-center recap-row-number"><?= $index + 1 ?></td>
-                <td class="recap-student-name"><a class="recap-student-link" href="<?= recap_e($detailUrl) ?>"><?= recap_e($row['NAMA']) ?></a><span>NIS <?= recap_e($row['NO_INDUK']) ?> · <?= (int)$row['transaksi'] ?> transaksi</span></td>
+                <td class="recap-student-name"><a class="recap-student-link" href="<?= recap_e($detailUrl) ?>"><?= recap_e($row['NAMA']) ?></a><span>NIS <?= recap_e($row['NO_INDUK']) ?><?= !empty($row['NO_induk_diknas']) ? ' · Diknas ' . recap_e($row['NO_induk_diknas']) : '' ?> · <?= (int)$row['transaksi'] ?> transaksi</span></td>
                 <td><span class="recap-status <?= recap_e($row['status_class']) ?>"><?= recap_e($row['status_label']) ?></span></td>
                 <td class="recap-money"><?= recap_money($row['pangkal']) ?></td>
                 <td class="recap-money"><?= recap_money($row['bangunan']) ?></td>
@@ -325,7 +327,7 @@ unset($row);
               <span class="recap-mobile-number"><?= $index + 1 ?></span>
               <div>
                 <a href="<?= recap_e($detailUrl) ?>"><?= recap_e($row['NAMA']) ?></a>
-                <span>NIS <?= recap_e($row['NO_INDUK']) ?> · <?= (int)$row['transaksi'] ?> transaksi</span>
+                <span>NIS <?= recap_e($row['NO_INDUK']) ?><?= !empty($row['NO_induk_diknas']) ? ' · Diknas ' . recap_e($row['NO_induk_diknas']) : '' ?> · <?= (int)$row['transaksi'] ?> transaksi</span>
               </div>
               <span class="recap-status <?= recap_e($row['status_class']) ?>"><?= recap_e($row['status_label']) ?></span>
             </div>
