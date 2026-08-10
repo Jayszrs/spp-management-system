@@ -10,6 +10,7 @@ requireRole(['admin', 'kasir']);
 $flash = $_SESSION['flash'] ?? null;
 unset($_SESSION['flash']);
 
+$prefill_nis = preg_replace('/[^\w.-]/', '', trim($_GET['nis'] ?? ''));
 $siswa_list = $koneksi->query("SELECT id, NO_INDUK, NAMA, KELAS FROM siswa WHERE is_active = 1 ORDER BY NAMA ASC");
 ?>
 <!DOCTYPE html>
@@ -23,7 +24,7 @@ $siswa_list = $koneksi->query("SELECT id, NO_INDUK, NAMA, KELAS FROM siswa WHERE
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
   <script>(function(){var t=localStorage.getItem('spp_theme')||'dark';document.documentElement.setAttribute('data-theme',t);})();</script>
-  <link rel="stylesheet" href="../assets/css/style.css?v=4.7" />
+  <link rel="stylesheet" href="../assets/css/style.css?v=5.8" />
 </head>
 <body>
   <div class="bg-orbs">
@@ -72,6 +73,7 @@ $siswa_list = $koneksi->query("SELECT id, NO_INDUK, NAMA, KELAS FROM siswa WHERE
                 <div class="search-box">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
                   <input type="text" id="siswa-search" list="siswa-list"
+                    value="<?= htmlspecialchars($prefill_nis) ?>"
                     placeholder="Ketik nama atau No. Induk..." oninput="pilihSiswaDatalist(this)" autocomplete="off" />
                 </div>
                 <datalist id="siswa-list">
@@ -154,7 +156,7 @@ $siswa_list = $koneksi->query("SELECT id, NO_INDUK, NAMA, KELAS FROM siswa WHERE
     </div>
   </div>
 
-  <script src="../assets/js/app.js?v=2.8"></script>
+  <script src="../assets/js/app.js?v=5.2"></script>
   <script>
     document.addEventListener('DOMContentLoaded', function () {
       const tgl = document.getElementById('tgl-keluar');
@@ -183,14 +185,19 @@ $siswa_list = $koneksi->query("SELECT id, NO_INDUK, NAMA, KELAS FROM siswa WHERE
       });
 
       autoHideFlash();
+
+      const prefilledSearch = document.getElementById('siswa-search');
+      if (prefilledSearch && prefilledSearch.value.trim()) {
+        window.pilihSiswaDatalist(prefilledSearch);
+      }
     });
 
-    const _originalPilih = pilihSiswaDatalist;
-    function pilihSiswaDatalist(input) {
+    const _originalPilih = window.pilihSiswaDatalist;
+    window.pilihSiswaDatalist = function (input) {
       _originalPilih(input);
       const nis = document.getElementById('disp-nis').value;
       if (nis) fetchSaldo(nis);
-    }
+    };
 
     function fetchSaldo(nis) {
       fetch('../tabungan/get_saldo.php?nis=' + encodeURIComponent(nis))

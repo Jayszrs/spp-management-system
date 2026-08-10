@@ -95,7 +95,7 @@ $bulan_label = $bln_names[str_pad($filter_bulan, 2, '0', STR_PAD_LEFT)];
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
   <script>(function(){var t=localStorage.getItem('spp_theme')||'dark';document.documentElement.setAttribute('data-theme',t);})();</script>
-  <link rel="stylesheet" href="../assets/css/style.css?v=4.7" />
+  <link rel="stylesheet" href="../assets/css/style.css?v=6.1" />
 </head>
 <body>
 <div class="bg-orbs"><div class="orb orb-1"></div><div class="orb orb-2"></div><div class="orb orb-3"></div></div>
@@ -226,9 +226,9 @@ $bulan_label = $bln_names[str_pad($filter_bulan, 2, '0', STR_PAD_LEFT)];
       <!-- Detail Transaksi Pembayaran -->
       <div class="main-card">
         <div class="card-header laporan-detail-header">
-          <div>
-          <h3 class="card-title">Detail Transaksi Pembayaran — <?= $bulan_label ?> <?= $filter_tahun ?></h3>
-          <span class="badge-count"><?= count($bayar_detail) ?> transaksi</span>
+          <div class="laporan-detail-heading">
+            <h3 class="card-title">Detail Transaksi Pembayaran — <?= $bulan_label ?> <?= $filter_tahun ?></h3>
+            <span class="badge-count"><?= count($bayar_detail) ?> transaksi</span>
           </div>
           <?php if (!empty($bayar_detail)): ?>
           <button type="submit" form="print-selected-form" class="btn btn-warning btn-print-selected" id="btn-print-selected" disabled>
@@ -245,7 +245,7 @@ $bulan_label = $bln_names[str_pad($filter_bulan, 2, '0', STR_PAD_LEFT)];
             <thead>
               <tr>
                 <th class="select-col"><input type="checkbox" class="select-print-check" id="check-all-print" aria-label="Pilih semua transaksi"></th>
-                <th>No</th><th>No. Induk</th><th>Nama</th><th>Kelas</th><th>Bulan Bayar</th><th>Sistem</th><th>Total (Rp)</th><th>Tgl Bayar</th><th>Aksi</th>
+                <th>No</th><th>No. Induk</th><th>Nama</th><th class="kelas-col">Kelas</th><th>Bulan Bayar</th><th>Sistem</th><th>Total (Rp)</th><th>Tgl Bayar</th><th>Aksi</th>
               </tr>
             </thead>
             <tbody>
@@ -258,7 +258,7 @@ $bulan_label = $bln_names[str_pad($filter_bulan, 2, '0', STR_PAD_LEFT)];
                 <td><?= $i+1 ?></td>
                 <td><span class="badge-nis"><?= htmlspecialchars($b['NO_INDUK']) ?></span></td>
                 <td><?= htmlspecialchars($b['NAMA']) ?></td>
-                <td><?= htmlspecialchars($b['KELAS']) ?></td>
+                <td class="kelas-col"><span class="kelas-badge">Kelas <?= htmlspecialchars($b['KELAS']) ?></span></td>
                 <td><?= htmlspecialchars($b['BULAN']) ?> <?= htmlspecialchars($b['TAHUN']) ?></td>
                 <td><?= htmlspecialchars($b['sistem_pembayaran'] ?? 'VA') ?></td>
                 <td class="nominal">Rp <?= number_format((float)$b['total_jumlah'],0,',','.') ?></td>

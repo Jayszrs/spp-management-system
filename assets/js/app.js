@@ -160,6 +160,154 @@ function pilihSiswaDatalist(input) {
   }
 }
 
+function studentSearchText(opt) {
+  return [
+    opt.value || '',
+    opt.dataset.nis || '',
+    opt.dataset.nama || '',
+    opt.dataset.kelas || ''
+  ].join(' ').toLowerCase();
+}
+
+function studentSearchOptionLabel(opt) {
+  const nis = opt.dataset.nis || '';
+  const nama = opt.dataset.nama || opt.textContent.trim() || opt.value || '';
+  return nis && nama ? nis + ' - ' + nama : (opt.value || nama);
+}
+
+function selectStudentSearchOption(input, opt) {
+  input.value = opt.value || studentSearchOptionLabel(opt);
+  input.dataset.studentSelected = '1';
+  input.dataset.studentSuppressPanel = '1';
+  try {
+    window.pilihSiswaDatalist(input);
+  } finally {
+    closeStudentSearchPanel(input);
+  }
+}
+
+function closeStudentSearchPanel(input) {
+  const box = input?.closest('.student-combobox');
+  const panel = box?.querySelector('.student-search-panel');
+  if (!panel) return;
+  panel.hidden = true;
+  panel.innerHTML = '';
+  input.setAttribute('aria-expanded', 'false');
+}
+
+function renderStudentSearchPanel(input, forceAll) {
+  const listId = input.dataset.studentList || input.getAttribute('list') || 'siswa-list';
+  const list = document.getElementById(listId);
+  const box = input.closest('.student-combobox');
+  const panel = box?.querySelector('.student-search-panel');
+  if (!list || !box || !panel) return;
+  if (input.dataset.studentSuppressPanel === '1') return;
+
+  const query = input.value.trim().toLowerCase();
+  const allOptions = Array.from(list.options);
+  const showAll = !!forceAll || !query || input.dataset.studentSelected === '1';
+
+  const matches = (!showAll
+    ? allOptions.filter(opt => studentSearchText(opt).includes(query))
+    : allOptions
+  ).slice(0, showAll ? 12 : 8);
+
+  input.setAttribute('aria-expanded', 'true');
+  panel.hidden = false;
+  panel.innerHTML = '';
+
+  if (matches.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'student-search-empty';
+    empty.textContent = query ? 'Siswa tidak ditemukan' : 'Belum ada data siswa aktif';
+    panel.appendChild(empty);
+    return;
+  }
+
+  if (showAll) {
+    const hint = document.createElement('div');
+    hint.className = 'student-search-hint';
+    hint.textContent = allOptions.length > matches.length
+      ? 'Menampilkan ' + matches.length + ' siswa pertama. Ketik nama atau NIS untuk mencari lebih spesifik.'
+      : 'Pilih siswa dari daftar.';
+    panel.appendChild(hint);
+  }
+
+  matches.forEach((opt, index) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'student-search-option';
+    button.dataset.index = String(index);
+    const main = document.createElement('span');
+    main.className = 'student-search-main';
+    const name = document.createElement('strong');
+    name.textContent = opt.dataset.nama || opt.textContent.trim() || opt.value || '-';
+    const nis = document.createElement('small');
+    nis.textContent = 'NIS ' + (opt.dataset.nis || '-');
+    const classBadge = document.createElement('span');
+    classBadge.className = 'student-search-class';
+    classBadge.textContent = 'Kelas ' + (opt.dataset.kelas || '-');
+    main.appendChild(name);
+    main.appendChild(nis);
+    button.appendChild(main);
+    button.appendChild(classBadge);
+    button.addEventListener('mousedown', function (event) {
+      event.preventDefault();
+      selectStudentSearchOption(input, opt);
+    });
+    panel.appendChild(button);
+  });
+}
+
+function initStudentSearchCombobox() {
+  const input = document.getElementById('siswa-search');
+  const list = document.getElementById('siswa-list');
+  if (!input || !list || input.dataset.studentComboboxReady === '1') return;
+
+  const box = input.closest('.search-box');
+  if (!box) return;
+
+  input.dataset.studentComboboxReady = '1';
+  input.dataset.studentList = list.id;
+  input.removeAttribute('list');
+  input.setAttribute('role', 'combobox');
+  input.setAttribute('aria-autocomplete', 'list');
+  input.setAttribute('aria-expanded', 'false');
+
+  box.classList.add('student-combobox');
+  const panel = document.createElement('div');
+  panel.className = 'student-search-panel';
+  panel.hidden = true;
+  box.appendChild(panel);
+
+  input.addEventListener('input', function () {
+    delete input.dataset.studentSelected;
+    delete input.dataset.studentSuppressPanel;
+    renderStudentSearchPanel(input);
+  });
+  input.addEventListener('focus', function () {
+    renderStudentSearchPanel(input, input.value.trim() === '');
+  });
+  input.addEventListener('click', function () {
+    delete input.dataset.studentSuppressPanel;
+    renderStudentSearchPanel(input, true);
+  });
+  input.addEventListener('keydown', function (event) {
+    if (event.key === 'Escape') {
+      closeStudentSearchPanel(input);
+      return;
+    }
+    if (event.key !== 'Enter') return;
+    const first = panel.querySelector('.student-search-option');
+    if (!first || panel.hidden) return;
+    event.preventDefault();
+    first.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+  });
+  document.addEventListener('mousedown', function (event) {
+    if (!box.contains(event.target)) closeStudentSearchPanel(input);
+  });
+}
+
 function applyDefaultDaftarUlangClass(opt) {
   const studentClass = String(opt.dataset.kelas || '').match(/[1-6]/)?.[0] || '';
   setDaftarUlangContext(studentClass, academicYearFromPaymentPeriod());
@@ -209,6 +357,47 @@ function academicYearFromPaymentPeriod() {
   if (!month || !year) return '';
   const start = month >= 7 ? year : year - 1;
   return start + '/' + (start + 1);
+}
+
+function academicYearPeriodKeys() {
+  const academicYear = academicYearFromPaymentPeriod();
+  const [startYear, endYear] = academicYear.split('/').map(Number);
+  if (!startYear || !endYear) return [];
+  const periods = [];
+  for (let month = 7; month <= 12; month++) {
+    periods.push(String(month).padStart(2, '0') + '-' + startYear);
+  }
+  for (let month = 1; month <= 6; month++) {
+    periods.push(String(month).padStart(2, '0') + '-' + endYear);
+  }
+  return periods;
+}
+
+function paidForAcademicYear(opt, key) {
+  if (!opt) return 0;
+  try {
+    const datasetKey = key === 'komite' ? 'paidKomitePeriods' : 'paidSppPeriods';
+    const periods = JSON.parse(opt.dataset[datasetKey] || '{}');
+    return academicYearPeriodKeys().reduce((sum, period) => sum + parseNumber(periods[period] || 0), 0);
+  } catch (_) {
+    return 0;
+  }
+}
+
+function selectedPaymentMonthLabel() {
+  const select = document.getElementById('bulan-bayar');
+  const option = select?.options[select.selectedIndex];
+  if (option?.dataset.label) return option.dataset.label;
+  const labels = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
+  const month = parseNumber(select?.value || 0);
+  return labels[month - 1] || '';
+}
+
+function refreshSppPeriodLabel() {
+  const label = document.getElementById('spp-component-label');
+  if (!label) return;
+  const monthLabel = selectedPaymentMonthLabel();
+  label.textContent = '🎓 Uang SPP' + (monthLabel ? ' (' + monthLabel + ')' : '');
 }
 
 function setDaftarUlangContext(kelas, tahunAjaran) {
@@ -340,6 +529,60 @@ function paidDaftarUlangForContext(opt) {
   return parseNumber(selectedDaftarUlangBill(opt)?.paid || 0);
 }
 
+function selectedBiayaLainSummary() {
+  const selected = new Set();
+  let total = 0;
+  let paid = 0;
+  document.querySelectorAll('.biaya-lain-select').forEach(select => {
+    const option = select.options[select.selectedIndex];
+    const masterId = option?.value || '';
+    if (!masterId || selected.has(masterId)) return;
+    selected.add(masterId);
+    total += parseNumber(option.dataset.nominal || 0);
+    paid += paidBiayaLainForSelectedStudent(masterId);
+  });
+  return { total, paid };
+}
+
+function refreshAcademicYearSummary() {
+  const totalLabel = document.getElementById('academic-total-label');
+  const totalValue = document.getElementById('academic-total-value');
+  const paidValue = document.getElementById('academic-paid-value');
+  const remainingValue = document.getElementById('academic-remaining-value');
+  if (!totalLabel || !totalValue || !paidValue || !remainingValue) return;
+
+  const academicYear = academicYearFromPaymentPeriod();
+  totalLabel.textContent = 'Total Tagihan TA ' + (academicYear || '-');
+  const opt = selectedStudentOption();
+  if (!opt) {
+    totalValue.textContent = 'Rp 0';
+    paidValue.textContent = 'Rp 0';
+    remainingValue.textContent = 'Rp 0';
+    return;
+  }
+
+  const oneTimeKeys = ['pangkal','bangunan','seragam','kegiatan','makan','sorga','infaq'];
+  let total = oneTimeKeys.reduce((sum, key) => sum + datasetNumber(opt, 'total', key), 0);
+  let paid = oneTimeKeys.reduce((sum, key) => sum + datasetNumber(opt, 'paid', key), 0);
+
+  total += datasetNumber(opt, 'total', 'spp') * 12;
+  total += datasetNumber(opt, 'total', 'komite') * 12;
+  paid += paidForAcademicYear(opt, 'spp');
+  paid += paidForAcademicYear(opt, 'komite');
+
+  const daftarUlang = selectedDaftarUlangBill(opt);
+  total += parseNumber(daftarUlang?.total || 0);
+  paid += parseNumber(daftarUlang?.paid || 0);
+
+  const biayaLain = selectedBiayaLainSummary();
+  total += biayaLain.total;
+  paid += biayaLain.paid;
+
+  totalValue.textContent = 'Rp ' + formatRupiah(total);
+  paidValue.textContent = 'Rp ' + formatRupiah(paid);
+  remainingValue.textContent = 'Rp ' + formatRupiah(Math.max(0, total - paid));
+}
+
 function setPaymentComponent(key, total, paid) {
   const totalEl = document.getElementById(key + '-total');
   const paidEl = document.getElementById(key + '-bayar');
@@ -420,6 +663,41 @@ function refreshOptionalOneTimeFeeAvailability() {
     }
     hitungSisa(key);
   });
+}
+
+function refreshSppInstallmentAvailability() {
+  const input = document.getElementById('spp-input');
+  if (!input) return;
+  const opt = selectedStudentOption();
+  const total = parseNumber(document.getElementById('spp-total')?.value || 0);
+  const paid = parseNumber(document.getElementById('spp-bayar')?.value || 0);
+  const remaining = Math.max(0, total - paid);
+  const context = document.getElementById('spp-context-label');
+  const monthLabel = selectedPaymentMonthLabel();
+  const year = document.getElementById('tahun-bayar')?.value || '';
+
+  let lockedMessage = '';
+  if (!opt) lockedMessage = 'Pilih siswa terlebih dahulu';
+  else if (total <= 0) lockedMessage = 'Tarif SPP belum diatur';
+  else if (remaining <= 0.001) lockedMessage = 'Lunas untuk ' + monthLabel + ' ' + year;
+
+  const locked = lockedMessage !== '';
+  input.readOnly = locked;
+  input.classList.toggle('tbl-readonly', locked);
+  if (locked) {
+    input.value = '0';
+    input.title = lockedMessage;
+    input.setCustomValidity('');
+  } else {
+    input.removeAttribute('title');
+  }
+
+  if (context) {
+    if (lockedMessage) context.textContent = lockedMessage;
+    else if (paid > 0) context.textContent = 'Cicilan ' + monthLabel + ' ' + year + ' · sisa Rp ' + formatRupiah(remaining);
+    else context.textContent = 'Tagihan bulanan · dapat dicicil';
+  }
+  hitungSisa('spp');
 }
 
 function refreshOverpaidWarnings() {
@@ -538,7 +816,11 @@ function clearOverpaidUiState() {
 function refreshSelectedStudentPaymentDetails() {
   const opt = syncDaftarUlangContextFromCurrentState();
   if (opt) applyStudentPaymentDetails(opt);
-  else refreshAnnualPaymentState(null);
+  else {
+    refreshAnnualPaymentState(null);
+    refreshSppPeriodLabel();
+    refreshAcademicYearSummary();
+  }
 }
 
 function showMonthLabels(select) {
@@ -607,6 +889,8 @@ function bindNumericInput(input) {
 
 // Auto-fill on page load (edit page) & bind number formatting
 document.addEventListener('DOMContentLoaded', function () {
+  initStudentSearchCombobox();
+
   const sel = document.getElementById('siswa-select');
   if (sel && sel.value) pilihSiswa(sel);
   const siswaSearch = document.getElementById('siswa-search');
@@ -816,7 +1100,7 @@ function refreshBiayaLainRow(row, preserveInput) {
   if (totalEl) totalEl.value = formatRupiahString(masterTotal);
   if (paidEl) paidEl.value = formatRupiahString(alreadyPaid);
   if (!preserveInput) {
-    nominal.value = formatRupiahString(remainingBeforeInput);
+    nominal.value = '0';
   }
 
   const inputValue = parseNumber(nominal.value || 0);
@@ -941,6 +1225,7 @@ function hitungSisa(key) {
 function updateTotal() {
   refreshOptionalOneTimeFeeAvailability();
   refreshOverpaidWarnings();
+  refreshSppInstallmentAvailability();
   refreshPaymentInputOverlimitWarnings();
   refreshBiayaLainAvailability();
   document.querySelectorAll('.biaya-lain-row').forEach(row => refreshBiayaLainRow(row, true));
@@ -965,13 +1250,15 @@ function updateTotal() {
   if (totalEl)  totalEl.textContent = 'Rp ' + formatRupiah(total);
   if (hiddenEl) hiddenEl.value = total;
 
-  // Hitung kewajiban SPP
-  const sppInput = parseNumber(document.getElementById('spp-input')?.value || 0);
-  const tabWajib = parseNumber(document.getElementById('tab-wajib')?.value || 0);
+  // Kewajiban SPP adalah sisa periode sebelum input transaksi saat ini.
+  const sppTotal = parseNumber(document.getElementById('spp-total')?.value || 0);
+  const sppPaid = parseNumber(document.getElementById('spp-bayar')?.value || 0);
   const kewEl    = document.getElementById('kewajiban-spp');
   if (kewEl) {
-    kewEl.value = formatRupiahString(Math.max(0, sppInput - pot - tabWajib));
+    kewEl.value = formatRupiahString(Math.max(0, sppTotal - sppPaid));
   }
+  refreshSppPeriodLabel();
+  refreshAcademicYearSummary();
 }
 
 /* ── Format Rupiah ───────────────────────── */

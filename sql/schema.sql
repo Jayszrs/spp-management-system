@@ -132,8 +132,8 @@ CREATE TABLE `bayar` (
   FOREIGN KEY (`NO_INDUK`) REFERENCES `siswa`(`NO_INDUK`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB;
 
--- Klaim unik periode SPP. Transaksi biaya non-SPP tetap boleh memakai bulan
--- yang sama, tetapi satu siswa hanya bisa memiliki satu SPP per bulan/tahun.
+-- Pemetaan periode per transaksi SPP. Satu periode boleh memiliki beberapa
+-- transaksi cicilan, sementara bayar_id tetap unik per transaksi.
 DROP TABLE IF EXISTS `bayar_spp_periode`;
 CREATE TABLE `bayar_spp_periode` (
   `bayar_id` INT NOT NULL PRIMARY KEY,
@@ -141,7 +141,7 @@ CREATE TABLE `bayar_spp_periode` (
   `bulan` CHAR(2) NOT NULL,
   `tahun` CHAR(4) NOT NULL,
   `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  UNIQUE KEY `uk_bayar_spp_siswa_periode` (`no_induk`, `tahun`, `bulan`),
+  KEY `idx_bayar_spp_siswa_periode` (`no_induk`, `tahun`, `bulan`),
   CONSTRAINT `fk_bayar_spp_periode_bayar` FOREIGN KEY (`bayar_id`) REFERENCES `bayar` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
   CONSTRAINT `fk_bayar_spp_periode_siswa` FOREIGN KEY (`no_induk`) REFERENCES `siswa` (`NO_INDUK`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB;
@@ -187,12 +187,14 @@ DROP TABLE IF EXISTS `Daftar_ulang`;
 DROP TABLE IF EXISTS `siswa_tahun_ajaran`;
 DROP TABLE IF EXISTS `tahun_ajaran`;
 CREATE TABLE `tahun_ajaran` (
-  `id` INT AUTO_INCREMENT PRIMARY KEY, `label` CHAR(9) NOT NULL UNIQUE,
+  `id` INT AUTO_INCREMENT PRIMARY KEY, `label` CHAR(9) NOT NULL,
   `tanggal_mulai` DATE NOT NULL, `tanggal_selesai` DATE NOT NULL,
   `status` ENUM('draft','published','closed') NOT NULL DEFAULT 'draft',
   `published_at` DATETIME DEFAULT NULL, `closed_at` DATETIME DEFAULT NULL,
   `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+  `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY `uk_tahun_ajaran_label` (`label`),
+  CONSTRAINT `chk_tahun_ajaran_dates` CHECK (`tanggal_selesai` > `tanggal_mulai`)
 ) ENGINE=InnoDB;
 CREATE TABLE `siswa_tahun_ajaran` (
   `id` BIGINT AUTO_INCREMENT PRIMARY KEY, `tahun_ajaran_id` INT NOT NULL,
@@ -202,8 +204,10 @@ CREATE TABLE `siswa_tahun_ajaran` (
   `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   UNIQUE KEY `uk_siswa_tahun_ajaran` (`tahun_ajaran_id`,`no_induk`),
   KEY `idx_penempatan_kelas_status` (`tahun_ajaran_id`,`kelas`,`status`),
+  KEY `idx_penempatan_siswa` (`no_induk`,`tahun_ajaran_id`),
   CONSTRAINT `fk_penempatan_tahun_ajaran` FOREIGN KEY (`tahun_ajaran_id`) REFERENCES `tahun_ajaran`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE,
-  CONSTRAINT `fk_penempatan_siswa` FOREIGN KEY (`no_induk`) REFERENCES `siswa`(`NO_INDUK`) ON DELETE RESTRICT ON UPDATE CASCADE
+  CONSTRAINT `fk_penempatan_siswa` FOREIGN KEY (`no_induk`) REFERENCES `siswa`(`NO_INDUK`) ON DELETE RESTRICT ON UPDATE CASCADE,
+  CONSTRAINT `chk_penempatan_kelas_sd` CHECK (`kelas` IN ('1','2','3','4','5','6'))
 ) ENGINE=InnoDB;
 CREATE TABLE `Daftar_ulang` (
   `id` INT AUTO_INCREMENT PRIMARY KEY, `tahun_ajaran_id` INT DEFAULT NULL,
@@ -223,16 +227,22 @@ CREATE TABLE `tagihan_daftar_ulang` (
   `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   UNIQUE KEY `uk_tagihan_du_siswa_tahun` (`tahun_ajaran_id`,`no_induk`),
   KEY `idx_tagihan_du_status` (`tahun_ajaran_id`,`kelas_snapshot`,`status`),
+  KEY `idx_tagihan_du_penempatan` (`penempatan_id`),
+  KEY `idx_tagihan_du_master` (`master_daftar_ulang_id`),
   CONSTRAINT `fk_tagihan_du_tahun` FOREIGN KEY (`tahun_ajaran_id`) REFERENCES `tahun_ajaran`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE,
   CONSTRAINT `fk_tagihan_du_penempatan` FOREIGN KEY (`penempatan_id`) REFERENCES `siswa_tahun_ajaran`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE,
   CONSTRAINT `fk_tagihan_du_master` FOREIGN KEY (`master_daftar_ulang_id`) REFERENCES `Daftar_ulang`(`id`) ON DELETE SET NULL ON UPDATE CASCADE,
-  CONSTRAINT `fk_tagihan_du_siswa` FOREIGN KEY (`no_induk`) REFERENCES `siswa`(`NO_INDUK`) ON DELETE RESTRICT ON UPDATE CASCADE
+  CONSTRAINT `fk_tagihan_du_siswa` FOREIGN KEY (`no_induk`) REFERENCES `siswa`(`NO_INDUK`) ON DELETE RESTRICT ON UPDATE CASCADE,
+  CONSTRAINT `chk_tagihan_du_nominal` CHECK (`nominal_awal` >= 0 AND `nominal_tagihan` >= 0),
+  CONSTRAINT `chk_tagihan_du_kelas` CHECK (`kelas_snapshot` IN ('1','2','3','4','5','6'))
 ) ENGINE=InnoDB;
 CREATE TABLE `daftar_ulang_audit_log` (
   `id` BIGINT AUTO_INCREMENT PRIMARY KEY, `tahun_ajaran_id` INT DEFAULT NULL, `master_id` INT DEFAULT NULL,
   `aksi` VARCHAR(40) NOT NULL, `before_data` LONGTEXT DEFAULT NULL, `after_data` LONGTEXT DEFAULT NULL,
   `affected_count` INT NOT NULL DEFAULT 0, `admin_id` INT DEFAULT NULL, `admin_name` VARCHAR(100) NOT NULL,
   `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  KEY `idx_du_audit_year` (`tahun_ajaran_id`,`created_at`),
+  KEY `idx_du_audit_master` (`master_id`,`created_at`),
   CONSTRAINT `fk_du_audit_year` FOREIGN KEY (`tahun_ajaran_id`) REFERENCES `tahun_ajaran`(`id`) ON DELETE SET NULL ON UPDATE CASCADE,
   CONSTRAINT `fk_du_audit_master` FOREIGN KEY (`master_id`) REFERENCES `Daftar_ulang`(`id`) ON DELETE SET NULL ON UPDATE CASCADE,
   CONSTRAINT `fk_du_audit_admin` FOREIGN KEY (`admin_id`) REFERENCES `admin`(`id`) ON DELETE SET NULL ON UPDATE CASCADE

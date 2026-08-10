@@ -105,7 +105,7 @@ $bln_list = [
   <meta name="description" content="Lihat semua data transaksi pembayaran siswa." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="../assets/css/style.css?v=4.7" />
+  <link rel="stylesheet" href="../assets/css/style.css?v=6.1" />
   <!-- Prevent theme flash -->
   <script>(function(){var t=localStorage.getItem('spp_theme')||'dark';document.documentElement.setAttribute('data-theme',t);})();</script>
 </head>
@@ -202,7 +202,7 @@ $bln_list = [
                 <th>No</th>
                 <th>NIS</th>
                 <th>Nama Siswa</th>
-                <th>Kelas</th>
+                <th class="kelas-col">Kelas</th>
                 <th>Bulan / Tahun</th>
                 <th>SPP</th>
                 <th>Sistem</th>
@@ -228,7 +228,7 @@ $bln_list = [
                 <td data-label="No"><?= $no++ ?></td>
                 <td data-label="NIS"><span class="badge-nis"><?= htmlspecialchars($row['NO_INDUK']) ?></span></td>
                 <td data-label="Nama Siswa"><?= htmlspecialchars($row['NAMA']) ?></td>
-                <td data-label="Kelas"><?= htmlspecialchars($row['KELAS']) ?></td>
+                <td data-label="Kelas" class="kelas-col"><span class="kelas-badge">Kelas <?= htmlspecialchars($row['KELAS']) ?></span></td>
                 <td data-label="Bulan / Tahun">
                   <?= htmlspecialchars(month_code($row['BULAN'])) ?> <?= $row['TAHUN'] ?>
                   <?php if ((int)($row['payment_batch_count'] ?? 1) === 12): ?>

@@ -54,8 +54,49 @@ $stmt->execute();
 $rows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
 $stmt->close();
 
-// Saldo per siswa
-$saldo_list = $koneksi->query("SELECT t.NO_INDUK, s.NAMA, t.SALDO FROM tabungan t JOIN siswa s ON s.NO_INDUK = t.NO_INDUK ORDER BY s.NAMA ASC")->fetch_all(MYSQLI_ASSOC);
+// Rekap saldo semua siswa aktif. Siswa yang belum punya tabungan tetap tampil
+// agar admin bisa langsung menemukan nama dan mulai setoran pertama.
+$saldo_list = $koneksi->query("
+    SELECT s.NO_INDUK, s.NAMA, s.KELAS, COALESCE(t.SALDO, 0) AS SALDO,
+           COALESCE(m.total_masuk, 0) AS total_masuk,
+           COALESCE(k.total_keluar, 0) AS total_keluar,
+           CASE
+             WHEN m.last_masuk IS NULL THEN k.last_keluar
+             WHEN k.last_keluar IS NULL THEN m.last_masuk
+             WHEN m.last_masuk >= k.last_keluar THEN m.last_masuk
+             ELSE k.last_keluar
+           END AS last_activity
+    FROM siswa s
+    LEFT JOIN tabungan t ON t.NO_INDUK = s.NO_INDUK
+    LEFT JOIN (
+        SELECT NO_INDUK, SUM(MASUK) AS total_masuk, MAX(TANGGAL) AS last_masuk
+        FROM transaksi_m
+        GROUP BY NO_INDUK
+    ) m ON m.NO_INDUK = s.NO_INDUK
+    LEFT JOIN (
+        SELECT NO_INDUK, SUM(KELUAR) AS total_keluar, MAX(TANGGAL) AS last_keluar
+        FROM transaksi_k
+        GROUP BY NO_INDUK
+    ) k ON k.NO_INDUK = s.NO_INDUK
+    WHERE s.is_active = 1
+    ORDER BY CAST(s.KELAS AS UNSIGNED), s.NAMA ASC
+")->fetch_all(MYSQLI_ASSOC);
+
+$total_saldo_semua = array_sum(array_map(static fn($row) => (float)$row['SALDO'], $saldo_list));
+$siswa_punya_saldo = count(array_filter($saldo_list, static fn($row) => (float)$row['SALDO'] > 0));
+$saldo_tertinggi = empty($saldo_list) ? 0 : max(array_map(static fn($row) => (float)$row['SALDO'], $saldo_list));
+$kelas_rekap = array_values(array_unique(array_map(static fn($row) => (string)$row['KELAS'], $saldo_list)));
+sort($kelas_rekap, SORT_NATURAL);
+
+$selected_saldo = null;
+if ($filter_nis !== '') {
+    foreach ($saldo_list as $saldo_row) {
+        if ((string)$saldo_row['NO_INDUK'] === (string)$filter_nis) {
+            $selected_saldo = $saldo_row;
+            break;
+        }
+    }
+}
 
 $total_masuk  = array_sum(array_column($rows, 'nominal'));
 $total_keluar = array_sum(array_column($rows, 'keluar'));
@@ -73,7 +114,7 @@ $bln_names = ['01'=>'Januari','02'=>'Februari','03'=>'Maret','04'=>'April','05'=
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
   <script>(function(){var t=localStorage.getItem('spp_theme')||'dark';document.documentElement.setAttribute('data-theme',t);})();</script>
-  <link rel="stylesheet" href="../assets/css/style.css?v=4.7" />
+  <link rel="stylesheet" href="../assets/css/style.css?v=6.0" />
 </head>
 <body>
 <div class="bg-orbs"><div class="orb orb-1"></div><div class="orb orb-2"></div><div class="orb orb-3"></div></div>
@@ -116,6 +157,15 @@ $bln_names = ['01'=>'Januari','02'=>'Februari','03'=>'Maret','04'=>'April','05'=
             <span class="stat-label">Total Keluar (Bulan Ini)</span>
           </div>
         </div>
+        <?php if ($selected_saldo): ?>
+        <div class="stat-card stat-purple">
+          <div class="stat-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 10h10"/><path d="M7 14h6"/></svg></div>
+          <div class="stat-info">
+            <span class="stat-value">Rp <?= number_format((float)$selected_saldo['SALDO'], 0, ',', '.') ?></span>
+            <span class="stat-label">Saldo <?= htmlspecialchars($selected_saldo['NAMA']) ?> saat ini</span>
+          </div>
+        </div>
+        <?php endif; ?>
         <div class="stat-card stat-blue">
           <div class="stat-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg></div>
           <div class="stat-info">
@@ -159,7 +209,7 @@ $bln_names = ['01'=>'Januari','02'=>'Februari','03'=>'Maret','04'=>'April','05'=
       </div>
 
       <!-- Tabel Transaksi -->
-      <div class="main-card">
+      <div class="main-card savings-transaction-card">
         <div class="card-header tabungan-card-header">
           <h3 class="card-title">Daftar Transaksi — <?= $bln_names[str_pad($filter_bulan,2,'0',STR_PAD_LEFT)] ?> <?= $filter_tahun ?></h3>
           <?php if (hasRole(['admin','kasir'])): ?>
@@ -171,10 +221,10 @@ $bln_names = ['01'=>'Januari','02'=>'Februari','03'=>'Maret','04'=>'April','05'=
         </div>
 
         <div class="table-container">
-          <table class="payment-table responsive-table" id="tbl-riwayat">
+          <table class="payment-table responsive-table savings-transaction-table" id="tbl-riwayat">
             <thead>
               <tr>
-                <th>No</th><th>No. Induk</th><th>Nama</th><th>Kelas</th>
+                <th>No</th><th>No. Induk</th><th>Nama</th><th class="savings-class-col">Kelas</th>
                 <th>Tanggal</th><th>Jenis</th><th>Masuk (Rp)</th><th>Keluar (Rp)</th>
               </tr>
             </thead>
@@ -187,7 +237,7 @@ $bln_names = ['01'=>'Januari','02'=>'Februari','03'=>'Maret','04'=>'April','05'=
                 <td data-label="No"><?= $i + 1 ?></td>
                 <td data-label="No. Induk"><span class="badge-nis"><?= htmlspecialchars($r['NO_INDUK']) ?></span></td>
                 <td data-label="Nama"><?= htmlspecialchars($r['NAMA']) ?></td>
-                <td data-label="Kelas"><?= htmlspecialchars($r['KELAS']) ?></td>
+                <td data-label="Kelas" class="savings-class-col"><span class="savings-class-badge">Kelas <?= htmlspecialchars($r['KELAS']) ?></span></td>
                 <td data-label="Tanggal"><?= date('d M Y H:i', strtotime($r['TANGGAL'])) ?></td>
                 <td data-label="Jenis">
                   <?php if ($r['jenis'] === 'masuk'): ?>
@@ -207,25 +257,103 @@ $bln_names = ['01'=>'Januari','02'=>'Februari','03'=>'Maret','04'=>'April','05'=
       </div>
 
       <!-- Rekap Saldo Per Siswa -->
-      <div class="main-card" style="margin-top:16px;">
-        <div class="card-header">
-          <h3 class="card-title">Rekap Saldo Tabungan Per Siswa</h3>
+      <div class="main-card savings-recap-card" style="margin-top:16px;">
+        <div class="savings-recap-head">
+          <div>
+            <span class="section-kicker">Rekap Tabungan Siswa</span>
+            <h3 class="card-title">Cari Saldo Tabungan Per Siswa</h3>
+            <p>Gunakan nama, NIS, kelas, atau status saldo untuk menemukan siswa lebih cepat.</p>
+          </div>
+          <div class="savings-recap-total">
+            <span>Total Saldo</span>
+            <strong>Rp <?= number_format($total_saldo_semua, 0, ',', '.') ?></strong>
+          </div>
         </div>
+
+        <div class="savings-recap-stats">
+          <div><span>Siswa aktif</span><strong><?= number_format(count($saldo_list)) ?></strong></div>
+          <div><span>Punya saldo</span><strong><?= number_format($siswa_punya_saldo) ?></strong></div>
+          <div><span>Saldo tertinggi</span><strong>Rp <?= number_format($saldo_tertinggi, 0, ',', '.') ?></strong></div>
+        </div>
+
+        <div class="savings-search-panel">
+          <div class="search-box savings-search-main">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <input type="search" id="savings-student-search" placeholder="Cari nama siswa atau No. Induk..." autocomplete="off" />
+          </div>
+          <select class="field-input field-select" id="savings-class-filter" aria-label="Filter kelas">
+            <option value="">Semua kelas</option>
+            <?php foreach ($kelas_rekap as $kelas): ?>
+            <option value="<?= htmlspecialchars($kelas) ?>">Kelas <?= htmlspecialchars($kelas) ?></option>
+            <?php endforeach; ?>
+          </select>
+          <select class="field-input field-select" id="savings-status-filter" aria-label="Filter saldo">
+            <option value="">Semua saldo</option>
+            <option value="positive">Ada saldo</option>
+            <option value="zero">Saldo kosong</option>
+          </select>
+          <button type="button" class="btn btn-ghost" id="savings-reset-filter">Reset</button>
+        </div>
+
+        <div class="savings-result-info">
+          <span id="savings-result-count">Menampilkan <?= number_format(count($saldo_list)) ?> siswa</span>
+          <span>Klik baris aksi untuk lihat riwayat, setor, atau tarik.</span>
+        </div>
+
         <div class="table-container">
-          <table class="payment-table responsive-table">
-            <thead><tr><th>No</th><th>No. Induk</th><th>Nama</th><th>Saldo Tabungan (Rp)</th></tr></thead>
+          <table class="payment-table responsive-table savings-recap-table" id="savings-recap-table">
+            <thead>
+              <tr>
+                <th>No</th>
+                <th>Siswa</th>
+                <th class="savings-class-col">Kelas</th>
+                <th>Saldo</th>
+                <th>Terakhir</th>
+                <th>Aksi</th>
+              </tr>
+            </thead>
             <tbody>
               <?php if (empty($saldo_list)): ?>
-              <tr><td colspan="4" style="text-align:center;padding:30px;color:var(--text-muted);">Belum ada data saldo tabungan.</td></tr>
+              <tr class="savings-empty-row"><td colspan="6" style="text-align:center;padding:30px;color:var(--text-muted);">Belum ada data siswa aktif.</td></tr>
               <?php else: ?>
               <?php foreach ($saldo_list as $i => $sl): ?>
-              <tr class="<?= $i%2===0?'row-highlight':'' ?>">
-                <td data-label="No"><?= $i+1 ?></td>
-                <td data-label="No. Induk"><span class="badge-nis"><?= htmlspecialchars($sl['NO_INDUK']) ?></span></td>
-                <td data-label="Nama"><?= htmlspecialchars($sl['NAMA']) ?></td>
-                <td data-label="Saldo" class="nominal" style="font-weight:700;color:var(--accent);">Rp <?= number_format($sl['SALDO'],0,',','.') ?></td>
+              <?php
+                $saldo = (float)$sl['SALDO'];
+                $lastActivity = $sl['last_activity'] ? date('d/m/Y', strtotime($sl['last_activity'])) : 'Belum ada';
+                $searchText = strtolower($sl['NO_INDUK'] . ' ' . $sl['NAMA'] . ' kelas ' . $sl['KELAS']);
+              ?>
+              <tr class="<?= $i%2===0?'row-highlight':'' ?>"
+                  data-search="<?= htmlspecialchars($searchText, ENT_QUOTES, 'UTF-8') ?>"
+                  data-class="<?= htmlspecialchars((string)$sl['KELAS'], ENT_QUOTES, 'UTF-8') ?>"
+                  data-saldo="<?= htmlspecialchars((string)$saldo, ENT_QUOTES, 'UTF-8') ?>">
+                <td data-label="No" class="savings-row-number"><?= $i+1 ?></td>
+                <td data-label="Siswa">
+                  <div class="savings-student-cell">
+                    <strong><?= htmlspecialchars($sl['NAMA']) ?></strong>
+                    <span>NIS <?= htmlspecialchars($sl['NO_INDUK']) ?></span>
+                  </div>
+                </td>
+                <td data-label="Kelas" class="savings-class-col"><span class="savings-class-badge">Kelas <?= htmlspecialchars($sl['KELAS']) ?></span></td>
+                <td data-label="Saldo" class="nominal savings-balance <?= $saldo > 0 ? 'is-positive' : 'is-empty' ?>">Rp <?= number_format($saldo,0,',','.') ?></td>
+                <td data-label="Terakhir"><?= htmlspecialchars($lastActivity) ?></td>
+                <td data-label="Aksi">
+                  <div class="savings-row-actions">
+                    <a href="riwayat.php?nis=<?= urlencode($sl['NO_INDUK']) ?>&bulan=<?= urlencode($filter_bulan) ?>&tahun=<?= urlencode($filter_tahun) ?>" class="btn-tbl btn-tbl-view" title="Lihat riwayat">
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                    </a>
+                    <?php if (hasRole(['admin','kasir'])): ?>
+                    <a href="masuk.php?nis=<?= urlencode($sl['NO_INDUK']) ?>" class="btn-tbl btn-tbl-edit" title="Tabungan masuk">
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+                    </a>
+                    <a href="keluar.php?nis=<?= urlencode($sl['NO_INDUK']) ?>" class="btn-tbl btn-tbl-del" title="Tabungan keluar">
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/></svg>
+                    </a>
+                    <?php endif; ?>
+                  </div>
+                </td>
               </tr>
               <?php endforeach; ?>
+              <tr class="savings-no-match" hidden><td colspan="6" style="text-align:center;padding:30px;color:var(--text-muted);">Siswa tidak ditemukan. Coba kata kunci atau filter lain.</td></tr>
               <?php endif; ?>
             </tbody>
           </table>
@@ -237,6 +365,65 @@ $bln_names = ['01'=>'Januari','02'=>'Februari','03'=>'Maret','04'=>'April','05'=
 </div>
 <div class="toast" id="toast"><span id="toast-icon"></span><span id="toast-msg"></span></div>
 <script src="../assets/js/app.js?v=2.8"></script>
-<script>document.addEventListener('DOMContentLoaded', function(){ autoHideFlash(); });</script>
+<script>
+document.addEventListener('DOMContentLoaded', function(){
+  autoHideFlash();
+
+  const searchInput = document.getElementById('savings-student-search');
+  const classFilter = document.getElementById('savings-class-filter');
+  const statusFilter = document.getElementById('savings-status-filter');
+  const resetButton = document.getElementById('savings-reset-filter');
+  const resultCount = document.getElementById('savings-result-count');
+  const table = document.getElementById('savings-recap-table');
+  if (!searchInput || !classFilter || !statusFilter || !table) return;
+
+  const rows = Array.from(table.querySelectorAll('tbody tr[data-search]'));
+  const noMatch = table.querySelector('.savings-no-match');
+
+  function applySavingsFilter() {
+    const query = searchInput.value.trim().toLowerCase();
+    const selectedClass = classFilter.value;
+    const selectedStatus = statusFilter.value;
+    let shown = 0;
+
+    rows.forEach(function(row) {
+      const saldo = Number(row.dataset.saldo || 0);
+      const matchesText = !query || (row.dataset.search || '').includes(query);
+      const matchesClass = !selectedClass || row.dataset.class === selectedClass;
+      const matchesStatus = !selectedStatus ||
+        (selectedStatus === 'positive' && saldo > 0) ||
+        (selectedStatus === 'zero' && saldo <= 0);
+      const visible = matchesText && matchesClass && matchesStatus;
+
+      row.hidden = !visible;
+      if (visible) {
+        shown += 1;
+        const numberCell = row.querySelector('.savings-row-number');
+        if (numberCell) numberCell.textContent = shown;
+      }
+    });
+
+    if (noMatch) noMatch.hidden = shown !== 0;
+    if (resultCount) {
+      resultCount.textContent = 'Menampilkan ' + shown.toLocaleString('id-ID') + ' siswa';
+    }
+  }
+
+  searchInput.addEventListener('input', applySavingsFilter);
+  classFilter.addEventListener('change', applySavingsFilter);
+  statusFilter.addEventListener('change', applySavingsFilter);
+  if (resetButton) {
+    resetButton.addEventListener('click', function () {
+      searchInput.value = '';
+      classFilter.value = '';
+      statusFilter.value = '';
+      applySavingsFilter();
+      searchInput.focus();
+    });
+  }
+
+  applySavingsFilter();
+});
+</script>
 </body>
 </html>

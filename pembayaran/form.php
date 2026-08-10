@@ -12,10 +12,10 @@ requireRole(['admin', 'kasir']);
 $siswa_sql = "
     SELECT
         s.*,
-        GREATEST(COALESCE(p.paid_pangkal, 0), COALESCE(s.PANGKAL_BAYAR, 0)) AS paid_pangkal,
-        GREATEST(COALESCE(p.paid_bangunan, 0), COALESCE(s.BANGUNAN_BAYAR, 0)) AS paid_bangunan,
-        GREATEST(COALESCE(p.paid_seragam, 0), COALESCE(s.SERAGAM_BAYAR, 0)) AS paid_seragam,
-        GREATEST(COALESCE(p.paid_kegiatan, 0), COALESCE(s.KEGIATAN_BAYAR, 0)) AS paid_kegiatan,
+        COALESCE(s.PANGKAL_BAYAR, 0) AS paid_pangkal,
+        COALESCE(s.BANGUNAN_BAYAR, 0) AS paid_bangunan,
+        COALESCE(s.SERAGAM_BAYAR, 0) AS paid_seragam,
+        COALESCE(s.KEGIATAN_BAYAR, 0) AS paid_kegiatan,
         COALESCE(p.paid_makan, 0) AS paid_makan,
         COALESCE(p.paid_sorga, 0) AS paid_sorga,
         COALESCE(p.paid_infaq, 0) AS paid_infaq,
@@ -24,10 +24,6 @@ $siswa_sql = "
     LEFT JOIN (
         SELECT
             NO_INDUK,
-            SUM(U_PANGKAL) AS paid_pangkal,
-            SUM(U_BANGUNAN) AS paid_bangunan,
-            SUM(U_SERAGAM) AS paid_seragam,
-            SUM(U_KEGIATAN) AS paid_kegiatan,
             SUM(U_MAKAN) AS paid_makan,
             SUM(U_SORGA) AS paid_sorga,
             SUM(U_INFAQ) AS paid_infaq
@@ -53,8 +49,10 @@ $spp_paid_result = $koneksi->query("
 while ($paid = $spp_paid_result->fetch_assoc()) {
     $bulan_key = month_code($paid['BULAN']);
     $periodKey = $bulan_key . '-' . $paid['TAHUN'];
-    $period_payments[$paid['NO_INDUK']]['spp'][$periodKey] = (float)$paid['paid_spp'];
-    $period_payments[$paid['NO_INDUK']]['komite'][$periodKey] = (float)$paid['paid_komite'];
+    $period_payments[$paid['NO_INDUK']]['spp'][$periodKey] =
+        ($period_payments[$paid['NO_INDUK']]['spp'][$periodKey] ?? 0) + (float)$paid['paid_spp'];
+    $period_payments[$paid['NO_INDUK']]['komite'][$periodKey] =
+        ($period_payments[$paid['NO_INDUK']]['komite'][$periodKey] ?? 0) + (float)$paid['paid_komite'];
 }
 
 $du_bills = [];
@@ -136,7 +134,7 @@ unset($_SESSION['flash']);
   <meta name="description" content="Form input transaksi pembayaran siswa." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="../assets/css/style.css?v=5.5" />
+  <link rel="stylesheet" href="../assets/css/style.css?v=5.9" />
   <!-- Prevent theme flash -->
   <script>(function(){var t=localStorage.getItem('spp_theme')||'dark';document.documentElement.setAttribute('data-theme',t);})();</script>
 </head>
@@ -187,19 +185,15 @@ unset($_SESSION['flash']);
         <form method="POST" action="../pembayaran/proses.php" id="form-bayar">
           <input type="hidden" name="aksi" value="input" />
 
-          <!-- Tanggal + Jumlah Box -->
-          <div class="top-info-row">
-            <div class="info-group">
+          <!-- Pengaturan transaksi + ringkasan tagihan -->
+          <div class="top-info-row payment-input-top">
+            <div class="info-group payment-settings-group">
               <input type="hidden" name="payment_plan" value="monthly" />
-              <div class="field-row">
-                <span class="field-label">Jenis Transaksi</span>
-                <div class="field-input tbl-readonly">Pembayaran per bulan · 1 struk</div>
-                <span class="field-hint">Pembayaran banyak bulan ditangguhkan sampai alur pemilihan periode barunya tersedia.</span>
-              </div>
+              <div class="payment-settings-grid">
               <div class="field-row">
                 <label class="field-label" for="tgl-bayar">Tanggal Bayar</label>
                 <input class="field-input" type="date" id="tgl-bayar" name="tanggal_bayar"
-                  value="<?= date('Y-m-d') ?>" required />
+                  value="<?= date('Y-m-d') ?>" readonly aria-readonly="true" required />
               </div>
               <div class="field-row">
                 <label class="field-label" for="bulan-bayar" id="payment-period-label">Pembayaran Bulan</label>
@@ -230,12 +224,36 @@ unset($_SESSION['flash']);
                   <option value="Qris">Qris</option>
                 </select>
               </div>
+              </div>
             </div>
-            <div class="jumlah-box">
-              <span class="jumlah-label">Total Jumlah</span>
-              <span class="jumlah-value" id="totalJumlah">Rp 0</span>
-              <input type="hidden" name="total_jumlah" id="hidden-total" value="0" />
-            </div>
+            <section class="payment-overview-panel" aria-label="Ringkasan pembayaran">
+              <div class="payment-current-total">
+                <span>Total Bayar</span>
+                <strong id="totalJumlah">Rp 0</strong>
+                <input type="hidden" name="total_jumlah" id="hidden-total" value="0" />
+              </div>
+              <div class="payment-year-summary-heading">
+                <span>Ringkasan Tahun Ajaran</span>
+                <span class="payment-help-wrap">
+                  <button class="payment-help" type="button" aria-label="Penjelasan tahun ajaran" aria-describedby="payment-year-tooltip">?</button>
+                  <span class="payment-help-tooltip" id="payment-year-tooltip" role="tooltip">Tahun ajaran berjalan Juli sampai Juni. Januari 2026 termasuk TA 2025/2026, sedangkan Desember 2026 termasuk TA 2026/2027.</span>
+                </span>
+              </div>
+              <div class="payment-year-summary">
+                <div>
+                  <span id="academic-total-label">Total Tagihan TA <?= htmlspecialchars($activeAcademicYear) ?></span>
+                  <strong id="academic-total-value">Rp 0</strong>
+                </div>
+                <div>
+                  <span>Sudah Terbayar</span>
+                  <strong id="academic-paid-value">Rp 0</strong>
+                </div>
+                <div>
+                  <span>Sisa Tagihan</span>
+                  <strong id="academic-remaining-value">Rp 0</strong>
+                </div>
+              </div>
+            </section>
           </div>
 
           <!-- Data Siswa -->
@@ -321,12 +339,12 @@ unset($_SESSION['flash']);
                   ['infaq', '🕌 Uang Infaq', 'uang_infaq'],
                   ['du', '📚 Daftar Ulang', 'uang_du']
                 ];
-                array_splice($komponen, 5, 0, [[ 'komite', 'Uang Komite', 'uang_komite' ]]);
+                array_splice($komponen, 5, 0, [[ 'komite', '🏫 Uang Komite', 'uang_komite' ]]);
                 foreach ($komponen as $i => $k):
                   [$key, $label, $name] = $k;
                 ?>
                 <tr class="<?= $i % 2 === 0 ? 'row-highlight' : '' ?>">
-                  <td><span class="comp-label"><?= $label ?></span><?php if(in_array($key,['makan','sorga','infaq'],true)): ?><small class="du-inline-context du-context-label" id="<?= $key ?>-context-label">Tagihan satu kali · dapat dicicil</small><?php endif; ?><?php if($key==='du'): ?><small class="du-inline-context du-context-label" id="du-context-label">Pilih siswa, bulan, dan tahun pembayaran.</small><small class="du-inline-context du-master-warning" id="du-master-warning" hidden></small><?php endif; ?></td>
+                  <td><span class="comp-label"<?= $key === 'spp' ? ' id="spp-component-label"' : '' ?>><?= $label ?><?= $key === 'spp' ? ' (' . htmlspecialchars($month_labels[$cur]) . ')' : '' ?></span><?php if($key==='spp'): ?><small class="du-inline-context du-context-label" id="spp-context-label">Tagihan bulanan · dapat dicicil</small><?php endif; ?><?php if(in_array($key,['makan','sorga','infaq'],true)): ?><small class="du-inline-context du-context-label" id="<?= $key ?>-context-label">Tagihan satu kali · dapat dicicil</small><?php endif; ?><?php if($key==='du'): ?><small class="du-inline-context du-context-label" id="du-context-label">Pilih siswa, bulan, dan tahun pembayaran.</small><small class="du-inline-context du-master-warning" id="du-master-warning" hidden></small><?php endif; ?></td>
                   <td data-label="Total Tagihan"><input class="tbl-input tbl-system" type="text" value="0" id="<?=$key?>-total" readonly tabindex="-1" aria-readonly="true" /></td>
                   <td data-label="Sudah Terbayar"><input class="tbl-input tbl-system" type="text" value="0" id="<?=$key?>-bayar" readonly tabindex="-1" aria-readonly="true" /></td>
                   <td data-label="Sisa"><input class="tbl-input tbl-system tbl-system-sisa" type="text" value="0" id="<?=$key?>-sisa" readonly tabindex="-1" aria-readonly="true" /></td>
@@ -403,7 +421,7 @@ unset($_SESSION['flash']);
               <input class="field-input" type="text" id="potongan-spp" name="potongan_spp" placeholder="Rp 0" />
             </div>
             <div class="field-row">
-              <label class="field-label" for="tab-wajib">Tabungan Wajib</label>
+              <label class="field-label" for="tab-wajib">Tabungan</label>
               <input class="field-input" type="text" id="tab-wajib" name="tabungan_wajib" placeholder="Rp 0" />
             </div>
             <div class="field-row">
@@ -446,7 +464,7 @@ unset($_SESSION['flash']);
     window.sppDaftarUlangMasters = {};
     window.sppDaftarUlangHasMasters = true;
   </script>
-  <script src="../assets/js/app.js?v=4.8"></script>
+  <script src="../assets/js/app.js?v=5.4"></script>
 </body>
 </html>
 

@@ -129,11 +129,11 @@ FROM (
            WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'bayar_spp_periode'
          )
   UNION ALL
-  SELECT 'uk_bayar_spp_siswa_periode',
+  SELECT 'idx_bayar_spp_siswa_periode',
          EXISTS(
            SELECT 1 FROM information_schema.STATISTICS
            WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'bayar_spp_periode'
-             AND INDEX_NAME = 'uk_bayar_spp_siswa_periode' AND NON_UNIQUE = 0
+             AND INDEX_NAME = 'idx_bayar_spp_siswa_periode' AND NON_UNIQUE = 1
          )
   UNION ALL
   SELECT 'bayar_du.bayar_id',
@@ -176,9 +176,59 @@ FROM (
       AND TABLE_NAME='siswa_tahun_ajaran' AND INDEX_NAME='uk_siswa_tahun_ajaran' AND NON_UNIQUE=0
   )
   UNION ALL
+  SELECT 'uk_tahun_ajaran_label', EXISTS(
+    SELECT 1 FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=DATABASE()
+      AND TABLE_NAME='tahun_ajaran' AND INDEX_NAME='uk_tahun_ajaran_label' AND NON_UNIQUE=0
+  )
+  UNION ALL
+  SELECT 'idx_penempatan_siswa', EXISTS(
+    SELECT 1 FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=DATABASE()
+      AND TABLE_NAME='siswa_tahun_ajaran' AND INDEX_NAME='idx_penempatan_siswa'
+  )
+  UNION ALL
+  SELECT 'idx_tagihan_du_penempatan', EXISTS(
+    SELECT 1 FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=DATABASE()
+      AND TABLE_NAME='tagihan_daftar_ulang' AND INDEX_NAME='idx_tagihan_du_penempatan'
+  )
+  UNION ALL
+  SELECT 'idx_tagihan_du_master', EXISTS(
+    SELECT 1 FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=DATABASE()
+      AND TABLE_NAME='tagihan_daftar_ulang' AND INDEX_NAME='idx_tagihan_du_master'
+  )
+  UNION ALL
+  SELECT 'idx_du_audit_year', EXISTS(
+    SELECT 1 FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=DATABASE()
+      AND TABLE_NAME='daftar_ulang_audit_log' AND INDEX_NAME='idx_du_audit_year'
+  )
+  UNION ALL
+  SELECT 'idx_du_audit_master', EXISTS(
+    SELECT 1 FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=DATABASE()
+      AND TABLE_NAME='daftar_ulang_audit_log' AND INDEX_NAME='idx_du_audit_master'
+  )
+  UNION ALL
   SELECT 'uk_tagihan_du_siswa_tahun', EXISTS(
     SELECT 1 FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=DATABASE()
       AND TABLE_NAME='tagihan_daftar_ulang' AND INDEX_NAME='uk_tagihan_du_siswa_tahun' AND NON_UNIQUE=0
+  )
+  UNION ALL
+  SELECT 'chk_tahun_ajaran_dates', EXISTS(
+    SELECT 1 FROM information_schema.CHECK_CONSTRAINTS WHERE CONSTRAINT_SCHEMA=DATABASE()
+      AND CONSTRAINT_NAME='chk_tahun_ajaran_dates'
+  )
+  UNION ALL
+  SELECT 'chk_penempatan_kelas_sd', EXISTS(
+    SELECT 1 FROM information_schema.CHECK_CONSTRAINTS WHERE CONSTRAINT_SCHEMA=DATABASE()
+      AND CONSTRAINT_NAME='chk_penempatan_kelas_sd'
+  )
+  UNION ALL
+  SELECT 'chk_tagihan_du_nominal', EXISTS(
+    SELECT 1 FROM information_schema.CHECK_CONSTRAINTS WHERE CONSTRAINT_SCHEMA=DATABASE()
+      AND CONSTRAINT_NAME='chk_tagihan_du_nominal'
+  )
+  UNION ALL
+  SELECT 'chk_tagihan_du_kelas', EXISTS(
+    SELECT 1 FROM information_schema.CHECK_CONSTRAINTS WHERE CONSTRAINT_SCHEMA=DATABASE()
+      AND CONSTRAINT_NAME='chk_tagihan_du_kelas'
   )
   UNION ALL
   SELECT 'fk_bayar_du_tagihan', EXISTS(

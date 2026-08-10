@@ -12,7 +12,7 @@ requireRole(['admin', 'kasir']);
 $id = (int)($_GET['id'] ?? 0);
 if ($id <= 0) { header('Location: lihat.php'); exit; }
 
-$stmt = $koneksi->prepare("SELECT p.*, s.NO_INDUK, s.NAMA, s.KELAS FROM bayar p JOIN siswa s ON s.NO_INDUK = p.NO_INDUK WHERE p.id = ?");
+$stmt = $koneksi->prepare("SELECT p.*, s.NO_INDUK, s.NAMA, s.KELAS, s.SPP_PERBULAN FROM bayar p JOIN siswa s ON s.NO_INDUK = p.NO_INDUK WHERE p.id = ?");
 $stmt->bind_param('i', $id);
 $stmt->execute();
 $d = $stmt->get_result()->fetch_assoc();
@@ -45,15 +45,15 @@ $res_tab = $stmt_tab->get_result()->fetch_assoc();
 $d['tabungan_wajib'] = $res_tab ? (float)$res_tab['MASUK'] : 0.0;
 $stmt_tab->close();
 
-$d['kewajiban_spp'] = max(0, $d['U_SPP'] - $d['potong_spp'] - $d['tabungan_wajib']);
+$d['kewajiban_spp'] = 0.0;
 
 $siswa_sql = "
     SELECT
         s.*,
-        GREATEST(COALESCE(p.paid_pangkal, 0), COALESCE(s.PANGKAL_BAYAR, 0)) AS paid_pangkal,
-        GREATEST(COALESCE(p.paid_bangunan, 0), COALESCE(s.BANGUNAN_BAYAR, 0)) AS paid_bangunan,
-        GREATEST(COALESCE(p.paid_seragam, 0), COALESCE(s.SERAGAM_BAYAR, 0)) AS paid_seragam,
-        GREATEST(COALESCE(p.paid_kegiatan, 0), COALESCE(s.KEGIATAN_BAYAR, 0)) AS paid_kegiatan,
+        GREATEST(COALESCE(s.PANGKAL_BAYAR, 0) - IF(s.NO_INDUK = ?, ?, 0), 0) AS paid_pangkal,
+        GREATEST(COALESCE(s.BANGUNAN_BAYAR, 0) - IF(s.NO_INDUK = ?, ?, 0), 0) AS paid_bangunan,
+        GREATEST(COALESCE(s.SERAGAM_BAYAR, 0) - IF(s.NO_INDUK = ?, ?, 0), 0) AS paid_seragam,
+        GREATEST(COALESCE(s.KEGIATAN_BAYAR, 0) - IF(s.NO_INDUK = ?, ?, 0), 0) AS paid_kegiatan,
         COALESCE(p.paid_makan, 0) AS paid_makan,
         COALESCE(p.paid_sorga, 0) AS paid_sorga,
         COALESCE(p.paid_infaq, 0) AS paid_infaq,
@@ -62,10 +62,6 @@ $siswa_sql = "
     LEFT JOIN (
         SELECT
             NO_INDUK,
-            SUM(U_PANGKAL) AS paid_pangkal,
-            SUM(U_BANGUNAN) AS paid_bangunan,
-            SUM(U_SERAGAM) AS paid_seragam,
-            SUM(U_KEGIATAN) AS paid_kegiatan,
             SUM(U_MAKAN) AS paid_makan,
             SUM(U_SORGA) AS paid_sorga,
             SUM(U_INFAQ) AS paid_infaq
@@ -83,7 +79,19 @@ $siswa_sql = "
     ORDER BY s.NAMA ASC
 ";
 $stmt_siswa = $koneksi->prepare($siswa_sql);
-$stmt_siswa->bind_param('iis', $id, $id, $d['NO_INDUK']);
+$currentNis = (string)$d['NO_INDUK'];
+$currentPangkal = (float)$d['U_PANGKAL'];
+$currentBangunan = (float)$d['U_BANGUNAN'];
+$currentSeragam = (float)$d['U_SERAGAM'];
+$currentKegiatan = (float)$d['U_KEGIATAN'];
+$stmt_siswa->bind_param(
+    'sdsdsdsdiis',
+    $currentNis, $currentPangkal,
+    $currentNis, $currentBangunan,
+    $currentNis, $currentSeragam,
+    $currentNis, $currentKegiatan,
+    $id, $id, $d['NO_INDUK']
+);
 $stmt_siswa->execute();
 $siswa_list = $stmt_siswa->get_result();
 
@@ -100,10 +108,15 @@ $spp_paid_result = $stmt_period->get_result();
 while ($paid = $spp_paid_result->fetch_assoc()) {
     $bulan_key = month_code($paid['BULAN']);
     $periodKey = $bulan_key . '-' . $paid['TAHUN'];
-    $period_payments[$paid['NO_INDUK']]['spp'][$periodKey] = (float)$paid['paid_spp'];
-    $period_payments[$paid['NO_INDUK']]['komite'][$periodKey] = (float)$paid['paid_komite'];
+    $period_payments[$paid['NO_INDUK']]['spp'][$periodKey] =
+        ($period_payments[$paid['NO_INDUK']]['spp'][$periodKey] ?? 0) + (float)$paid['paid_spp'];
+    $period_payments[$paid['NO_INDUK']]['komite'][$periodKey] =
+        ($period_payments[$paid['NO_INDUK']]['komite'][$periodKey] ?? 0) + (float)$paid['paid_komite'];
 }
 $stmt_period->close();
+
+$currentPeriodKey = month_code($d['BULAN']) . '-' . $d['TAHUN'];
+$d['kewajiban_spp'] = max(0, (float)$d['SPP_PERBULAN'] - (float)($period_payments[$d['NO_INDUK']]['spp'][$currentPeriodKey] ?? 0));
 
 $du_bills = [];
 $stmt_du_bills = $koneksi->prepare("SELECT tdu.id, tdu.no_induk, tdu.kelas_snapshot, tdu.tahun_ajaran_snapshot,
@@ -221,7 +234,7 @@ $selectedPaymentMethod = $d['sistem_pembayaran'] ?? 'VA';
   <meta name="description" content="Edit data transaksi pembayaran siswa." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="../assets/css/style.css?v=5.5" />
+  <link rel="stylesheet" href="../assets/css/style.css?v=5.8" />
   <!-- Prevent theme flash -->
   <script>(function(){var t=localStorage.getItem('spp_theme')||'dark';document.documentElement.setAttribute('data-theme',t);})();</script>
 </head>
@@ -391,7 +404,7 @@ $selectedPaymentMethod = $d['sistem_pembayaran'] ?? 'VA';
                   ['infaq', '🕌 Uang Infaq', 'U_INFAQ', 'uang_infaq'],
                   ['du', '📚 Daftar Ulang', 'uang_du', 'uang_du']
                 ];
-                array_splice($komp, 5, 0, [[ 'komite', 'Uang Komite', 'U_KOMITE', 'uang_komite' ]]);
+                array_splice($komp, 5, 0, [[ 'komite', '🏫 Uang Komite', 'U_KOMITE', 'uang_komite' ]]);
                 foreach ($komp as $i => [$key,$label,$col,$inputName]):
                 ?>
                 <tr class="<?= $i%2===0?'row-highlight':'' ?>">
@@ -494,7 +507,7 @@ $selectedPaymentMethod = $d['sistem_pembayaran'] ?? 'VA';
                 value="<?= number_format((float)$d['potong_spp'], 0, ',', '.') ?>" />
             </div>
             <div class="field-row">
-              <label class="field-label">Tabungan Wajib</label>
+              <label class="field-label">Tabungan</label>
               <input class="field-input" type="text" name="tabungan_wajib" id="tab-wajib"
                 value="<?= number_format((float)$d['tabungan_wajib'], 0, ',', '.') ?>" />
             </div>
@@ -531,7 +544,7 @@ $selectedPaymentMethod = $d['sistem_pembayaran'] ?? 'VA';
     window.sppDaftarUlangMasters = {};
     window.sppDaftarUlangHasMasters = true;
   </script>
-  <script src="../assets/js/app.js?v=4.8"></script>
+  <script src="../assets/js/app.js?v=5.4"></script>
 </body>
 </html>
 

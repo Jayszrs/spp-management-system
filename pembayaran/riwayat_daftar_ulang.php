@@ -183,7 +183,7 @@ unset($_SESSION['flash']);
   <meta name="description" content="Rekap pembayaran dan cicilan daftar ulang siswa." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="../assets/css/style.css?v=5.6" />
+  <link rel="stylesheet" href="../assets/css/style.css?v=5.7" />
   <script>(function(){var t=localStorage.getItem('spp_theme')||'dark';document.documentElement.setAttribute('data-theme',t);})();</script>
 </head>
 <body>
@@ -236,8 +236,11 @@ unset($_SESSION['flash']);
                 <td data-label="Sisa" class="nominal"><?= du_money($group['remaining']) ?></td>
                 <td data-label="Status"><span class="recap-status <?= $group['status'] === 'lunas' ? 'is-paid' : 'is-partial' ?>"><?= $group['status'] === 'lunas' ? 'Lunas' : 'Belum Lunas' ?></span></td>
                 <td data-label="Rincian">
-                  <details class="du-payment-details">
-                    <summary><?= count($group['transactions']) ?> pembayaran</summary>
+                  <div class="du-payment-details">
+                    <div class="du-payment-summary">
+                      <strong><?= count($group['transactions']) ?> pembayaran</strong>
+                      <span><?= $group['transactions'] ? 'Rincian transaksi' : 'Belum ada cicilan' ?></span>
+                    </div>
                     <div class="du-payment-timeline">
                     <?php foreach ($group['transactions'] as $transaction): ?>
                       <div class="du-payment-entry">
@@ -246,7 +249,8 @@ unset($_SESSION['flash']);
                       </div>
                     <?php endforeach; ?>
                     </div>
-                  </details>
+                    <?php if (!$group['transactions']): ?><div class="du-payment-empty">Pembayaran daftar ulang belum tercatat.</div><?php endif; ?>
+                  </div>
                 </td>
               </tr>
             <?php endforeach; endif; ?>

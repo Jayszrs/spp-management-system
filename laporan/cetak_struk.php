@@ -56,6 +56,123 @@ function receipt_words(int $number): string {
     return receipt_words(intdiv($number, 1000000000)) . ' miliar' . ($number % 1000000000 ? ' ' . receipt_words($number % 1000000000) : '');
 }
 
+function receipt_month_code($value): string {
+    $map = [
+        'Januari' => '01', 'Februari' => '02', 'Maret' => '03', 'April' => '04',
+        'Mei' => '05', 'Juni' => '06', 'Juli' => '07', 'Agustus' => '08',
+        'September' => '09', 'Oktober' => '10', 'November' => '11', 'Desember' => '12',
+    ];
+    if (isset($map[$value])) return $map[$value];
+    return str_pad((string)(int)$value, 2, '0', STR_PAD_LEFT);
+}
+
+function receipt_period_paid(mysqli $db, string $noInduk, string $bulan, string $tahun): array {
+    $monthCode = receipt_month_code($bulan);
+    $monthLabel = receipt_month($monthCode);
+    $legacyMonth = (string)(int)$monthCode;
+    $stmt = $db->prepare("
+        SELECT COALESCE(SUM(U_SPP), 0) AS spp, COALESCE(SUM(U_KOMITE), 0) AS komite
+        FROM bayar
+        WHERE NO_INDUK = ? AND TAHUN = ? AND (BULAN = ? OR BULAN = ? OR BULAN = ?)
+    ");
+    $stmt->bind_param('sssss', $noInduk, $tahun, $monthCode, $monthLabel, $legacyMonth);
+    $stmt->execute();
+    $paid = $stmt->get_result()->fetch_assoc() ?: [];
+    $stmt->close();
+    return ['spp' => (float)($paid['spp'] ?? 0), 'komite' => (float)($paid['komite'] ?? 0)];
+}
+
+function receipt_one_time_paid(mysqli $db, string $noInduk): array {
+    $stmt = $db->prepare("
+        SELECT
+            COALESCE(SUM(U_MAKAN), 0) AS makan,
+            COALESCE(SUM(U_SORGA), 0) AS sorga,
+            COALESCE(SUM(U_INFAQ), 0) AS infaq
+        FROM bayar
+        WHERE NO_INDUK = ?
+    ");
+    $stmt->bind_param('s', $noInduk);
+    $stmt->execute();
+    $paid = $stmt->get_result()->fetch_assoc() ?: [];
+    $stmt->close();
+    return [
+        'makan' => (float)($paid['makan'] ?? 0),
+        'sorga' => (float)($paid['sorga'] ?? 0),
+        'infaq' => (float)($paid['infaq'] ?? 0),
+    ];
+}
+
+function receipt_du_paid(mysqli $db, int $billId): float {
+    if ($billId <= 0) return 0.0;
+    $stmt = $db->prepare('SELECT COALESCE(SUM(jumlah), 0) AS paid FROM bayar_du WHERE tagihan_daftar_ulang_id = ?');
+    $stmt->bind_param('i', $billId);
+    $stmt->execute();
+    $paid = (float)($stmt->get_result()->fetch_assoc()['paid'] ?? 0);
+    $stmt->close();
+    return $paid;
+}
+
+function receipt_biaya_lain_paid(mysqli $db, string $noInduk, int $masterId): float {
+    if ($masterId <= 0) return 0.0;
+    $stmt = $db->prepare("
+        SELECT COALESCE(SUM(d.nominal_snapshot), 0) AS paid
+        FROM bayar_biaya_lain d
+        JOIN bayar b ON b.id = d.bayar_id
+        WHERE b.NO_INDUK = ? AND d.master_biaya_lain_id = ?
+    ");
+    $stmt->bind_param('si', $noInduk, $masterId);
+    $stmt->execute();
+    $paid = (float)($stmt->get_result()->fetch_assoc()['paid'] ?? 0);
+    $stmt->close();
+    return $paid;
+}
+
+function receipt_add_remaining_line(array &$lines, string $label, float $currentAmount, float $total, float $paid): void {
+    if (abs($currentAmount) < 0.005 || $total <= 0) return;
+    $lines[] = [$label, max(0, $total - $paid)];
+}
+
+function receipt_remaining_lines(mysqli $db, array $payment, array $otherDetails): array {
+    $lines = [];
+    $noInduk = (string)$payment['NO_INDUK'];
+    $periodPaid = receipt_period_paid($db, $noInduk, (string)$payment['BULAN'], (string)$payment['TAHUN']);
+    $oneTimePaid = receipt_one_time_paid($db, $noInduk);
+
+    $psbBill = (float)$payment['tot_pangkal'] > 0
+        ? (float)$payment['tot_pangkal']
+        : max(0, (float)$payment['PANGKAL'] - (float)$payment['potong_pangkal']);
+    receipt_add_remaining_line($lines, 'Sisa PSB', (float)$payment['U_PANGKAL'], $psbBill, (float)$payment['PANGKAL_BAYAR']);
+    receipt_add_remaining_line($lines, 'Sisa Bangunan', (float)$payment['U_BANGUNAN'], (float)$payment['BANGUNAN'], (float)$payment['BANGUNAN_BAYAR']);
+    receipt_add_remaining_line($lines, 'Sisa Seragam', (float)$payment['U_SERAGAM'], (float)$payment['SERAGAM'], (float)$payment['SERAGAM_BAYAR']);
+    receipt_add_remaining_line($lines, 'Sisa Kegiatan', (float)$payment['U_KEGIATAN'], (float)$payment['KEGIATAN'], (float)$payment['KEGIATAN_BAYAR']);
+    receipt_add_remaining_line($lines, 'Sisa SPP', (float)$payment['U_SPP'], (float)$payment['SPP_PERBULAN'], $periodPaid['spp']);
+    receipt_add_remaining_line($lines, 'Sisa Komite', (float)$payment['U_KOMITE'], (float)$payment['POMG'], $periodPaid['komite']);
+    receipt_add_remaining_line($lines, 'Sisa Makan', (float)$payment['U_MAKAN'], (float)$payment['MAKAN'], $oneTimePaid['makan']);
+    receipt_add_remaining_line($lines, 'Sisa Sorga', (float)$payment['U_SORGA'], (float)$payment['SORGA'], $oneTimePaid['sorga']);
+    receipt_add_remaining_line($lines, 'Sisa Infaq', (float)$payment['U_INFAQ'], (float)$payment['INFAQ'], $oneTimePaid['infaq']);
+
+    $duBillId = (int)($payment['tagihan_daftar_ulang_id'] ?? 0);
+    $duTotal = (float)($payment['du_nominal_tagihan'] ?? 0);
+    if ($duTotal <= 0) {
+        $duTotal = (float)$payment['tot_du'] > 0
+            ? (float)$payment['tot_du']
+            : max(0, (float)$payment['DAFTAR_ULANG'] - (float)$payment['potong_du']);
+    }
+    $duPaid = $duBillId > 0 ? receipt_du_paid($db, $duBillId) : (float)($payment['total_du_bayar'] ?? 0);
+    receipt_add_remaining_line($lines, 'Sisa DU', (float)$payment['uang_du'], $duTotal, $duPaid);
+
+    foreach ($otherDetails as $detail) {
+        $masterId = (int)($detail['master_biaya_lain_id'] ?? 0);
+        $masterTotal = (float)($detail['master_nominal'] ?? 0);
+        if ($masterId <= 0 || $masterTotal <= 0) continue;
+        $label = 'Sisa ' . (string)$detail['nama_biaya_snapshot'];
+        if (trim((string)$detail['keterangan']) !== '') $label .= ' - ' . $detail['keterangan'];
+        receipt_add_remaining_line($lines, $label, (float)$detail['nominal_snapshot'], $masterTotal, receipt_biaya_lain_paid($db, $noInduk, $masterId));
+    }
+
+    return $lines;
+}
+
 $stmt = $koneksi->prepare("
     SELECT
         b.*,
@@ -63,18 +180,32 @@ $stmt = $koneksi->prepare("
         s.KELAS AS KELAS_SISWA,
         s.PANGKAL,
         s.PANGKAL_BAYAR,
+        s.BANGUNAN,
+        s.BANGUNAN_BAYAR,
+        s.SERAGAM,
+        s.SERAGAM_BAYAR,
+        s.KEGIATAN,
+        s.KEGIATAN_BAYAR,
+        s.MAKAN,
+        s.SORGA,
+        s.INFAQ,
+        s.SPP_PERBULAN,
+        s.POMG,
         s.potong_pangkal,
         s.tot_pangkal,
         s.DAFTAR_ULANG,
         s.potong_du,
         s.tot_du,
+        du.tagihan_daftar_ulang_id,
         COALESCE(du.jumlah, 0) AS uang_du,
+        COALESCE(tdu.nominal_tagihan, 0) AS du_nominal_tagihan,
         COALESCE(tab.MASUK, 0) AS tabungan_wajib,
         COALESCE((SELECT SUM(bp.U_PANGKAL) FROM bayar bp WHERE bp.NO_INDUK = b.NO_INDUK), 0) AS total_pangkal_bayar,
         COALESCE((SELECT SUM(bd.jumlah) FROM bayar_du bd WHERE bd.no_induk = b.NO_INDUK), 0) AS total_du_bayar
     FROM bayar b
     JOIN siswa s ON s.NO_INDUK = b.NO_INDUK
     LEFT JOIN bayar_du du ON du.bayar_id = b.id
+    LEFT JOIN tagihan_daftar_ulang tdu ON tdu.id = du.tagihan_daftar_ulang_id
     LEFT JOIN transaksi_m tab ON tab.bayar_id = b.id
     WHERE b.id = ?
     LIMIT 1
@@ -91,7 +222,13 @@ if (!$payment) {
 }
 
 $otherDetails = [];
-$stmt = $koneksi->prepare('SELECT nama_biaya_snapshot, nominal_snapshot, keterangan FROM bayar_biaya_lain WHERE bayar_id = ? ORDER BY urutan, id');
+$stmt = $koneksi->prepare('
+    SELECT d.master_biaya_lain_id, d.nama_biaya_snapshot, d.nominal_snapshot, d.keterangan, m.nominal AS master_nominal
+    FROM bayar_biaya_lain d
+    LEFT JOIN master_biaya_lain m ON m.id = d.master_biaya_lain_id
+    WHERE d.bayar_id = ?
+    ORDER BY d.urutan, d.id
+');
 $stmt->bind_param('i', $paymentId);
 $stmt->execute();
 $detailResult = $stmt->get_result();
@@ -103,7 +240,7 @@ $primaryLines = [
     ['Uang Daftar Ulang', $payment['uang_du']],
     ['Uang SPP', $payment['U_SPP']],
     ['Komite Sekolah', $payment['U_KOMITE']],
-    ['Tabungan Wajib', $payment['tabungan_wajib']],
+    ['Tabungan', $payment['tabungan_wajib']],
 ];
 $otherLines = [
     ['Uang Bangunan', $payment['U_BANGUNAN']],
@@ -121,14 +258,7 @@ foreach ($otherDetails as $detail) {
 if ((float)$payment['potong_spp'] > 0) $otherLines[] = ['Potongan SPP', -(float)$payment['potong_spp']];
 $otherLines = array_values(array_filter($otherLines, fn($line) => abs((float)$line[1]) >= 0.005));
 
-$psbBill = (float)$payment['tot_pangkal'] > 0
-    ? (float)$payment['tot_pangkal']
-    : max(0, (float)$payment['PANGKAL'] - (float)$payment['potong_pangkal']);
-$duBill = (float)$payment['tot_du'] > 0
-    ? (float)$payment['tot_du']
-    : max(0, (float)$payment['DAFTAR_ULANG'] - (float)$payment['potong_du']);
-$remainingPsb = max(0, $psbBill - max((float)$payment['PANGKAL_BAYAR'], (float)$payment['total_pangkal_bayar']));
-$remainingDu = max(0, $duBill - (float)$payment['total_du_bayar']);
+$remainingLines = receipt_remaining_lines($koneksi, $payment, $otherDetails);
 $total = (float)$payment['total_jumlah'];
 $signer = $_SESSION['admin_nama'] ?? 'Bagian Keuangan';
 ?>
@@ -219,15 +349,18 @@ $signer = $_SESSION['admin_nama'] ?? 'Bagian Keuangan';
       <td>
         <div class="section-label">Sisa Pembayaran:</div>
         <table class="payments">
-          <tr><td><strong>Sisa PSB</strong></td><td class="separator">:</td><td class="amount"><?= receipt_e(receipt_money($remainingPsb)) ?></td></tr>
-          <tr><td><strong>Sisa DU</strong></td><td class="separator">:</td><td class="amount"><?= receipt_e(receipt_money($remainingDu)) ?></td></tr>
+          <?php if ($remainingLines): foreach ($remainingLines as [$label, $amount]): ?>
+          <tr><td><strong><?= receipt_e($label) ?></strong></td><td class="separator">:</td><td class="amount"><?= receipt_e(receipt_money($amount, true)) ?></td></tr>
+          <?php endforeach; else: ?>
+          <tr><td>-</td><td></td><td></td></tr>
+          <?php endif; ?>
         </table>
         <div class="section-label" style="margin-top:8px">Pembayaran Lain-lain:</div>
         <table class="payments">
           <?php if ($otherLines): foreach ($otherLines as [$label, $amount]): ?>
           <tr><td><?= receipt_e($label) ?></td><td class="separator">:</td><td class="amount"><?= $amount < 0 ? '-' : '' ?><?= receipt_e(receipt_money(abs((float)$amount))) ?></td></tr>
           <?php endforeach; else: ?>
-          <tr><td>—</td><td></td><td></td></tr>
+          <tr><td>-</td><td></td><td></td></tr>
           <?php endif; ?>
         </table>
       </td>

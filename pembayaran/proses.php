@@ -62,19 +62,6 @@ function split_payment_amount(float $amount, int $parts): array {
     return $result;
 }
 
-function assert_spp_period_available(mysqli $db, string $noInduk, string $bulan, string $tahun, int $excludePaymentId = 0): void {
-    $monthLabel = payment_month_label($bulan);
-    $legacyMonth = (string)(int)$bulan;
-    $stmt = $db->prepare('SELECT id FROM bayar WHERE NO_INDUK = ? AND TAHUN = ? AND (BULAN = ? OR BULAN = ? OR BULAN = ?) AND U_SPP > 0 AND id <> ? LIMIT 1 FOR UPDATE');
-    $stmt->bind_param('sssssi', $noInduk, $tahun, $bulan, $monthLabel, $legacyMonth, $excludePaymentId);
-    $stmt->execute();
-    $exists = $stmt->get_result()->fetch_assoc();
-    $stmt->close();
-    if ($exists) {
-        throw new RuntimeException('SPP ' . $monthLabel . ' ' . $tahun . ' sudah dibayar. Periode yang sama tidak dapat dibayar dua kali.');
-    }
-}
-
 function sync_spp_period_claim(mysqli $db, int $bayarId, string $noInduk, string $bulan, string $tahun, float $uangSpp): void {
     $stmt = $db->prepare('DELETE FROM bayar_spp_periode WHERE bayar_id = ?');
     $stmt->bind_param('i', $bayarId);
@@ -82,7 +69,6 @@ function sync_spp_period_claim(mysqli $db, int $bayarId, string $noInduk, string
     $stmt->close();
     if ($uangSpp <= 0) return;
 
-    assert_spp_period_available($db, $noInduk, $bulan, $tahun, $bayarId);
     $stmt = $db->prepare('INSERT INTO bayar_spp_periode (bayar_id, no_induk, bulan, tahun) VALUES (?, ?, ?, ?)');
     $stmt->bind_param('isss', $bayarId, $noInduk, $bulan, $tahun);
     $stmt->execute();
@@ -132,8 +118,10 @@ function validate_student_and_komite(
         throw new RuntimeException('Siswa yang diarsipkan tidak dapat dipakai untuk transaksi baru.');
     }
 
-    $stmt = $db->prepare('SELECT U_KOMITE FROM bayar WHERE NO_INDUK = ? AND BULAN = ? AND TAHUN = ? AND id <> ? FOR UPDATE');
-    $stmt->bind_param('sssi', $noInduk, $bulan, $tahun, $excludePaymentId);
+    $monthLabel = payment_month_label($bulan);
+    $legacyMonth = (string)(int)$bulan;
+    $stmt = $db->prepare('SELECT U_KOMITE FROM bayar WHERE NO_INDUK = ? AND TAHUN = ? AND (BULAN = ? OR BULAN = ? OR BULAN = ?) AND id <> ? FOR UPDATE');
+    $stmt->bind_param('sssssi', $noInduk, $tahun, $bulan, $monthLabel, $legacyMonth, $excludePaymentId);
     $stmt->execute();
     $paid = 0.0;
     $result = $stmt->get_result();
@@ -164,7 +152,8 @@ function validate_component_remaining(
 ): void {
     $stmt = $db->prepare('
         SELECT PANGKAL, potong_pangkal, tot_pangkal, BANGUNAN, SERAGAM, KEGIATAN,
-               MAKAN, SORGA, INFAQ, SPP_PERBULAN, POMG, DAFTAR_ULANG, potong_du, tot_du
+               MAKAN, SORGA, INFAQ, SPP_PERBULAN, POMG, DAFTAR_ULANG, potong_du, tot_du,
+               PANGKAL_BAYAR, BANGUNAN_BAYAR, SERAGAM_BAYAR, KEGIATAN_BAYAR
         FROM siswa
         WHERE NO_INDUK = ?
         FOR UPDATE
@@ -175,24 +164,55 @@ function validate_component_remaining(
     $stmt->close();
     if (!$student) throw new RuntimeException('Data siswa tidak ditemukan.');
 
+    $monthLabel = payment_month_label($bulan);
+    $legacyMonth = (string)(int)$bulan;
     $stmtPaid = $db->prepare('
         SELECT
-            COALESCE(SUM(U_PANGKAL), 0) AS pangkal,
-            COALESCE(SUM(U_BANGUNAN), 0) AS bangunan,
-            COALESCE(SUM(U_SERAGAM), 0) AS seragam,
-            COALESCE(SUM(U_KEGIATAN), 0) AS kegiatan,
-            COALESCE(SUM(CASE WHEN BULAN = ? AND TAHUN = ? THEN U_SPP ELSE 0 END), 0) AS spp,
-            COALESCE(SUM(CASE WHEN BULAN = ? AND TAHUN = ? THEN U_KOMITE ELSE 0 END), 0) AS komite,
+            COALESCE(SUM(CASE WHEN TAHUN = ? AND (BULAN = ? OR BULAN = ? OR BULAN = ?) THEN U_SPP ELSE 0 END), 0) AS spp,
+            COALESCE(SUM(CASE WHEN TAHUN = ? AND (BULAN = ? OR BULAN = ? OR BULAN = ?) THEN U_KOMITE ELSE 0 END), 0) AS komite,
             COALESCE(SUM(U_MAKAN), 0) AS makan,
             COALESCE(SUM(U_SORGA), 0) AS sorga,
             COALESCE(SUM(U_INFAQ), 0) AS infaq
         FROM bayar
         WHERE NO_INDUK = ? AND id <> ?
     ');
-    $stmtPaid->bind_param('sssssi', $bulan, $tahun, $bulan, $tahun, $noInduk, $excludePaymentId);
+    $stmtPaid->bind_param(
+        'sssssssssi',
+        $tahun, $bulan, $monthLabel, $legacyMonth,
+        $tahun, $bulan, $monthLabel, $legacyMonth,
+        $noInduk, $excludePaymentId
+    );
     $stmtPaid->execute();
     $paid = $stmtPaid->get_result()->fetch_assoc() ?: [];
     $stmtPaid->close();
+
+    $excludedInitialPaid = ['pangkal' => 0.0, 'bangunan' => 0.0, 'seragam' => 0.0, 'kegiatan' => 0.0];
+    if ($excludePaymentId > 0) {
+        $stmtExcluded = $db->prepare('
+            SELECT U_PANGKAL, U_BANGUNAN, U_SERAGAM, U_KEGIATAN
+            FROM bayar
+            WHERE id = ? AND NO_INDUK = ?
+            LIMIT 1
+            FOR UPDATE
+        ');
+        $stmtExcluded->bind_param('is', $excludePaymentId, $noInduk);
+        $stmtExcluded->execute();
+        $excluded = $stmtExcluded->get_result()->fetch_assoc() ?: [];
+        $stmtExcluded->close();
+        $excludedInitialPaid = [
+            'pangkal' => (float)($excluded['U_PANGKAL'] ?? 0),
+            'bangunan' => (float)($excluded['U_BANGUNAN'] ?? 0),
+            'seragam' => (float)($excluded['U_SERAGAM'] ?? 0),
+            'kegiatan' => (float)($excluded['U_KEGIATAN'] ?? 0),
+        ];
+    }
+
+    $initialPaid = [
+        'pangkal' => max(0, (float)$student['PANGKAL_BAYAR'] - $excludedInitialPaid['pangkal']),
+        'bangunan' => max(0, (float)$student['BANGUNAN_BAYAR'] - $excludedInitialPaid['bangunan']),
+        'seragam' => max(0, (float)$student['SERAGAM_BAYAR'] - $excludedInitialPaid['seragam']),
+        'kegiatan' => max(0, (float)$student['KEGIATAN_BAYAR'] - $excludedInitialPaid['kegiatan']),
+    ];
 
     $duTotal = 0.0;
     $paid['du'] = 0.0;
@@ -208,10 +228,10 @@ function validate_component_remaining(
     }
 
     $limits = [
-        'pangkal' => ['label' => 'Uang Pangkal', 'total' => payable_total((float)$student['PANGKAL'], (float)$student['potong_pangkal'], (float)$student['tot_pangkal']), 'paid' => (float)($paid['pangkal'] ?? 0), 'input' => (float)($components['pangkal'] ?? 0)],
-        'bangunan' => ['label' => 'Uang Bangunan', 'total' => (float)$student['BANGUNAN'], 'paid' => (float)($paid['bangunan'] ?? 0), 'input' => (float)($components['bangunan'] ?? 0)],
-        'seragam' => ['label' => 'Uang Seragam', 'total' => (float)$student['SERAGAM'], 'paid' => (float)($paid['seragam'] ?? 0), 'input' => (float)($components['seragam'] ?? 0)],
-        'kegiatan' => ['label' => 'Uang Kegiatan', 'total' => (float)$student['KEGIATAN'], 'paid' => (float)($paid['kegiatan'] ?? 0), 'input' => (float)($components['kegiatan'] ?? 0)],
+        'pangkal' => ['label' => 'Uang Pangkal', 'total' => payable_total((float)$student['PANGKAL'], (float)$student['potong_pangkal'], (float)$student['tot_pangkal']), 'paid' => $initialPaid['pangkal'], 'input' => (float)($components['pangkal'] ?? 0)],
+        'bangunan' => ['label' => 'Uang Bangunan', 'total' => (float)$student['BANGUNAN'], 'paid' => $initialPaid['bangunan'], 'input' => (float)($components['bangunan'] ?? 0)],
+        'seragam' => ['label' => 'Uang Seragam', 'total' => (float)$student['SERAGAM'], 'paid' => $initialPaid['seragam'], 'input' => (float)($components['seragam'] ?? 0)],
+        'kegiatan' => ['label' => 'Uang Kegiatan', 'total' => (float)$student['KEGIATAN'], 'paid' => $initialPaid['kegiatan'], 'input' => (float)($components['kegiatan'] ?? 0)],
         'spp' => ['label' => 'Uang SPP', 'total' => (float)$student['SPP_PERBULAN'], 'paid' => (float)($paid['spp'] ?? 0), 'input' => (float)($components['spp'] ?? 0)],
         'komite' => ['label' => 'Uang Komite', 'total' => (float)$student['POMG'], 'paid' => (float)($paid['komite'] ?? 0), 'input' => (float)($components['komite'] ?? 0)],
         'makan' => ['label' => 'Uang Makan', 'total' => (float)$student['MAKAN'], 'paid' => (float)($paid['makan'] ?? 0), 'input' => (float)($components['makan'] ?? 0)],
@@ -387,6 +407,50 @@ function calculate_payment_total(array $components, float $uangDu, float $potong
     return max(0, $total - $potonganSpp);
 }
 
+function sync_student_initial_fee_paid(
+    mysqli $db,
+    string $noInduk,
+    float $pangkalDelta,
+    float $bangunanDelta,
+    float $seragamDelta,
+    float $kegiatanDelta
+): void {
+    if (
+        abs($pangkalDelta) < 0.001 &&
+        abs($bangunanDelta) < 0.001 &&
+        abs($seragamDelta) < 0.001 &&
+        abs($kegiatanDelta) < 0.001
+    ) {
+        return;
+    }
+
+    $stmtLock = $db->prepare('
+        SELECT PANGKAL_BAYAR, BANGUNAN_BAYAR, SERAGAM_BAYAR, KEGIATAN_BAYAR
+        FROM siswa
+        WHERE NO_INDUK = ?
+        FOR UPDATE
+    ');
+    $stmtLock->bind_param('s', $noInduk);
+    $stmtLock->execute();
+    $student = $stmtLock->get_result()->fetch_assoc();
+    $stmtLock->close();
+    if (!$student) throw new RuntimeException('Data siswa tidak ditemukan untuk sinkron pembayaran awal.');
+
+    $pangkalBayar = max(0, (float)$student['PANGKAL_BAYAR'] + $pangkalDelta);
+    $bangunanBayar = max(0, (float)$student['BANGUNAN_BAYAR'] + $bangunanDelta);
+    $seragamBayar = max(0, (float)$student['SERAGAM_BAYAR'] + $seragamDelta);
+    $kegiatanBayar = max(0, (float)$student['KEGIATAN_BAYAR'] + $kegiatanDelta);
+
+    $stmtUpdate = $db->prepare('
+        UPDATE siswa
+        SET PANGKAL_BAYAR = ?, BANGUNAN_BAYAR = ?, SERAGAM_BAYAR = ?, KEGIATAN_BAYAR = ?
+        WHERE NO_INDUK = ?
+    ');
+    $stmtUpdate->bind_param('dddds', $pangkalBayar, $bangunanBayar, $seragamBayar, $kegiatanBayar, $noInduk);
+    $stmtUpdate->execute();
+    $stmtUpdate->close();
+}
+
 /**
  * Pastikan pembayaran bukan histori legacy dan kunci header sebelum dimutasi.
  */
@@ -473,11 +537,8 @@ function save_linked_savings(mysqli $db, int $bayarId, string $noInduk, string $
 // ── INSERT ──────────────────────────────────
 if ($aksi === 'input') {
     $no_induk        = trim($_POST['no_induk'] ?? '');
-    $tanggal_bayar   = $_POST['tanggal_bayar'] ?? date('Y-m-d H:i:s');
-    // Jika tanggal tidak mengandung waktu, tambahkan waktu sekarang agar tipe data DATETIME pas
-    if (strlen($tanggal_bayar) === 10) {
-        $tanggal_bayar .= ' ' . date('H:i:s');
-    }
+    // Transaksi baru selalu memakai waktu server Asia/Jakarta.
+    $tanggal_bayar   = date('Y-m-d H:i:s');
     $bulan_bayar     = normalize_month_code($_POST['bulan_bayar'] ?? '');
     $tahun_bayar     = $_POST['tahun_bayar'] ?? date('Y');
     $sistem_pembayaran = $_POST['sistem_pembayaran'] ?? 'VA';
@@ -520,7 +581,7 @@ if ($aksi === 'input') {
             'Seragam' => $uang_seragam, 'Kegiatan' => $uang_kegiatan,
             'SPP' => $uang_spp, 'Komite' => $uang_komite, 'Makan' => $uang_makan,
             'Sorga' => $uang_sorga, 'Infaq' => $uang_infaq, 'Daftar Ulang' => $uang_du,
-            'Potongan SPP' => $potongan_spp, 'Tabungan Wajib' => $tabungan_wajib
+            'Potongan SPP' => $potongan_spp, 'Tabungan' => $tabungan_wajib
         ]);
         validate_payment_context($tanggal_bayar, $bulan_bayar, (string)$tahun_bayar);
         if ($potongan_spp > $uang_spp) throw new RuntimeException('Potongan SPP tidak boleh melebihi pembayaran SPP.');
@@ -552,15 +613,10 @@ if ($aksi === 'input') {
             for ($month = 1; $month <= 12; $month++) {
                 $periods[] = ['bulan' => str_pad((string)$month, 2, '0', STR_PAD_LEFT), 'tahun' => (string)$tahun_bayar];
             }
-            foreach ($periods as $period) {
-                assert_spp_period_available($koneksi, $no_induk, $period['bulan'], $period['tahun']);
-            }
             $spp_parts = split_payment_amount($uang_spp, 12);
             $discount_parts = split_payment_amount($potongan_spp, 12);
             $batch_token = bin2hex(random_bytes(16));
             $batch_count = 12;
-        } elseif ($uang_spp > 0) {
-            assert_spp_period_available($koneksi, $no_induk, $bulan_bayar, (string)$tahun_bayar);
         }
 
         foreach ($periods as $index => $period) {
@@ -629,6 +685,7 @@ if ($aksi === 'input') {
             $bayar_id = $koneksi->insert_id;
             $receipt_ids[] = $bayar_id;
             sync_spp_period_claim($koneksi, $bayar_id, $no_induk, $row_month, $row_year, $row_spp);
+            sync_student_initial_fee_paid($koneksi, $no_induk, $row_pangkal, $row_bangunan, $row_seragam, $row_kegiatan);
 
             if (!$isFirst) continue;
             save_biaya_lain($koneksi, $bayar_id, $biaya_lain);
@@ -717,7 +774,7 @@ if ($aksi === 'update') {
             'Seragam' => $uang_seragam, 'Kegiatan' => $uang_kegiatan,
             'SPP' => $uang_spp, 'Komite' => $uang_komite, 'Makan' => $uang_makan,
             'Sorga' => $uang_sorga, 'Infaq' => $uang_infaq, 'Daftar Ulang' => $uang_du,
-            'Potongan SPP' => $potongan_spp, 'Tabungan Wajib' => $tabungan_wajib
+            'Potongan SPP' => $potongan_spp, 'Tabungan' => $tabungan_wajib
         ]);
         validate_payment_context($tanggal_bayar, $bulan_bayar, (string)$tahun_bayar);
         if ($potongan_spp > $uang_spp) throw new RuntimeException('Potongan SPP tidak boleh melebihi pembayaran SPP.');
@@ -773,6 +830,27 @@ if ($aksi === 'update') {
         $stmt->execute();
         $stmt->close();
 
+        if ((string)$old_bayar['NO_INDUK'] === $no_induk) {
+            sync_student_initial_fee_paid(
+                $koneksi,
+                $no_induk,
+                $uang_pangkal - (float)$old_bayar['U_PANGKAL'],
+                $uang_bangunan - (float)$old_bayar['U_BANGUNAN'],
+                $uang_seragam - (float)$old_bayar['U_SERAGAM'],
+                $uang_kegiatan - (float)$old_bayar['U_KEGIATAN']
+            );
+        } else {
+            sync_student_initial_fee_paid(
+                $koneksi,
+                (string)$old_bayar['NO_INDUK'],
+                -(float)$old_bayar['U_PANGKAL'],
+                -(float)$old_bayar['U_BANGUNAN'],
+                -(float)$old_bayar['U_SERAGAM'],
+                -(float)$old_bayar['U_KEGIATAN']
+            );
+            sync_student_initial_fee_paid($koneksi, $no_induk, $uang_pangkal, $uang_bangunan, $uang_seragam, $uang_kegiatan);
+        }
+
         // Klaim periode ikut berpindah/dihapus ketika bulan, tahun, siswa,
         // atau nominal SPP pada transaksi diedit.
         sync_spp_period_claim($koneksi, $id, $no_induk, $bulan_bayar, (string)$tahun_bayar, $uang_spp);
@@ -825,11 +903,19 @@ if ($aksi === 'hapus') {
     $koneksi->begin_transaction();
 
     try {
-        find_linked_payment($koneksi, $id);
+        $old_bayar = find_linked_payment($koneksi, $id);
 
         // 1. Balikkan setoran milik pembayaran ini. Jika saldo tidak cukup,
         // seluruh penghapusan akan di-rollback.
         reverse_linked_savings($koneksi, $id);
+        sync_student_initial_fee_paid(
+            $koneksi,
+            (string)$old_bayar['NO_INDUK'],
+            -(float)$old_bayar['U_PANGKAL'],
+            -(float)$old_bayar['U_BANGUNAN'],
+            -(float)$old_bayar['U_SERAGAM'],
+            -(float)$old_bayar['U_KEGIATAN']
+        );
 
         // 2. Hapus header; FK cascade hanya akan menghapus child dengan bayar_id ini.
         $stmt_del = $koneksi->prepare("DELETE FROM bayar WHERE id = ?");
