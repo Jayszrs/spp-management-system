@@ -17,6 +17,10 @@ function parse_amount($value) {
     return is_numeric($normalized) ? (float)$normalized : NAN;
 }
 
+function current_operator_id(): string {
+    return (string)($_SESSION['admin_id'] ?? '');
+}
+
 function validate_payment_amounts(array $amounts): void {
     foreach ($amounts as $label => $amount) {
         if (!is_finite($amount) || $amount < 0) {
@@ -35,10 +39,10 @@ function validate_payment_context(string $tanggal, string $bulan, string $tahun)
     if (!$parsedDate || $parsedDate->format('Y-m-d') !== $datePart) {
         throw new RuntimeException('Tanggal pembayaran tidak valid.');
     }
-    $periodStart = DateTime::createFromFormat('!Y-m-d', $tahun . '-' . $bulan . '-01');
-    $paymentMonth = DateTime::createFromFormat('!Y-m-d', $parsedDate->format('Y-m-01'));
-    if (!$periodStart || $periodStart > $paymentMonth) {
-        throw new RuntimeException('Periode pembayaran masa depan belum dapat dicatat. Pilih bulan yang sama atau lebih lama dari tanggal bayar.');
+    $paymentYear = (int)$parsedDate->format('Y');
+    $periodYear = (int)$tahun;
+    if ($periodYear > $paymentYear + 10) {
+        throw new RuntimeException('Tahun pembayaran maksimal 10 tahun dari tanggal bayar, yaitu ' . ($paymentYear + 10) . '.');
     }
 }
 
@@ -669,7 +673,7 @@ if ($aksi === 'input') {
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)";
 
         $stmt = $koneksi->prepare($sql);
-        $user_id = $_SESSION['admin_nama'] ?? 'admin';
+        $user_id = current_operator_id();
         $receipt_ids = [];
         foreach ($periods as $index => $period) {
             $isFirst = $index === 0;
@@ -851,7 +855,7 @@ if ($aksi === 'update') {
             WHERE id=?";
 
         $stmt = $koneksi->prepare($sql);
-        $user_id = $_SESSION['admin_nama'] ?? 'admin';
+        $user_id = current_operator_id();
         
         $stmt->bind_param(
             'ssddddddddddsssssssdsdsdsdssddi',

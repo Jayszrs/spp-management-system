@@ -5,6 +5,7 @@
 session_start();
 require_once '../koneksi.php';
 require_once '../includes/auth.php';
+require_once '../includes/pagination.php';
 requireRole(['admin', 'kasir', 'bendahara']);
 
 $flash = $_SESSION['flash'] ?? null;
@@ -14,6 +15,9 @@ unset($_SESSION['flash']);
 $filter_nis = trim($_GET['nis'] ?? '');
 $filter_bulan = $_GET['bulan'] ?? date('m');
 $filter_tahun = $_GET['tahun'] ?? date('Y');
+$allowedPageSizes = [10, 25, 50];
+$perPage = page_size_param('per_page', $allowedPageSizes, 10);
+$page = page_int_param('page');
 
 if ($filter_nis !== '') {
     $stmtIdentity = $koneksi->prepare('SELECT NO_INDUK FROM siswa WHERE NO_INDUK=? OR NO_induk_diknas=? LIMIT 1');
@@ -44,21 +48,37 @@ $sql_keluar = "
     WHERE MONTH(tk.TANGGAL) = ? AND YEAR(tk.TANGGAL) = ?$where_nis_keluar
 ";
 
-$sql = "($sql_masuk) UNION ALL ($sql_keluar) ORDER BY TANGGAL DESC";
-$stmt = $koneksi->prepare($sql);
 if ($filter_nis !== '') {
-    $stmt->bind_param(
-        'iisiis',
+    $historyTypes = 'iisiis';
+    $historyParams = [
         $filter_bulan,
         $filter_tahun,
         $filter_nis,
         $filter_bulan,
         $filter_tahun,
-        $filter_nis
-    );
+        $filter_nis,
+    ];
 } else {
-    $stmt->bind_param('iiii', $filter_bulan, $filter_tahun, $filter_bulan, $filter_tahun);
+    $historyTypes = 'iiii';
+    $historyParams = [$filter_bulan, $filter_tahun, $filter_bulan, $filter_tahun];
 }
+
+$historyUnionSql = "($sql_masuk) UNION ALL ($sql_keluar)";
+$stmtSummary = $koneksi->prepare("SELECT COUNT(*) AS total, COALESCE(SUM(nominal), 0) AS total_masuk, COALESCE(SUM(keluar), 0) AS total_keluar FROM ($historyUnionSql) tabungan_tx");
+$stmtSummary->bind_param($historyTypes, ...$historyParams);
+$stmtSummary->execute();
+$historySummary = $stmtSummary->get_result()->fetch_assoc() ?: ['total'=>0, 'total_masuk'=>0, 'total_keluar'=>0];
+$stmtSummary->close();
+$totalHistoryRows = (int)$historySummary['total'];
+$totalPages = total_pages($totalHistoryRows, $perPage);
+$page = min($page, $totalPages);
+$offset = ($page - 1) * $perPage;
+
+$sql = "$historyUnionSql ORDER BY TANGGAL DESC LIMIT ? OFFSET ?";
+$stmt = $koneksi->prepare($sql);
+$pageTypes = $historyTypes . 'ii';
+$pageParams = array_merge($historyParams, [$perPage, $offset]);
+$stmt->bind_param($pageTypes, ...$pageParams);
 $stmt->execute();
 $rows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
 $stmt->close();
@@ -107,8 +127,14 @@ if ($filter_nis !== '') {
     }
 }
 
-$total_masuk  = array_sum(array_column($rows, 'nominal'));
-$total_keluar = array_sum(array_column($rows, 'keluar'));
+$total_masuk  = (float)$historySummary['total_masuk'];
+$total_keluar = (float)$historySummary['total_keluar'];
+$historyPaginationQuery = pagination_query([
+    'bulan' => $filter_bulan,
+    'tahun' => $filter_tahun,
+    'nis' => $filter_nis,
+    'per_page' => $perPage,
+]);
 
 $bln_names = ['01'=>'Januari','02'=>'Februari','03'=>'Maret','04'=>'April','05'=>'Mei','06'=>'Juni',
                '07'=>'Juli','08'=>'Agustus','09'=>'September','10'=>'Oktober','11'=>'November','12'=>'Desember'];
@@ -178,7 +204,7 @@ $bln_names = ['01'=>'Januari','02'=>'Februari','03'=>'Maret','04'=>'April','05'=
         <div class="stat-card stat-blue">
           <div class="stat-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg></div>
           <div class="stat-info">
-            <span class="stat-value"><?= count($rows) ?></span>
+            <span class="stat-value"><?= number_format($totalHistoryRows) ?></span>
             <span class="stat-label">Total Transaksi</span>
           </div>
         </div>
@@ -209,6 +235,14 @@ $bln_names = ['01'=>'Januari','02'=>'Februari','03'=>'Maret','04'=>'April','05'=
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
               <input type="text" name="nis" placeholder="Kosongkan = semua" value="<?= htmlspecialchars($filter_nis) ?>" />
             </div>
+          </div>
+          <div class="field-row tabungan-filter-page">
+            <label class="field-label">Per Halaman</label>
+            <select class="field-input field-select" name="per_page" aria-label="Jumlah transaksi tabungan per halaman">
+              <?php foreach ($allowedPageSizes as $pageSize): ?>
+              <option value="<?= $pageSize ?>" <?= $perPage === $pageSize ? 'selected' : '' ?>><?= $pageSize ?></option>
+              <?php endforeach; ?>
+            </select>
           </div>
           <div class="tabungan-filter-actions">
             <button type="submit" class="btn btn-primary">Filter</button>
@@ -243,7 +277,7 @@ $bln_names = ['01'=>'Januari','02'=>'Februari','03'=>'Maret','04'=>'April','05'=
               <?php else: ?>
               <?php foreach ($rows as $i => $r): ?>
               <tr class="<?= $i % 2 === 0 ? 'row-highlight' : '' ?>">
-                <td data-label="No"><?= $i + 1 ?></td>
+                <td data-label="No"><?= $offset + $i + 1 ?></td>
                 <td data-label="No. Induk"><span class="badge-nis"><?= htmlspecialchars($r['NO_INDUK']) ?></span></td>
                 <td data-label="Nama"><?= htmlspecialchars($r['NAMA']) ?></td>
                 <td data-label="Kelas" class="savings-class-col"><span class="savings-class-badge">Kelas <?= htmlspecialchars($r['KELAS']) ?></span></td>
@@ -263,6 +297,7 @@ $bln_names = ['01'=>'Januari','02'=>'Februari','03'=>'Maret','04'=>'April','05'=
             </tbody>
           </table>
         </div>
+        <?php render_pagination('riwayat.php', $historyPaginationQuery, $page, $totalPages, $totalHistoryRows, $perPage, 'transaksi'); ?>
       </div>
 
       <!-- Rekap Saldo Per Siswa -->

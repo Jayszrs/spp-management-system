@@ -1003,39 +1003,174 @@ h1, h2, h3, h4, h5, h6, .card-title, .topbar-title h2, .sidebar-brand-name {
 }
 .info-group { flex: 1; display: flex; flex-direction: column; gap: 16px; min-width: 260px; }
 .payment-input-top {
+  position: relative;
+  z-index: 30;
   display: grid;
-  grid-template-columns: minmax(0, 1.2fr) minmax(430px, 0.8fr);
-  gap: 20px;
+  grid-template-columns: minmax(0, 1.02fr) minmax(420px, 0.98fr);
+  gap: 22px;
   align-items: stretch;
 }
 .payment-settings-group {
+  position: relative;
+  z-index: 40;
+  overflow: visible;
   min-width: 0;
-  justify-content: center;
+  justify-content: flex-start;
+  gap: 12px;
+  border: 1px solid rgba(52, 211, 153, 0.16);
+  border-radius: 12px;
+  background:
+    linear-gradient(135deg, rgba(52, 211, 153, 0.055), rgba(56, 189, 248, 0.035)),
+    rgba(148, 163, 184, 0.025);
+  padding: 15px;
+}
+.payment-panel-kicker {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.6px;
+  line-height: 1.2;
+  text-transform: uppercase;
 }
 .payment-settings-grid {
+  overflow: visible;
   display: grid;
-  grid-template-columns: minmax(135px, 0.8fr) minmax(225px, 1.25fr) minmax(135px, 0.75fr);
-  gap: 14px;
-  align-items: end;
+  grid-template-columns: minmax(150px, 0.9fr) minmax(250px, 1.35fr) minmax(150px, 0.85fr);
+  gap: 10px;
+  align-items: stretch;
 }
 .payment-settings-grid > .field-row {
   min-width: 0;
 }
+.payment-field-card {
+  position: relative;
+  overflow: visible;
+  justify-content: space-between;
+  min-height: 108px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.025);
+  padding: 12px;
+  transition: border-color var(--transition), box-shadow var(--transition), transform var(--transition);
+}
+.payment-field-card:focus-within {
+  z-index: 70;
+  border-color: var(--border-hover);
+  box-shadow: 0 12px 26px rgba(0, 0, 0, 0.11);
+  transform: translateY(-1px);
+}
+.payment-field-card .field-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 24px;
+}
+.payment-field-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 8px;
+  background: var(--green-bg);
+  color: var(--accent-light);
+  flex: 0 0 auto;
+}
+.payment-field-card .field-input {
+  min-height: 42px;
+  padding: 9px 12px;
+}
+.payment-period-inputs {
+  position: relative;
+  z-index: 90;
+  gap: 7px;
+  overflow: visible;
+}
+.payment-year-picker {
+  position: relative;
+  z-index: 100;
+  flex: 0 0 92px !important;
+  max-width: 92px;
+}
+.payment-year-picker.is-open {
+  z-index: 180;
+}
+.payment-year-select {
+  width: 100%;
+  max-width: 100%;
+}
+.payment-year-options {
+  position: absolute;
+  top: calc(100% + 7px);
+  left: 0;
+  z-index: 200;
+  display: none;
+  width: 100%;
+  max-height: 178px;
+  overflow-y: auto;
+  padding: 6px;
+  border: 1px solid rgba(31, 157, 85, 0.20);
+  border-radius: 12px;
+  background: #fbfefc;
+  box-shadow: 0 14px 28px rgba(19, 86, 48, 0.14);
+  scrollbar-width: thin;
+  scrollbar-color: rgba(27, 123, 72, 0.38) transparent;
+}
+.payment-year-options::-webkit-scrollbar {
+  width: 6px;
+}
+.payment-year-options::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(27, 123, 72, 0.35);
+}
+.payment-year-picker.is-open .payment-year-options {
+  display: grid;
+  gap: 3px;
+}
+.payment-year-option {
+  width: 100%;
+  min-height: 26px;
+  padding: 5px 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #17261e;
+  cursor: pointer;
+  font: 800 13px/1 'Inter', sans-serif;
+  text-align: center;
+  transition: background var(--transition), color var(--transition), transform var(--transition);
+}
+.payment-year-option:hover,
+.payment-year-option:focus {
+  background: rgba(31, 157, 85, 0.10);
+  color: var(--accent);
+  outline: none;
+}
+.payment-year-option.is-active {
+  background: var(--green-bg);
+  color: var(--accent);
+}
+.payment-year-option:active {
+  transform: scale(0.98);
+}
 .payment-overview-panel {
   min-width: 0;
   overflow: visible;
-  border: 1px solid rgba(52, 211, 153, 0.22);
-  border-radius: 8px;
-  background: rgba(52, 211, 153, 0.045);
+  border: 1px solid rgba(52, 211, 153, 0.20);
+  border-radius: 14px;
+  background:
+    linear-gradient(145deg, rgba(52, 211, 153, 0.10), rgba(245, 158, 11, 0.055) 54%, rgba(56, 189, 248, 0.05)),
+    var(--bg-card);
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.12);
 }
 .payment-current-total {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 18px;
-  min-height: 66px;
-  padding: 14px 18px;
-  border-bottom: 1px solid var(--border);
+  min-height: 78px;
+  padding: 18px 20px 14px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.16);
 }
 .payment-current-total span,
 .payment-year-summary-heading > span:first-child,
@@ -1050,18 +1185,27 @@ h1, h2, h3, h4, h5, h6, .card-title, .topbar-title h2, .sidebar-brand-name {
   text-transform: uppercase;
   letter-spacing: 0.4px;
 }
+.payment-current-total small {
+  display: block;
+  margin-top: 4px;
+  color: var(--text-muted);
+  font-size: 11.5px;
+  font-weight: 500;
+  line-height: 1.35;
+}
 .payment-current-total strong {
   color: var(--accent-light);
-  font-size: 23px;
+  font-size: 28px;
   font-weight: 850;
   line-height: 1.15;
   text-align: right;
+  white-space: nowrap;
 }
 .payment-year-summary-heading {
   display: flex;
   align-items: center;
   gap: 7px;
-  padding: 11px 18px 5px;
+  padding: 14px 20px 6px;
 }
 .payment-help-wrap {
   position: relative;
@@ -1113,25 +1257,32 @@ h1, h2, h3, h4, h5, h6, .card-title, .topbar-title h2, .sidebar-brand-name {
 .payment-year-summary {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  padding: 7px 10px 13px;
+  gap: 9px;
+  padding: 8px 14px 15px;
 }
-.payment-year-summary > div {
+.payment-year-card {
   display: grid;
-  gap: 4px;
+  align-content: start;
+  gap: 6px;
   min-width: 0;
-  padding: 7px 9px;
-}
-.payment-year-summary > div + div {
-  border-left: 1px solid var(--border);
+  min-height: 80px;
+  padding: 13px 12px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.045);
 }
 .payment-year-summary strong {
   color: var(--text-primary);
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 850;
   line-height: 1.2;
   white-space: nowrap;
 }
-.payment-year-summary > div:last-child strong {
+.payment-year-card.is-remaining {
+  border-color: rgba(245, 158, 11, 0.24);
+  background: rgba(245, 158, 11, 0.075);
+}
+.payment-year-card.is-remaining strong {
   color: var(--orange);
 }
 .jumlah-box {
@@ -1555,11 +1706,17 @@ h1, h2, h3, h4, h5, h6, .card-title, .topbar-title h2, .sidebar-brand-name {
   .payment-input-top {
     grid-template-columns: 1fr;
   }
+  .payment-settings-grid {
+    grid-template-columns: minmax(150px, 0.85fr) minmax(250px, 1.25fr) minmax(150px, 0.8fr);
+  }
 }
 
 @media (max-width: 760px) {
   .payment-settings-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .payment-period-card {
+    grid-column: 1 / -1;
   }
   .payment-settings-grid .field-group-inline {
     flex-direction: row;
@@ -1567,20 +1724,33 @@ h1, h2, h3, h4, h5, h6, .card-title, .topbar-title h2, .sidebar-brand-name {
 }
 
 @media (max-width: 560px) {
-  .payment-year-summary {
+  .payment-settings-group {
+    padding: 12px;
+  }
+  .payment-settings-grid {
     grid-template-columns: 1fr;
   }
-  .payment-year-summary > div + div {
-    border-top: 1px solid var(--border);
-    border-left: 0;
+  .payment-period-card {
+    grid-column: auto;
+  }
+  .payment-field-card {
+    min-height: 0;
+  }
+  .payment-year-select {
+    flex-basis: 86px !important;
+    max-width: 86px;
+  }
+  .payment-year-summary {
+    grid-template-columns: 1fr;
   }
   .payment-current-total {
     align-items: flex-start;
     flex-direction: column;
-    gap: 5px;
+    gap: 8px;
   }
   .payment-current-total strong {
     text-align: left;
+    white-space: normal;
   }
 }
 .btn-tbl-edit:hover { background: rgba(245,158,11,0.22); transform: scale(1.05); }
@@ -1628,6 +1798,183 @@ h1, h2, h3, h4, h5, h6, .card-title, .topbar-title h2, .sidebar-brand-name {
   min-height: 38px;
   white-space: nowrap;
   align-self: center;
+}
+.report-filter-card {
+  position: relative;
+  z-index: 25;
+  overflow: visible;
+}
+.report-filter-grid {
+  display: grid;
+  grid-template-columns: minmax(280px, 1.55fr) minmax(150px, 0.82fr) minmax(96px, 0.55fr) minmax(190px, 1.1fr) minmax(145px, 0.8fr) minmax(112px, 0.62fr);
+  gap: 12px;
+  align-items: end;
+}
+.report-date-field {
+  min-width: 0;
+}
+.report-date-range-field {
+  min-width: 0;
+}
+.report-date-range-control {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  min-height: 42px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-elevated);
+  transition: border-color var(--transition), box-shadow var(--transition);
+}
+.report-date-range-control:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(31, 157, 85, 0.12);
+}
+.report-date-range-control > span {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+.report-date-range-control input[type="date"] {
+  width: 100%;
+  min-width: 0;
+  height: 38px;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--text-primary);
+  font: 600 13px/1 'Inter', sans-serif;
+}
+.report-year-picker {
+  position: relative;
+  z-index: 120;
+  width: 100%;
+  max-width: none;
+  flex: none !important;
+}
+.report-year-picker.is-open {
+  z-index: 240;
+}
+.report-year-picker .payment-year-select {
+  height: 42px;
+}
+.report-year-picker .payment-year-options {
+  width: 100%;
+  max-height: 148px;
+  z-index: 260;
+}
+.report-filter-actions,
+.report-export-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.report-filter-actions {
+  grid-column: span 3;
+}
+.report-export-actions {
+  grid-column: span 3;
+  justify-content: flex-end;
+}
+.report-stats-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+.report-secondary-id {
+  display: block;
+  margin-top: 4px;
+  color: var(--text-muted);
+  font-size: 10.5px;
+  font-weight: 700;
+}
+.report-remaining {
+  color: var(--orange) !important;
+  font-weight: 850;
+}
+.report-status-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 64px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+}
+.report-status-pill.is-paid {
+  border: 1px solid rgba(34, 197, 94, 0.22);
+  background: rgba(34, 197, 94, 0.12);
+  color: var(--accent);
+}
+.report-status-pill.is-unpaid {
+  border: 1px solid rgba(239, 68, 68, 0.22);
+  background: rgba(239, 68, 68, 0.10);
+  color: var(--red);
+}
+.report-global-hero {
+  display: grid;
+  grid-template-columns: minmax(280px, 1fr) minmax(420px, 0.85fr);
+  gap: 22px;
+  align-items: end;
+  margin-bottom: 16px;
+}
+.report-global-hero h3 {
+  margin: 5px 0 6px;
+  color: var(--text-primary);
+  font-size: 22px;
+  line-height: 1.2;
+}
+.report-global-hero p {
+  max-width: 680px;
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.6;
+}
+.report-global-filter {
+  display: grid;
+  grid-template-columns: minmax(280px, 1.35fr) minmax(190px, 1fr) auto;
+  gap: 10px;
+  align-items: end;
+}
+.report-component-summary,
+.report-global-section {
+  margin-top: 16px;
+}
+.report-component-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+}
+.report-component-card {
+  display: grid;
+  gap: 6px;
+  min-height: 92px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: rgba(52, 211, 153, 0.055);
+}
+.report-component-card span,
+.report-component-card small {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 800;
+}
+.report-component-card strong {
+  color: var(--text-primary);
+  font-size: 18px;
+  font-weight: 850;
+}
+.report-empty-state {
+  grid-column: 1 / -1;
+  padding: 28px;
+  color: var(--text-muted);
+  text-align: center;
 }
 .select-col {
   width: 46px;
@@ -2573,6 +2920,38 @@ input[list]::-webkit-calendar-picker-indicator { display: none !important; }
   -webkit-text-fill-color: transparent;
   background-clip: text;
 }
+[data-theme="light"] .payment-settings-group {
+  border-color: rgba(31, 157, 85, 0.16);
+  background:
+    linear-gradient(135deg, rgba(31, 157, 85, 0.055), rgba(15, 118, 110, 0.025)),
+    #ffffff;
+  box-shadow: 0 8px 22px rgba(19, 86, 48, 0.035);
+}
+[data-theme="light"] .payment-field-card {
+  border-color: rgba(31, 157, 85, 0.13);
+  background: rgba(251, 254, 252, 0.92);
+}
+[data-theme="light"] .payment-field-card:focus-within {
+  box-shadow: 0 12px 26px rgba(19, 86, 48, 0.08);
+}
+[data-theme="light"] .payment-overview-panel {
+  border-color: rgba(31, 157, 85, 0.20);
+  background:
+    linear-gradient(145deg, rgba(31, 157, 85, 0.075), rgba(217, 119, 6, 0.045) 55%, rgba(15, 118, 110, 0.035)),
+    #ffffff;
+  box-shadow: 0 14px 30px rgba(19, 86, 48, 0.075);
+}
+[data-theme="light"] .payment-current-total {
+  border-bottom-color: rgba(31, 157, 85, 0.13);
+}
+[data-theme="light"] .payment-year-card {
+  border-color: rgba(31, 157, 85, 0.12);
+  background: rgba(255, 255, 255, 0.72);
+}
+[data-theme="light"] .payment-year-card.is-remaining {
+  border-color: rgba(217, 119, 6, 0.20);
+  background: rgba(217, 119, 6, 0.065);
+}
 
 /* Section divider */
 [data-theme="light"] .section-divider::before,
@@ -3180,6 +3559,37 @@ input[list]::-webkit-calendar-picker-indicator { display: none !important; }
   }
   .laporan-detail-heading {
     gap: 7px;
+  }
+  .report-filter-grid,
+  .report-global-hero,
+  .report-global-filter {
+    grid-template-columns: 1fr;
+  }
+  .report-filter-actions,
+  .report-export-actions {
+    grid-column: auto;
+    justify-content: stretch;
+  }
+  .report-filter-actions .btn,
+  .report-export-actions .btn,
+  .report-global-filter .btn {
+    width: 100%;
+    justify-content: center;
+  }
+  .report-date-range-control {
+    grid-template-columns: 1fr;
+    gap: 2px;
+    padding: 8px 10px;
+  }
+  .report-date-range-control > span {
+    text-align: center;
+  }
+  .report-date-range-control input[type="date"] {
+    height: 34px;
+    text-align: center;
+  }
+  .report-stats-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .btn-print-selected {
     width: 100%;

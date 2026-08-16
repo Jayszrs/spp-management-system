@@ -9,11 +9,40 @@ requireRole(['admin', 'bendahara']);
 
 $filter_bulan = (int)($_GET['bulan'] ?? date('m'));
 $filter_tahun = (int)($_GET['tahun'] ?? date('Y'));
+$dateParam = static function (string $key): string {
+    $value = trim((string)($_GET[$key] ?? ''));
+    return preg_match('/^\d{4}-\d{2}-\d{2}$/', $value) ? $value : '';
+};
+$filter_tanggal = $dateParam('tanggal');
+$filter_tanggal_awal = $dateParam('tanggal_awal') ?: $filter_tanggal;
+$filter_tanggal_akhir = $dateParam('tanggal_akhir') ?: $filter_tanggal;
+if ($filter_tanggal_awal !== '' && $filter_tanggal_akhir === '') $filter_tanggal_akhir = $filter_tanggal_awal;
+if ($filter_tanggal_akhir !== '' && $filter_tanggal_awal === '') $filter_tanggal_awal = $filter_tanggal_akhir;
+if ($filter_tanggal_awal !== '' && $filter_tanggal_akhir !== '' && strtotime($filter_tanggal_awal) > strtotime($filter_tanggal_akhir)) {
+    [$filter_tanggal_awal, $filter_tanggal_akhir] = [$filter_tanggal_akhir, $filter_tanggal_awal];
+}
 $download = isset($_GET['download']) && $_GET['download'] === '1';
 
 $bln_names = ['1'=>'Januari','2'=>'Februari','3'=>'Maret','4'=>'April','5'=>'Mei','6'=>'Juni',
                '7'=>'Juli','8'=>'Agustus','9'=>'September','10'=>'Oktober','11'=>'November','12'=>'Desember'];
 $bulan_label = $bln_names[$filter_bulan] ?? 'Unknown';
+$period_start = $filter_tanggal_awal !== '' ? $filter_tanggal_awal . ' 00:00:00' : sprintf('%04d-%02d-01 00:00:00', $filter_tahun, $filter_bulan);
+$period_end = $filter_tanggal_akhir !== ''
+    ? date('Y-m-d H:i:s', strtotime($filter_tanggal_akhir . ' +1 day'))
+    : date('Y-m-d H:i:s', strtotime($period_start . ' +1 month'));
+if ($filter_tanggal_awal !== '' && $filter_tanggal_akhir !== '') {
+    $startTs = strtotime($filter_tanggal_awal);
+    $endTs = strtotime($filter_tanggal_akhir);
+    if ($filter_tanggal_awal === $filter_tanggal_akhir) {
+        $period_label = date('d M Y', $startTs);
+    } elseif (date('Y-m', $startTs) === date('Y-m', $endTs)) {
+        $period_label = date('d', $startTs) . ' - ' . date('d M Y', $endTs);
+    } else {
+        $period_label = date('d M Y', $startTs) . ' - ' . date('d M Y', $endTs);
+    }
+} else {
+    $period_label = $bulan_label . ' ' . $filter_tahun;
+}
 
 // Ambil data pembayaran
 $stmt = $koneksi->prepare("
@@ -22,10 +51,10 @@ $stmt = $koneksi->prepare("
            b.U_SPP, b.U_MAKAN, b.U_SORGA, b.U_INFAQ, b.U_KOMITE,
            b.sistem_pembayaran, b.total_jumlah, b.TGL_BYR
     FROM bayar b JOIN siswa s ON s.NO_INDUK = b.NO_INDUK
-    WHERE MONTH(b.TGL_BYR) = ? AND YEAR(b.TGL_BYR) = ?
+    WHERE b.TGL_BYR >= ? AND b.TGL_BYR < ?
     ORDER BY b.TGL_BYR DESC
 ");
-$stmt->bind_param('ii', $filter_bulan, $filter_tahun);
+$stmt->bind_param('ss', $period_start, $period_end);
 $stmt->execute();
 $rows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
 $stmt->close();
@@ -36,9 +65,9 @@ $stmtKomponen = $koneksi->prepare("
            SUM(U_SPP) AS spp, SUM(U_MAKAN) AS makan,
            SUM(U_SORGA) AS sorga, SUM(U_INFAQ) AS infaq,
            SUM(U_KOMITE) AS komite
-    FROM bayar WHERE MONTH(TGL_BYR) = ? AND YEAR(TGL_BYR) = ?
+    FROM bayar WHERE TGL_BYR >= ? AND TGL_BYR < ?
 ");
-$stmtKomponen->bind_param('ii', $filter_bulan, $filter_tahun);
+$stmtKomponen->bind_param('ss', $period_start, $period_end);
 $stmtKomponen->execute();
 $komponenTetap = $stmtKomponen->get_result()->fetch_assoc();
 $stmtKomponen->close();
@@ -59,10 +88,10 @@ foreach ($komponenMap as $nama => $key) {
 $stmtBiayaLain = $koneksi->prepare("
     SELECT d.nama_biaya_snapshot AS nama, SUM(d.nominal_snapshot) AS total
     FROM bayar_biaya_lain d JOIN bayar b ON b.id = d.bayar_id
-    WHERE MONTH(b.TGL_BYR) = ? AND YEAR(b.TGL_BYR) = ?
+    WHERE b.TGL_BYR >= ? AND b.TGL_BYR < ?
     GROUP BY d.nama_biaya_snapshot ORDER BY d.nama_biaya_snapshot ASC
 ");
-$stmtBiayaLain->bind_param('ii', $filter_bulan, $filter_tahun);
+$stmtBiayaLain->bind_param('ss', $period_start, $period_end);
 $stmtBiayaLain->execute();
 $komponen_rows = array_merge($komponen_rows, $stmtBiayaLain->get_result()->fetch_all(MYSQLI_ASSOC));
 $stmtBiayaLain->close();
@@ -71,14 +100,14 @@ $stmtBiayaLain->close();
 $stmt2 = $koneksi->prepare("
     SELECT tm.NO_INDUK, s.NO_induk_diknas, s.NAMA, s.KELAS, tm.TANGGAL, tm.MASUK as nominal, 'masuk' as jenis
     FROM transaksi_m tm JOIN siswa s ON s.NO_INDUK = tm.NO_INDUK
-    WHERE MONTH(tm.TANGGAL) = ? AND YEAR(tm.TANGGAL) = ?
+    WHERE tm.TANGGAL >= ? AND tm.TANGGAL < ?
     UNION ALL
     SELECT tk.NO_INDUK, s.NO_induk_diknas, s.NAMA, s.KELAS, tk.TANGGAL, tk.KELUAR as nominal, 'keluar' as jenis
     FROM transaksi_k tk JOIN siswa s ON s.NO_INDUK = tk.NO_INDUK
-    WHERE MONTH(tk.TANGGAL) = ? AND YEAR(tk.TANGGAL) = ?
+    WHERE tk.TANGGAL >= ? AND tk.TANGGAL < ?
     ORDER BY TANGGAL DESC
 ");
-$stmt2->bind_param('iiii', $filter_bulan, $filter_tahun, $filter_bulan, $filter_tahun);
+$stmt2->bind_param('ssss', $period_start, $period_end, $period_start, $period_end);
 $stmt2->execute();
 $tab_rows = $stmt2->get_result()->fetch_all(MYSQLI_ASSOC);
 $stmt2->close();
@@ -98,7 +127,7 @@ foreach ($tab_rows as $tab) {
 }
 
 // Set header untuk download Excel
-$filename = 'Laporan_SPP_' . $bulan_label . '_' . $filter_tahun . '.xls';
+$filename = 'Laporan_SPP_' . str_replace(' ', '_', $period_label) . '.xls';
 if ($download) {
     header('Content-Type: application/vnd.ms-excel; charset=UTF-8');
     header('Content-Disposition: attachment; filename="' . $filename . '"');
@@ -108,7 +137,7 @@ if ($download) {
 <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel">
 <head>
   <meta charset="UTF-8">
-  <title><?= $download ? htmlspecialchars($filename) : 'Preview Excel - ' . htmlspecialchars($bulan_label . ' ' . $filter_tahun) ?></title>
+  <title><?= $download ? htmlspecialchars($filename) : 'Preview Excel - ' . htmlspecialchars($period_label) ?></title>
   <!--[if gte mso 9]>
   <xml><x:ExcelWorkbook><x:ExcelWorksheets>
     <x:ExcelWorksheet><x:Name>Pembayaran SPP</x:Name><x:WorksheetOptions><x:Print><x:FitToPage/></x:Print></x:WorksheetOptions></x:ExcelWorksheet>
@@ -312,8 +341,8 @@ if ($download) {
 
 <?php if (!$download): ?>
 <div class="no-print">
-  <a class="primary" href="export_excel.php?bulan=<?= $filter_bulan ?>&tahun=<?= $filter_tahun ?>&download=1">Download Excel</a>
-  <a href="index.php?bulan=<?= $filter_bulan ?>&tahun=<?= $filter_tahun ?>">Kembali</a>
+  <a class="primary" href="export_excel.php?bulan=<?= $filter_bulan ?>&tahun=<?= $filter_tahun ?>&tanggal_awal=<?= urlencode($filter_tanggal_awal) ?>&tanggal_akhir=<?= urlencode($filter_tanggal_akhir) ?>&download=1">Download Excel</a>
+  <a href="index.php?bulan=<?= $filter_bulan ?>&tahun=<?= $filter_tahun ?>&tanggal_awal=<?= urlencode($filter_tanggal_awal) ?>&tanggal_akhir=<?= urlencode($filter_tanggal_akhir) ?>">Kembali</a>
 </div>
 <main class="preview-sheet">
 <?php endif; ?>
@@ -323,7 +352,7 @@ if ($download) {
     <h2 class="report-title">Laporan Keuangan Sistem SPP</h2>
     <p class="report-meta">Dicetak: <?= date('d M Y H:i') ?></p>
   </div>
-  <span class="period-pill">Periode <?= $bulan_label . ' ' . $filter_tahun ?></span>
+  <span class="period-pill">Periode <?= htmlspecialchars($period_label) ?></span>
 </div>
 
 <?php if (!$download): ?>
@@ -362,7 +391,7 @@ if ($download) {
 <div class="table-card">
 <div class="table-scroll">
 <table>
-  <tr class="header-row"><td colspan="7">REKAP PEMBAYARAN SPP — <?= strtoupper($bulan_label . ' ' . $filter_tahun) ?></td></tr>
+  <tr class="header-row"><td colspan="7">REKAP PEMBAYARAN SPP — <?= strtoupper($period_label) ?></td></tr>
   <tr>
     <th>No</th><th>No. Induk</th><th>Nama Siswa</th><th>Kelas</th>
     <th>Bulan Bayar / Sistem</th><th>Total Bayar (Rp)</th><th>Tanggal Bayar</th>
@@ -398,7 +427,7 @@ if ($download) {
 <div class="table-card">
 <div class="table-scroll">
 <table>
-  <tr class="header-row"><td colspan="7">REKAP TABUNGAN — <?= strtoupper($bulan_label . ' ' . $filter_tahun) ?></td></tr>
+  <tr class="header-row"><td colspan="7">REKAP TABUNGAN — <?= strtoupper($period_label) ?></td></tr>
   <tr>
     <th>No</th><th>No. Induk</th><th>Nama Siswa</th><th>Kelas</th>
     <th>Tanggal</th><th>Jenis</th><th>Nominal (Rp)</th>

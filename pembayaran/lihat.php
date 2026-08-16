@@ -6,6 +6,7 @@ session_start();
 if (!isset($_SESSION['admin_id'])) { header('Location: ../login.php'); exit; }
 require_once '../koneksi.php';
 require_once '../includes/auth.php';
+require_once '../includes/pagination.php';
 requireRole(['admin', 'kasir']);
 
 $flash = $_SESSION['flash'] ?? null;
@@ -54,6 +55,9 @@ function payment_was_updated($createdAt, $updatedAt): bool {
 $search     = trim($_GET['search'] ?? '');
 $filter_bln = $_GET['bulan']  ?? '';
 $filter_thn = $_GET['tahun']  ?? '';
+$allowedPageSizes = [10, 25, 50];
+$perPage = page_size_param('per_page', $allowedPageSizes, 10);
+$page = page_int_param('page');
 
 $where = "WHERE 1=1";
 $params = [];
@@ -79,14 +83,31 @@ if ($filter_thn) {
     $params[] = $filter_thn; $types .= 's';
 }
 
+$countSql = "SELECT COUNT(*) AS total FROM bayar p
+        JOIN siswa s ON s.NO_INDUK = p.NO_INDUK
+        $where";
+$stmtCount = $koneksi->prepare($countSql);
+if ($params) { $stmtCount->bind_param($types, ...$params); }
+$stmtCount->execute();
+$totalPayments = (int)($stmtCount->get_result()->fetch_assoc()['total'] ?? 0);
+$stmtCount->close();
+
+$totalPages = total_pages($totalPayments, $perPage);
+$page = min($page, $totalPages);
+$offset = ($page - 1) * $perPage;
+
 $sql = "SELECT p.*, s.NO_INDUK, s.NO_induk_diknas, s.NAMA, s.KELAS FROM bayar p
         JOIN siswa s ON s.NO_INDUK = p.NO_INDUK
-        $where ORDER BY p.created_at DESC";
+        $where ORDER BY p.created_at DESC
+        LIMIT ? OFFSET ?";
 
 $stmt = $koneksi->prepare($sql);
-if ($params) { $stmt->bind_param($types, ...$params); }
+$pageParams = array_merge($params, [$perPage, $offset]);
+$pageTypes = $types . 'ii';
+$stmt->bind_param($pageTypes, ...$pageParams);
 $stmt->execute();
 $result = $stmt->get_result();
+$paymentPaginationQuery = pagination_query(['per_page' => $perPage]);
 
 // Months list
 $bln_list = [
@@ -190,6 +211,11 @@ $bln_list = [
             <option value="<?=$y?>" <?= $filter_thn == $y ? 'selected' : '' ?>><?=$y?></option>
             <?php endfor; ?>
           </select>
+          <select class="field-input field-select filter-sel" name="per_page" aria-label="Jumlah pembayaran per halaman">
+            <?php foreach ($allowedPageSizes as $pageSize): ?>
+            <option value="<?= $pageSize ?>" <?= $perPage === $pageSize ? 'selected' : '' ?>><?= $pageSize ?> / halaman</option>
+            <?php endforeach; ?>
+          </select>
           <button type="submit" class="btn btn-primary" id="btn-filter" style="padding:8px 16px;font-size:13px">Filter</button>
           <a href="lihat.php" class="btn btn-ghost" id="btn-reset-filter" style="padding:8px 16px;font-size:13px">Reset</a>
         </form>
@@ -213,7 +239,7 @@ $bln_list = [
             </thead>
             <tbody>
               <?php if ($result->num_rows > 0):
-                $no = 1;
+                $no = $offset + 1;
                 while ($row = $result->fetch_assoc()):
                   $paymentDateTime = format_payment_datetime($row['TGL_BYR']);
                   $updatedDateTime = format_payment_datetime($row['updated_at'] ?? null);
@@ -280,6 +306,7 @@ $bln_list = [
             </tbody>
           </table>
         </div>
+        <?php render_pagination('lihat.php', $paymentPaginationQuery, $page, $totalPages, $totalPayments, $perPage, 'transaksi'); ?>
       </div>
     </main>
   </div>

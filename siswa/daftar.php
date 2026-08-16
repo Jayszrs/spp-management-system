@@ -4,6 +4,7 @@ if (!isset($_SESSION['admin_id'])) { header('Location: ../login.php'); exit; }
 require_once '../koneksi.php';
 require_once '../includes/auth.php';
 require_once '../includes/daftar_ulang.php';
+require_once '../includes/pagination.php';
 requireRole(['admin']);
 
 if (empty($_SESSION['csrf_student'])) {
@@ -357,6 +358,28 @@ while ($classRow = $classResult->fetch_assoc()) $classOptions[] = (string)$class
 if ($filterClass !== '' && !in_array($filterClass, $classOptions, true)) $filterClass = '';
 $filterStatus = (string)($_GET['status'] ?? 'active');
 if (!in_array($filterStatus, ['active', 'archived', 'all'], true)) $filterStatus = 'active';
+$allowedPageSizes = [10, 25, 50];
+$perPage = page_size_param('per_page', $allowedPageSizes, 10);
+$page = page_int_param('page');
+
+$listWhereSql = "
+    FROM siswa s
+    WHERE (? = '' OR s.NO_INDUK LIKE CONCAT('%', ?, '%') OR s.NAMA LIKE CONCAT('%', ?, '%') OR s.NO_induk_diknas LIKE CONCAT('%', ?, '%'))
+      AND (? = '' OR s.KELAS = ?)
+      AND (? = 'all' OR s.is_active = IF(? = 'archived', 0, 1))
+";
+$listTypes = 'ssssssss';
+$listParams = [$query, $query, $query, $query, $filterClass, $filterClass, $filterStatus, $filterStatus];
+
+$stmtCount = $koneksi->prepare("SELECT COUNT(*) AS total " . $listWhereSql);
+$stmtCount->bind_param($listTypes, ...$listParams);
+$stmtCount->execute();
+$totalStudents = (int)($stmtCount->get_result()->fetch_assoc()['total'] ?? 0);
+$stmtCount->close();
+
+$totalPages = total_pages($totalStudents, $perPage);
+$page = min($page, $totalPages);
+$offset = ($page - 1) * $perPage;
 
 $stmtList = $koneksi->prepare("
     SELECT s.*,
@@ -365,18 +388,19 @@ $stmtList = $koneksi->prepare("
        (SELECT COUNT(*) FROM bayar_du du WHERE du.no_induk = s.NO_INDUK) +
        (SELECT COUNT(*) FROM transaksi_m tm WHERE tm.NO_INDUK = s.NO_INDUK) +
        (SELECT COUNT(*) FROM transaksi_k tk WHERE tk.NO_INDUK = s.NO_INDUK)) AS history_count
-    FROM siswa s
-    WHERE (? = '' OR s.NO_INDUK LIKE CONCAT('%', ?, '%') OR s.NAMA LIKE CONCAT('%', ?, '%') OR s.NO_induk_diknas LIKE CONCAT('%', ?, '%'))
-      AND (? = '' OR s.KELAS = ?)
-      AND (? = 'all' OR s.is_active = IF(? = 'archived', 0, 1))
+    " . $listWhereSql . "
     ORDER BY s.is_active DESC,
       CASE WHEN s.KELAS REGEXP '^[1-6]$' THEN 0 ELSE 1 END,
       CAST(s.KELAS AS UNSIGNED), s.KELAS, s.NAMA ASC
+    LIMIT ? OFFSET ?
 ");
-$stmtList->bind_param('ssssssss', $query, $query, $query, $query, $filterClass, $filterClass, $filterStatus, $filterStatus);
+$pageTypes = $listTypes . 'ii';
+$pageParams = array_merge($listParams, [$perPage, $offset]);
+$stmtList->bind_param($pageTypes, ...$pageParams);
 $stmtList->execute();
 $studentRows = $stmtList->get_result()->fetch_all(MYSQLI_ASSOC);
 $stmtList->close();
+$studentPaginationQuery = pagination_query(['per_page' => $perPage]);
 
 $formStudent = $editStudent ?? [];
 $fieldMap = [
@@ -550,7 +574,7 @@ $canEditOpening = !$editStudent || (int)($editStudent['history_count'] ?? 0) ===
       </div>
 
       <div class="main-card" style="margin-top:0">
-        <div class="card-title-row"><div class="card-title">Daftar Siswa (<?= count($studentRows) ?>)</div></div>
+        <div class="card-title-row"><div class="card-title">Daftar Siswa (<?= number_format($totalStudents) ?>)</div></div>
         <form method="GET" action="daftar.php" class="filter-bar student-filter-bar">
           <div class="search-box">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
@@ -565,6 +589,11 @@ $canEditOpening = !$editStudent || (int)($editStudent['history_count'] ?? 0) ===
             <option value="archived" <?= $filterStatus === 'archived' ? 'selected' : '' ?>>Diarsipkan</option>
             <option value="all" <?= $filterStatus === 'all' ? 'selected' : '' ?>>Semua Status</option>
           </select>
+          <select class="field-input field-select filter-sel" name="per_page" aria-label="Jumlah siswa per halaman">
+            <?php foreach ($allowedPageSizes as $pageSize): ?>
+            <option value="<?= $pageSize ?>" <?= $perPage === $pageSize ? 'selected' : '' ?>><?= $pageSize ?> / halaman</option>
+            <?php endforeach; ?>
+          </select>
           <button class="btn btn-primary" type="submit">Filter</button>
         </form>
         <div class="table-container">
@@ -577,7 +606,7 @@ $canEditOpening = !$editStudent || (int)($editStudent['history_count'] ?? 0) ===
                 $editUrl = 'daftar.php?edit=' . (int)$student['id'];
               ?>
               <tr class="clickable-payment-row" data-edit-url="<?= htmlspecialchars($editUrl, ENT_QUOTES, 'UTF-8') ?>" tabindex="0" role="link" aria-label="Edit siswa <?= htmlspecialchars($student['NAMA'], ENT_QUOTES, 'UTF-8') ?>">
-                <td data-label="No"><?= $index + 1 ?></td>
+                <td data-label="No"><?= $offset + $index + 1 ?></td>
                 <td data-label="No. Induk"><span class="badge-nis"><?= htmlspecialchars($student['NO_INDUK']) ?></span><?php if (!empty($student['NO_induk_diknas'])): ?><small class="du-history-nis">Diknas <?= htmlspecialchars($student['NO_induk_diknas']) ?></small><?php endif; ?></td>
                 <td data-label="Nama Siswa"><?= htmlspecialchars($student['NAMA']) ?></td>
                 <td data-label="Kelas">Kelas <?= htmlspecialchars($student['KELAS']) ?></td>
@@ -597,6 +626,7 @@ $canEditOpening = !$editStudent || (int)($editStudent['history_count'] ?? 0) ===
             </tbody>
           </table>
         </div>
+        <?php render_pagination('daftar.php', $studentPaginationQuery, $page, $totalPages, $totalStudents, $perPage, 'siswa'); ?>
       </div>
     </main>
   </div>

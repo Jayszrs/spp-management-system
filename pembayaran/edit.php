@@ -296,11 +296,20 @@ $selectedPaymentMethod = $d['sistem_pembayaran'] ?? 'VA';
                     <option value="<?= $code ?>" data-label="<?= $label ?>" <?= $selectedMonth === $code ? 'selected' : '' ?>><?= $label ?></option>
                     <?php endforeach; ?>
                   </select>
-                  <select class="field-input field-select" name="tahun_bayar" id="tahun-bayar" style="max-width:90px">
-                    <?php for ($y = min((int)date('Y')-7, (int)$d['TAHUN']); $y <= (int)date('Y'); $y++): ?>
-                    <option <?= $d['TAHUN'] == $y ? 'selected' : '' ?>><?=$y?></option>
-                    <?php endfor; ?>
-                  </select>
+                  <?php
+                    $selectedYear = (int)$d['TAHUN'];
+                    $yearStart = min((int)date('Y'), $selectedYear);
+                    $yearEnd = max((int)date('Y') + 10, $selectedYear);
+                  ?>
+                  <div class="payment-year-picker">
+                    <input class="field-input payment-year-select" type="text" inputmode="numeric" pattern="\d{4}" maxlength="4"
+                      name="tahun_bayar" id="tahun-bayar" value="<?= htmlspecialchars((string)$d['TAHUN']) ?>" autocomplete="off" required />
+                    <div class="payment-year-options" role="listbox" aria-label="Pilihan tahun pembayaran">
+                      <?php for ($y = $yearStart; $y <= $yearEnd; $y++): ?>
+                      <button type="button" class="payment-year-option" data-year="<?= $y ?>" role="option"><?= $y ?></button>
+                      <?php endfor; ?>
+                    </div>
+                  </div>
                 </div>
               </div>
               <div class="field-row">

@@ -141,6 +141,23 @@ try {
     $firstPaymentId = (int)$stmtFirst->get_result()->fetch_assoc()['id'];
     $stmtFirst->close();
 
+    $adminId = (string)$koneksi->query("SELECT id FROM admin WHERE username='admin' LIMIT 1")->fetch_assoc()['id'];
+    $stmtOperator = $koneksi->prepare("
+        SELECT b.user_id AS payment_operator,
+               COALESCE((SELECT user_id FROM transaksi_m WHERE bayar_id = b.id), '') AS savings_operator
+        FROM bayar b
+        WHERE b.id = ?
+    ");
+    $stmtOperator->bind_param('i', $firstPaymentId);
+    $stmtOperator->execute();
+    $operatorRow = $stmtOperator->get_result()->fetch_assoc();
+    $stmtOperator->close();
+    payment_process_assert(
+        (string)$operatorRow['payment_operator'] === $adminId
+        && (string)$operatorRow['savings_operator'] === $adminId,
+        'Transaksi pembayaran atau tabungan terkait tidak menyimpan ID kasir/operator login.'
+    );
+
     $stmtLegacyOther = $koneksi->prepare("\n        SELECT U_LAIN, LAIN_LAIN1, JUMLAH1, LAIN_LAIN2, JUMLAH2,\n               LAIN_LAIN3, JUMLAH3, LAIN_LAIN4, JUMLAH4,\n               (SELECT COUNT(*) FROM bayar_biaya_lain WHERE bayar_id = bayar.id) AS detail_count\n        FROM bayar WHERE id = ?\n    ");
     $stmtLegacyOther->bind_param('i', $firstPaymentId);
     $stmtLegacyOther->execute();
@@ -175,6 +192,7 @@ try {
     payment_process_assert(str_contains($receipt['body'], 'Tabungan'), 'Struk belum memakai label Tabungan.');
     payment_process_assert(!str_contains($receipt['body'], 'Tabungan Wajib'), 'Struk masih memakai label Tabungan Wajib.');
     payment_process_assert(str_contains($receipt['body'], 'Sisa SPP'), 'Struk belum menampilkan sisa SPP dari database.');
+    payment_process_assert(str_contains($receipt['body'], 'Administrator'), 'Struk belum menampilkan operator dari ID transaksi.');
 
     $update = payment_process_request($baseUrl . '/pembayaran/proses.php', array_merge($common, [
         'aksi' => 'update',

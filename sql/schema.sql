@@ -25,7 +25,11 @@ CREATE TABLE IF NOT EXISTS `admin` (
 INSERT INTO `admin` (`username`, `password`, `nama`, `role`) VALUES
 ('admin',      MD5('admin123'),      'Administrator', 'admin'),
 ('bendahara',  MD5('bendahara123'),  'Bendahara TU',  'bendahara'),
-('kasir',      MD5('kasir123'),      'Kasir',         'kasir')
+('kasir',      MD5('kasir123'),      'Kasir',         'kasir'),
+('kasir1',     MD5('kasir123'),      'Kasir Loket 1', 'kasir'),
+('kasir2',     MD5('kasir123'),      'Kasir Loket 2', 'kasir'),
+('kasir3',     MD5('kasir123'),      'Kasir Loket 3', 'kasir'),
+('kasir4',     MD5('kasir123'),      'Kasir Loket 4', 'kasir')
 ON DUPLICATE KEY UPDATE `nama`=VALUES(`nama`), `role`=VALUES(`role`);
 
 
@@ -81,13 +85,41 @@ CREATE TABLE `siswa_audit_log` (
 ) ENGINE=InnoDB;
 
 -- Data siswa contoh
-INSERT INTO `siswa` (`NO_INDUK`, `NAMA`, `KELAS`, `SPP_PERBULAN`, `PANGKAL`, `BANGUNAN`, `SERAGAM`, `KEGIATAN`) VALUES
-('2024001', 'Ahmad Fauzi',    '1', 250000, 1000000, 1500000, 500000, 300000),
-('2024002', 'Siti Rahayu',    '2', 250000, 1000000, 1500000, 500000, 300000),
-('2024003', 'Budi Santoso',   '3', 275000, 1000000, 1500000, 500000, 300000),
-('2024004', 'Dewi Lestari',   '4', 275000, 1000000, 1500000, 500000, 300000),
-('2024005', 'Muhammad Rizky', '5', 300000, 1000000, 1500000, 500000, 300000),
-('2024006', 'Ayu Putri',      '6', 300000, 1000000, 1500000, 500000, 300000);
+INSERT INTO `siswa` (
+  `NO_INDUK`, `NO_induk_diknas`, `NAMA`, `KELAS`, `SPP_PERBULAN`,
+  `PANGKAL`, `BANGUNAN`, `SERAGAM`, `KEGIATAN`, `MAKAN`, `SORGA`, `INFAQ`,
+  `POMG`, `DAFTAR_ULANG`, `tot_pangkal`, `tot_du`
+) VALUES
+('2024001', NULL,      'Ahmad Fauzi',             '1', 250000, 1000000, 1500000, 500000, 300000,      0,     0,     0,      0, 1000000, 1000000, 1000000),
+('2024002', NULL,      'Siti Rahayu',             '2', 250000, 1000000, 1500000, 500000, 300000,      0,     0,     0,      0, 1100000, 1000000, 1100000),
+('2024003', NULL,      'Budi Santoso',            '3', 275000, 1000000, 1500000, 500000, 300000,      0,     0,     0,      0, 1200000, 1000000, 1200000),
+('2024004', NULL,      'Dewi Lestari',            '4', 275000, 1000000, 1500000, 500000, 300000,      0,     0,     0,      0, 1300000, 1000000, 1300000),
+('2024005', NULL,      'Muhammad Rizky',          '5', 300000, 1000000, 1500000, 500000, 300000,      0,     0,     0,      0, 1400000, 1000000, 1400000),
+('2024006', NULL,      'Ayu Putri',               '6', 300000, 1000000, 1500000, 500000, 300000, 200000, 70000, 40000, 150000, 1500000, 1000000, 1500000),
+('2026101', 'D260101', 'Alya Nabila Demo',        '1', 250000, 1000000, 1500000, 500000, 300000, 180000, 50000, 25000, 100000, 1000000, 1000000, 1000000),
+('2026102', 'D260102', 'Rafi Pratama Demo',       '1', 250000, 1000000, 1500000, 500000, 300000, 180000, 50000, 25000, 100000, 1000000, 1000000, 1000000),
+('2026103', 'D260103', 'Kirana Putri Demo',       '2', 260000, 1100000, 1550000, 525000, 325000, 185000, 50000, 30000, 110000, 1100000, 1100000, 1100000),
+('2026104', 'D260104', 'Bagas Saputra Demo',      '2', 260000, 1100000, 1550000, 525000, 325000, 185000, 50000, 30000, 110000, 1100000, 1100000, 1100000),
+('2026105', 'D260105', 'Naya Ramadhani Demo',     '3', 275000, 1200000, 1600000, 550000, 350000, 190000, 60000, 30000, 120000, 1200000, 1200000, 1200000),
+('2026106', 'D260106', 'Dimas Arya Demo',         '3', 275000, 1200000, 1600000, 550000, 350000, 190000, 60000, 30000, 120000, 1200000, 1200000, 1200000),
+('2026107', 'D260107', 'Salsa Azzahra Demo',      '4', 290000, 1300000, 1650000, 575000, 375000, 195000, 60000, 35000, 130000, 1300000, 1300000, 1300000),
+('2026108', 'D260108', 'Fadli Maulana Demo',      '4', 290000, 1300000, 1650000, 575000, 375000, 195000, 60000, 35000, 130000, 1300000, 1300000, 1300000),
+('2026109', 'D260109', 'Citra Maharani Demo',     '5', 305000, 1400000, 1700000, 600000, 400000, 200000, 70000, 40000, 140000, 1400000, 1400000, 1400000),
+('2026110', 'D260110', 'Farhan Hafizh Demo',      '6', 320000, 1500000, 1750000, 625000, 425000, 210000, 70000, 40000, 150000, 1500000, 1500000, 1500000),
+('2026111', 'D260111', 'Andika Pratama Demo',     '1', 250000, 1000000, 1500000, 500000, 300000, 180000, 50000, 25000, 100000, 1000000, 1000000, 1000000),
+('2026112', 'D260112', 'Mira Aulia Demo',         '1', 250000, 1000000, 1500000, 500000, 300000, 180000, 50000, 25000, 100000, 1000000, 1000000, 1000000),
+('2026113', 'D260113', 'Rizky Ramadhan Demo',     '2', 260000, 1100000, 1550000, 525000, 325000, 185000, 50000, 30000, 110000, 1100000, 1100000, 1100000),
+('2026114', 'D260114', 'Tiara Safitri Demo',      '2', 260000, 1100000, 1550000, 525000, 325000, 185000, 50000, 30000, 110000, 1100000, 1100000, 1100000),
+('2026115', 'D260115', 'Gilang Saputra Demo',     '3', 275000, 1200000, 1600000, 550000, 350000, 190000, 60000, 30000, 120000, 1200000, 1200000, 1200000),
+('2026116', 'D260116', 'Putri Amelia Demo',       '3', 275000, 1200000, 1600000, 550000, 350000, 190000, 60000, 30000, 120000, 1200000, 1200000, 1200000),
+('2026117', 'D260117', 'Raka Firmansyah Demo',    '4', 290000, 1300000, 1650000, 575000, 375000, 195000, 60000, 35000, 130000, 1300000, 1300000, 1300000),
+('2026118', 'D260118', 'Zahra Nuraini Demo',      '4', 290000, 1300000, 1650000, 575000, 375000, 195000, 60000, 35000, 130000, 1300000, 1300000, 1300000),
+('2026119', 'D260119', 'Hafiz Alfarizi Demo',     '5', 305000, 1400000, 1700000, 600000, 400000, 200000, 70000, 40000, 140000, 1400000, 1400000, 1400000),
+('2026120', 'D260120', 'Laras Puspita Demo',      '5', 305000, 1400000, 1700000, 600000, 400000, 200000, 70000, 40000, 140000, 1400000, 1400000, 1400000),
+('2026121', 'D260121', 'Naufal Akbar Demo',       '5', 305000, 1400000, 1700000, 600000, 400000, 200000, 70000, 40000, 140000, 1400000, 1400000, 1400000),
+('2026122', 'D260122', 'Sabrina Fitri Demo',      '6', 320000, 1500000, 1750000, 625000, 425000, 210000, 70000, 40000, 150000, 1500000, 1500000, 1500000),
+('2026123', 'D260123', 'Arkan Maulana Demo',      '6', 320000, 1500000, 1750000, 625000, 425000, 210000, 70000, 40000, 150000, 1500000, 1500000, 1500000),
+('2026124', 'D260124', 'Nadya Khairunnisa Demo',  '6', 320000, 1500000, 1750000, 625000, 425000, 210000, 70000, 40000, 150000, 1500000, 1500000, 1500000);
 
 -- Tabel Bayar (Revisi Baru)
 DROP TABLE IF EXISTS `bayar`;
@@ -258,6 +290,39 @@ CREATE TABLE `bayar_du` (
   CONSTRAINT `fk_bayar_du_bayar` FOREIGN KEY (`bayar_id`) REFERENCES `bayar`(`id`) ON DELETE CASCADE ON UPDATE CASCADE,
   CONSTRAINT `fk_bayar_du_tagihan` FOREIGN KEY (`tagihan_daftar_ulang_id`) REFERENCES `tagihan_daftar_ulang`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE
 ) ENGINE=InnoDB;
+
+INSERT INTO `tahun_ajaran` (`label`, `tanggal_mulai`, `tanggal_selesai`, `status`, `published_at`) VALUES
+('2026/2027', '2026-07-01', '2027-06-30', 'published', NOW());
+
+INSERT INTO `Daftar_ulang` (`tahun_ajaran_id`, `th_ajaran`, `kelas`, `Jumlah`)
+SELECT ta.id, ta.label, kelas_data.kelas, kelas_data.jumlah
+FROM tahun_ajaran ta
+JOIN (
+  SELECT '1' AS kelas, 1000000 AS jumlah UNION ALL
+  SELECT '2', 1100000 UNION ALL
+  SELECT '3', 1200000 UNION ALL
+  SELECT '4', 1300000 UNION ALL
+  SELECT '5', 1400000 UNION ALL
+  SELECT '6', 1500000
+) kelas_data
+WHERE ta.label = '2026/2027';
+
+INSERT INTO `siswa_tahun_ajaran` (`tahun_ajaran_id`, `no_induk`, `kelas`, `status`)
+SELECT ta.id, s.NO_INDUK, s.KELAS, 'aktif'
+FROM siswa s
+JOIN tahun_ajaran ta ON ta.label = '2026/2027';
+
+INSERT INTO `tagihan_daftar_ulang` (
+  `tahun_ajaran_id`, `penempatan_id`, `master_daftar_ulang_id`,
+  `no_induk`, `kelas_snapshot`, `tahun_ajaran_snapshot`, `nominal_awal`, `nominal_tagihan`
+)
+SELECT ta.id, sta.id, du.id, s.NO_INDUK, s.KELAS, ta.label,
+       COALESCE(NULLIF(s.DAFTAR_ULANG, 0), du.Jumlah, 0),
+       COALESCE(NULLIF(s.tot_du, 0), NULLIF(s.DAFTAR_ULANG - s.potong_du, 0), du.Jumlah, 0)
+FROM siswa s
+JOIN tahun_ajaran ta ON ta.label = '2026/2027'
+JOIN siswa_tahun_ajaran sta ON sta.tahun_ajaran_id = ta.id AND sta.no_induk = s.NO_INDUK
+LEFT JOIN Daftar_ulang du ON du.tahun_ajaran_id = ta.id AND du.kelas = s.KELAS;
 
 -- Tabel Tabungan
 DROP TABLE IF EXISTS `tabungan`;

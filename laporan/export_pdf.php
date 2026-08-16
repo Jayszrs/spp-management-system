@@ -10,6 +10,18 @@ requireRole(['admin', 'bendahara']);
 
 $filter_bulan = (int)($_GET['bulan'] ?? date('m'));
 $filter_tahun = (int)($_GET['tahun'] ?? date('Y'));
+$dateParam = static function (string $key): string {
+    $value = trim((string)($_GET[$key] ?? ''));
+    return preg_match('/^\d{4}-\d{2}-\d{2}$/', $value) ? $value : '';
+};
+$filter_tanggal = $dateParam('tanggal');
+$filter_tanggal_awal = $dateParam('tanggal_awal') ?: $filter_tanggal;
+$filter_tanggal_akhir = $dateParam('tanggal_akhir') ?: $filter_tanggal;
+if ($filter_tanggal_awal !== '' && $filter_tanggal_akhir === '') $filter_tanggal_akhir = $filter_tanggal_awal;
+if ($filter_tanggal_akhir !== '' && $filter_tanggal_awal === '') $filter_tanggal_awal = $filter_tanggal_akhir;
+if ($filter_tanggal_awal !== '' && $filter_tanggal_akhir !== '' && strtotime($filter_tanggal_awal) > strtotime($filter_tanggal_akhir)) {
+    [$filter_tanggal_awal, $filter_tanggal_akhir] = [$filter_tanggal_akhir, $filter_tanggal_awal];
+}
 $preview_mode = isset($_GET['contoh']) && $_GET['contoh'] === '1';
 $selected_mode = isset($_GET['mode']) && $_GET['mode'] === 'selected';
 $selected_ids_raw = $_GET['ids'] ?? [];
@@ -20,7 +32,7 @@ $selected_ids = array_values(array_unique(array_filter(array_map('intval', $sele
 
 if ($selected_mode && !$selected_ids) {
     $_SESSION['flash'] = ['type' => 'error', 'msg' => 'Pilih minimal satu transaksi untuk dicetak.'];
-    header('Location: index.php?bulan=' . urlencode((string)$filter_bulan) . '&tahun=' . urlencode((string)$filter_tahun));
+    header('Location: index.php?bulan=' . urlencode((string)$filter_bulan) . '&tahun=' . urlencode((string)$filter_tahun) . '&tanggal_awal=' . urlencode($filter_tanggal_awal) . '&tanggal_akhir=' . urlencode($filter_tanggal_akhir));
     exit;
 }
 
@@ -30,7 +42,19 @@ $bln_names = [
     9 => 'September', 10 => 'Oktober', 11 => 'November', 12 => 'Desember'
 ];
 $bulan_label = $bln_names[$filter_bulan] ?? '';
-$periode = trim($bulan_label . ' ' . $filter_tahun);
+if ($filter_tanggal_awal !== '' && $filter_tanggal_akhir !== '') {
+    $startTs = strtotime($filter_tanggal_awal);
+    $endTs = strtotime($filter_tanggal_akhir);
+    if ($filter_tanggal_awal === $filter_tanggal_akhir) {
+        $periode = date('d M Y', $startTs);
+    } elseif (date('Y-m', $startTs) === date('Y-m', $endTs)) {
+        $periode = date('d', $startTs) . ' - ' . date('d M Y', $endTs);
+    } else {
+        $periode = date('d M Y', $startTs) . ' - ' . date('d M Y', $endTs);
+    }
+} else {
+    $periode = trim($bulan_label . ' ' . $filter_tahun);
+}
 
 function e($value): string {
     return htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
@@ -83,9 +107,13 @@ function payment_line(string $label, $amount): array {
     return ['label' => $label, 'amount' => (float)$amount];
 }
 
-$where_sql = 'WHERE MONTH(b.TGL_BYR) = ? AND YEAR(b.TGL_BYR) = ?';
-$types = 'ii';
-$params = [$filter_bulan, $filter_tahun];
+$period_start = $filter_tanggal_awal !== '' ? $filter_tanggal_awal . ' 00:00:00' : sprintf('%04d-%02d-01 00:00:00', $filter_tahun, $filter_bulan);
+$period_end = $filter_tanggal_akhir !== ''
+    ? date('Y-m-d H:i:s', strtotime($filter_tanggal_akhir . ' +1 day'))
+    : date('Y-m-d H:i:s', strtotime($period_start . ' +1 month'));
+$where_sql = 'WHERE b.TGL_BYR >= ? AND b.TGL_BYR < ?';
+$types = 'ss';
+$params = [$period_start, $period_end];
 if ($selected_ids) {
     $where_sql .= ' AND b.id IN (' . implode(',', array_fill(0, count($selected_ids), '?')) . ')';
     $types .= str_repeat('i', count($selected_ids));
@@ -108,9 +136,11 @@ $stmt = $koneksi->prepare("
         COALESCE(du_current.jumlah, 0) AS uang_du,
         COALESCE(tab_current.tabungan_wajib, 0) AS tabungan_wajib,
         COALESCE(psb_paid.total_pangkal_bayar, 0) AS total_pangkal_bayar,
-        COALESCE(du_paid.total_du_bayar, 0) AS total_du_bayar
+        COALESCE(du_paid.total_du_bayar, 0) AS total_du_bayar,
+        COALESCE(op.nama, NULLIF(b.user_id, '')) AS operator_name
     FROM bayar b
     JOIN siswa s ON s.NO_INDUK = b.NO_INDUK
+    LEFT JOIN admin op ON op.id = CAST(b.user_id AS UNSIGNED)
     LEFT JOIN (
         SELECT no_induk, th_ajaran, kelas, SUM(jumlah) AS jumlah
         FROM bayar_du
@@ -145,7 +175,7 @@ $stmt->close();
 
 if ($selected_mode && !$rows) {
     $_SESSION['flash'] = ['type' => 'error', 'msg' => 'Transaksi yang dipilih tidak ditemukan pada periode ini.'];
-    header('Location: index.php?bulan=' . urlencode((string)$filter_bulan) . '&tahun=' . urlencode((string)$filter_tahun));
+    header('Location: index.php?bulan=' . urlencode((string)$filter_bulan) . '&tahun=' . urlencode((string)$filter_tahun) . '&tanggal_awal=' . urlencode($filter_tanggal_awal) . '&tanggal_akhir=' . urlencode($filter_tanggal_akhir));
     exit;
 }
 
@@ -445,7 +475,7 @@ ob_start();
     $sisa_psb = max(0, total_psb_bill($row) - max((float)$row['PANGKAL_BAYAR'], (float)$row['total_pangkal_bayar']));
     $sisa_du = max(0, total_du_bill($row) - (float)$row['total_du_bayar']);
     $month_name = month_name_from_value($row['BULAN'], $bln_names);
-    $signer = $_SESSION['admin_nama'] ?? 'Bagian Keuangan';
+    $signer = $row['operator_name'] ?: ($_SESSION['admin_nama'] ?? 'Bagian Keuangan');
   ?>
   <section class="slip">
     <h1 class="school-title">SEKOLAH DASAR AL-QUR'AN<br>( SDA ) MUTIARA HIKMAH</h1>

@@ -187,48 +187,73 @@ unset($_SESSION['flash']);
 
           <!-- Pengaturan transaksi + ringkasan tagihan -->
           <div class="top-info-row payment-input-top">
-            <div class="info-group payment-settings-group">
+            <div class="info-group payment-settings-group" aria-label="Pengaturan transaksi">
+              <div class="payment-panel-kicker">Pengaturan Transaksi</div>
               <input type="hidden" name="payment_plan" value="monthly" />
               <div class="payment-settings-grid">
-              <div class="field-row">
-                <label class="field-label" for="tgl-bayar">Tanggal Bayar</label>
-                <input class="field-input" type="date" id="tgl-bayar" name="tanggal_bayar"
-                  value="<?= date('Y-m-d') ?>" readonly aria-readonly="true" required />
-              </div>
-              <div class="field-row">
-                <label class="field-label" for="bulan-bayar" id="payment-period-label">Pembayaran Bulan</label>
-                <div class="field-group-inline">
-                  <select class="field-input field-select month-code-select" id="bulan-bayar" name="bulan_bayar" required>
-                    <?php
-                    $month_labels = [
-                        '01' => 'Januari', '02' => 'Februari', '03' => 'Maret', '04' => 'April',
-                        '05' => 'Mei', '06' => 'Juni', '07' => 'Juli', '08' => 'Agustus',
-                        '09' => 'September', '10' => 'Oktober', '11' => 'November', '12' => 'Desember'
-                    ];
-                    $cur = date('m');
-                    foreach ($month_labels as $code => $label) {
-                        echo "<option value=\"$code\" data-label=\"$label\"" . ($code === $cur ? ' selected' : '') . ">$label</option>";
-                    }
-                    ?>
-                  </select>
-                  <select class="field-input field-select" id="tahun-bayar" name="tahun_bayar" style="max-width:90px">
-                    <?php for ($y = date('Y')-7; $y <= date('Y'); $y++) echo "<option" . ($y == date('Y') ? ' selected' : '') . ">$y</option>"; ?>
+                <div class="field-row payment-field-card">
+                  <label class="field-label" for="tgl-bayar">
+                    <span class="payment-field-icon" aria-hidden="true">
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                    </span>
+                    Tanggal Bayar
+                  </label>
+                  <input class="field-input" type="date" id="tgl-bayar" name="tanggal_bayar"
+                    value="<?= date('Y-m-d') ?>" readonly aria-readonly="true" required />
+                </div>
+                <div class="field-row payment-field-card payment-period-card">
+                  <label class="field-label" for="bulan-bayar" id="payment-period-label">
+                    <span class="payment-field-icon" aria-hidden="true">
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v4"/><path d="M16 2v4"/><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M3 10h18"/></svg>
+                    </span>
+                    Pembayaran Bulan
+                  </label>
+                  <div class="field-group-inline payment-period-inputs">
+                    <select class="field-input field-select month-code-select" id="bulan-bayar" name="bulan_bayar" required>
+                      <?php
+                      $month_labels = [
+                          '01' => 'Januari', '02' => 'Februari', '03' => 'Maret', '04' => 'April',
+                          '05' => 'Mei', '06' => 'Juni', '07' => 'Juli', '08' => 'Agustus',
+                          '09' => 'September', '10' => 'Oktober', '11' => 'November', '12' => 'Desember'
+                      ];
+                      $cur = date('m');
+                      foreach ($month_labels as $code => $label) {
+                          echo "<option value=\"$code\" data-label=\"$label\"" . ($code === $cur ? ' selected' : '') . ">$label</option>";
+                      }
+                      ?>
+                    </select>
+                    <div class="payment-year-picker">
+                      <input class="field-input payment-year-select" type="text" inputmode="numeric" pattern="\d{4}" maxlength="4"
+                        id="tahun-bayar" name="tahun_bayar" value="<?= date('Y') ?>" autocomplete="off" required />
+                      <div class="payment-year-options" role="listbox" aria-label="Pilihan tahun pembayaran">
+                        <?php for ($y = (int)date('Y'); $y <= (int)date('Y') + 10; $y++): ?>
+                        <button type="button" class="payment-year-option" data-year="<?= $y ?>" role="option"><?= $y ?></button>
+                        <?php endfor; ?>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div class="field-row payment-field-card">
+                  <label class="field-label" for="sistem-pembayaran">
+                    <span class="payment-field-icon" aria-hidden="true">
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
+                    </span>
+                    Sistem Pembayaran
+                  </label>
+                  <select class="field-input field-select" id="sistem-pembayaran" name="sistem_pembayaran" required>
+                    <option value="Tunai">Tunai</option>
+                    <option value="VA" selected>VA</option>
+                    <option value="Qris">Qris</option>
                   </select>
                 </div>
-              </div>
-              <div class="field-row">
-                <label class="field-label" for="sistem-pembayaran">Sistem Pembayaran</label>
-                <select class="field-input field-select" id="sistem-pembayaran" name="sistem_pembayaran" required>
-                  <option value="Tunai">Tunai</option>
-                  <option value="VA" selected>VA</option>
-                  <option value="Qris">Qris</option>
-                </select>
-              </div>
               </div>
             </div>
             <section class="payment-overview-panel" aria-label="Ringkasan pembayaran">
               <div class="payment-current-total">
-                <span>Total Bayar</span>
+                <div>
+                  <span>Total Bayar</span>
+                  <small>Nominal transaksi yang sedang diinput</small>
+                </div>
                 <strong id="totalJumlah">Rp 0</strong>
                 <input type="hidden" name="total_jumlah" id="hidden-total" value="0" />
               </div>
@@ -240,15 +265,15 @@ unset($_SESSION['flash']);
                 </span>
               </div>
               <div class="payment-year-summary">
-                <div>
+                <div class="payment-year-card">
                   <span id="academic-total-label">Total Tagihan TA <?= htmlspecialchars($activeAcademicYear) ?></span>
                   <strong id="academic-total-value">Rp 0</strong>
                 </div>
-                <div>
+                <div class="payment-year-card">
                   <span>Sudah Terbayar</span>
                   <strong id="academic-paid-value">Rp 0</strong>
                 </div>
-                <div>
+                <div class="payment-year-card is-remaining">
                   <span>Sisa Tagihan</span>
                   <strong id="academic-remaining-value">Rp 0</strong>
                 </div>

@@ -17,7 +17,7 @@ $no_induk  = trim($_POST['no_induk'] ?? '');
 $tanggal   = $_POST['tanggal'] ?? date('Y-m-d');
 $nominal   = (float)($_POST['nominal'] ?? 0);
 $keterangan = trim($_POST['keterangan'] ?? '');
-$user_id   = $_SESSION['admin_id'] ?? '';
+$user_id   = (string)($_SESSION['admin_id'] ?? '');
 
 // Validasi dasar
 if (!$no_induk || $nominal <= 0 || !in_array($aksi, ['masuk', 'keluar'], true)) {

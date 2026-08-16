@@ -169,10 +169,12 @@ $paymentStmt = $koneksi->prepare("
            du.tagihan_daftar_ulang_id, COALESCE(du.jumlah, 0) AS uang_du,
            COALESCE(tdu.nominal_tagihan, 0) AS du_nominal_tagihan,
            COALESCE(tab.MASUK, 0) AS tabungan_wajib,
+           COALESCE(op.nama, NULLIF(b.user_id, '')) AS operator_name,
            COALESCE((SELECT SUM(bp.U_PANGKAL) FROM bayar bp WHERE bp.NO_INDUK = b.NO_INDUK), 0) AS total_pangkal_bayar,
            COALESCE((SELECT SUM(bd.jumlah) FROM bayar_du bd WHERE bd.no_induk = b.NO_INDUK), 0) AS total_du_bayar
     FROM bayar b
     JOIN siswa s ON s.NO_INDUK = b.NO_INDUK
+    LEFT JOIN admin op ON op.id = CAST(b.user_id AS UNSIGNED)
     LEFT JOIN bayar_du du ON du.bayar_id = b.id
     LEFT JOIN tagihan_daftar_ulang tdu ON tdu.id = du.tagihan_daftar_ulang_id
     LEFT JOIN transaksi_m tab ON tab.bayar_id = b.id
@@ -217,7 +219,6 @@ foreach ($ids as $paymentId) {
 }
 $paymentStmt->close();
 $otherStmt->close();
-$signer = $_SESSION['admin_nama'] ?? 'Bagian Keuangan';
 ?>
 <!DOCTYPE html>
 <html lang="id">
@@ -257,7 +258,7 @@ $signer = $_SESSION['admin_nama'] ?? 'Bagian Keuangan';
     <div class="rule split"></div>
     <table class="detail"><tr><td><div class="section-label">Data Pembayaran:</div><table class="payments"><?php foreach ($receipt['primary_lines'] as $index => [$label,$amount]): ?><tr><td class="number"><?= $index+1 ?>.</td><td class="payment-label"><?= annual_receipt_e($label) ?></td><td class="separator">:</td><td class="amount"><?= annual_receipt_e(annual_receipt_money($amount)) ?></td></tr><?php endforeach; ?></table></td><td><div class="section-label">Sisa Pembayaran:</div><table class="payments"><?php if ($receipt['remaining_lines']): foreach ($receipt['remaining_lines'] as [$label,$amount]): ?><tr><td><strong><?= annual_receipt_e($label) ?></strong></td><td class="separator">:</td><td class="amount"><?= annual_receipt_e(annual_receipt_money($amount,true)) ?></td></tr><?php endforeach; else: ?><tr><td>-</td></tr><?php endif; ?></table><div class="section-label" style="margin-top:8px">Pembayaran Lain-lain:</div><table class="payments"><?php if ($receipt['other_lines']): foreach ($receipt['other_lines'] as [$label,$amount]): ?><tr><td><?= annual_receipt_e($label) ?></td><td class="separator">:</td><td class="amount"><?= $amount<0?'-':'' ?><?= annual_receipt_e(annual_receipt_money(abs((float)$amount))) ?></td></tr><?php endforeach; else: ?><tr><td>-</td></tr><?php endif; ?></table></td></tr></table>
     <table class="total"><tr><td>JUMLAH TOTAL</td><td class="amount"><?= annual_receipt_e(annual_receipt_money($receipt['total_jumlah'],true)) ?></td></tr></table>
-    <table class="footer"><tr><td class="footer-left"><div class="words"><strong>Terbilang:</strong> <?= annual_receipt_e(ucfirst(annual_receipt_words((int)round($receipt['total_jumlah']))) . ' rupiah') ?></div><div><strong>Sistem Pembayaran:</strong> <?= annual_receipt_e($receipt['sistem_pembayaran'] ?? 'VA') ?></div></td><td class="footer-right"><div>Bekasi, <?= annual_receipt_e(annual_receipt_date($receipt['TGL_BYR'])) ?></div><div>Bagian Keuangan</div><div class="signature-space"></div><strong><?= annual_receipt_e($signer) ?></strong></td></tr></table>
+    <table class="footer"><tr><td class="footer-left"><div class="words"><strong>Terbilang:</strong> <?= annual_receipt_e(ucfirst(annual_receipt_words((int)round($receipt['total_jumlah']))) . ' rupiah') ?></div><div><strong>Sistem Pembayaran:</strong> <?= annual_receipt_e($receipt['sistem_pembayaran'] ?? 'VA') ?></div></td><td class="footer-right"><div>Bekasi, <?= annual_receipt_e(annual_receipt_date($receipt['TGL_BYR'])) ?></div><div>Bagian Keuangan</div><div class="signature-space"></div><strong><?= annual_receipt_e($receipt['operator_name'] ?: ($_SESSION['admin_nama'] ?? 'Bagian Keuangan')) ?></strong></td></tr></table>
   </main>
   <?php endforeach; ?>
   <script>window.addEventListener('load',function(){window.setTimeout(function(){window.print()},40)});</script>

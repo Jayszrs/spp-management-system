@@ -58,6 +58,10 @@ $allNavItems = [
    '<path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>',
    ['admin', 'bendahara'], 'Laporan'],
 
+  ['laporan/global.php', 'Laporan Global',
+   '<path d="M3 3v18h18"/><path d="M7 15l3-3 3 2 5-6"/><path d="M7 19h12"/>',
+   ['admin', 'bendahara', 'kasir'], 'Laporan'],
+
   ['laporan/rekap_kelas.php', 'Rekap per Kelas',
    '<path d="M3 3h18v18H3z"/><path d="M3 9h18M9 3v18"/>',
    ['admin', 'bendahara'], 'Laporan'],
@@ -84,6 +88,7 @@ $shortLabels = [
   'Tabungan Keluar'   => 'Keluar',
   'Riwayat Tabungan'  => 'Riwayat',
   'Laporan'           => 'Laporan',
+  'Laporan Global'    => 'Global',
   'Rekap per Kelas'   => 'Rekap',
 ];
 

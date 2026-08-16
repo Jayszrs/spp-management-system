@@ -908,6 +908,56 @@ document.addEventListener('DOMContentLoaded', function () {
 
   document.querySelectorAll('#bulan-bayar, #tahun-bayar').forEach(el => {
     el.addEventListener('change', refreshSelectedStudentPaymentDetails);
+    if (el.id === 'tahun-bayar') {
+      el.addEventListener('input', refreshSelectedStudentPaymentDetails);
+    }
+  });
+
+  document.querySelectorAll('.payment-year-picker').forEach(picker => {
+    const input = picker.querySelector('.payment-year-select');
+    const options = Array.from(picker.querySelectorAll('.payment-year-option'));
+    if (!input || !options.length) return;
+
+    const syncActiveYear = () => {
+      let activeOption = null;
+      options.forEach(option => {
+        const isActive = option.dataset.year === input.value.trim();
+        option.classList.toggle('is-active', isActive);
+        if (isActive) activeOption = option;
+      });
+      return activeOption;
+    };
+    const openPicker = () => {
+      const activeOption = syncActiveYear();
+      picker.classList.add('is-open');
+      requestAnimationFrame(() => {
+        (activeOption || options[0]).scrollIntoView({ block: 'nearest' });
+      });
+    };
+    const closePicker = () => picker.classList.remove('is-open');
+
+    input.addEventListener('focus', openPicker);
+    input.addEventListener('click', openPicker);
+    input.addEventListener('input', () => {
+      input.value = input.value.replace(/\D/g, '').slice(0, 4);
+      syncActiveYear();
+    });
+    input.addEventListener('keydown', event => {
+      if (event.key === 'Escape') closePicker();
+    });
+    options.forEach(option => {
+      option.addEventListener('click', () => {
+        input.value = option.dataset.year || option.textContent.trim();
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+        closePicker();
+        input.focus();
+      });
+    });
+    document.addEventListener('click', event => {
+      if (!picker.contains(event.target)) closePicker();
+    });
+    syncActiveYear();
   });
 
   const paymentPlan = document.getElementById('payment-plan');
@@ -919,9 +969,15 @@ document.addEventListener('DOMContentLoaded', function () {
   if (paymentDate) {
     paymentDate.addEventListener('change', function () {
       const selectedYear = this.value.slice(0, 4);
-      const yearSelect = document.getElementById('tahun-bayar');
-      if (yearSelect && Array.from(yearSelect.options).some(option => option.value === selectedYear || option.textContent.trim() === selectedYear)) {
-        yearSelect.value = selectedYear;
+      const yearInput = document.getElementById('tahun-bayar');
+      if (yearInput && selectedYear) {
+        if ('options' in yearInput) {
+          if (Array.from(yearInput.options).some(option => option.value === selectedYear || option.textContent.trim() === selectedYear)) {
+            yearInput.value = selectedYear;
+          }
+        } else {
+          yearInput.value = selectedYear;
+        }
       }
       refreshSelectedStudentPaymentDetails();
     });
