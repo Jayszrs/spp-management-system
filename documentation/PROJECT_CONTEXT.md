@@ -153,7 +153,7 @@ Tabel `Daftar_ulang` dipakai sebagai template tarif per kombinasi `kelas + th_aj
 
 ### `tabungan`, `transaksi_m`, dan `transaksi_k`
 
-`tabungan` menyimpan saldo berjalan per siswa. `transaksi_m` dan `transaksi_k` menyimpan jurnal masuk dan keluar. Setoran Tabungan Wajib dari pembayaran aman menyimpan `transaksi_m.bayar_id` unik dengan foreign key `ON DELETE CASCADE`; setoran manual bernilai `NULL`, sedangkan seluruh `transaksi_k` tetap tidak berelasi ke pembayaran. Semua foreign key nomor induk mengikuti perubahan nomor induk melalui `ON UPDATE CASCADE`.
+`tabungan` menyimpan saldo berjalan per siswa. `transaksi_m` dan `transaksi_k` menyimpan jurnal masuk dan keluar dari modul Tabungan Masuk/Keluar. Pembayaran siswa tidak lagi membuat setoran tabungan; `transaksi_m.bayar_id` dipertahankan untuk kompatibilitas schema dan cleanup histori lama, tetapi alur baru harus menyimpannya `NULL`. Semua foreign key nomor induk mengikuti perubahan nomor induk melalui `ON UPDATE CASCADE`.
 
 ## 7. Alur dan Aturan Bisnis
 
@@ -185,10 +185,9 @@ Tabel `Daftar_ulang` dipakai sebagai template tarif per kombinasi `kelas + th_aj
 - Nominal negatif, periode tidak valid, pembayaran Komite melebihi sisa periode, dan input komponen yang melebihi sisa tagihan harus ditolak.
 - Form pembayaran menampilkan alert bila `Sudah Terbayar` lebih besar dari `Total Tagihan`; sisa ditampilkan sebagai nol dan input bayar pada komponen tersebut dikunci.
 - Form pembayaran juga menampilkan alert inline bila `Input Bayar` lebih besar dari sisa tagihan sebelum submit; input tersebut diberi invalid state dan browser menahan submit melalui custom validity.
-- Simpan, edit, dan hapus transaksi utama, daftar ulang, tabungan terkait, serta detail biaya lain dijalankan dalam transaction.
-- Pembayaran baru menyimpan relasi eksplisit ke Daftar Ulang dan setoran Tabungan Wajib melalui `bayar_id`. Edit atau hapus hanya boleh mengubah child dengan `bayar_id` yang sama, bukan child dengan NIS, tanggal, atau tahun ajaran yang kebetulan sama.
+- Simpan, edit, dan hapus transaksi utama, daftar ulang, serta detail biaya lain dijalankan dalam transaction.
+- Pembayaran baru menyimpan relasi eksplisit ke Daftar Ulang melalui `bayar_id`. Pembayaran tidak boleh membuat setoran tabungan; POST lama dengan `tabungan_wajib > 0` wajib ditolak.
 - Pembayaran `payment_link_version=0` adalah legacy. Sistem menandainya di daftar dan menolak edit/hapus, termasuk akses endpoint langsung; rekonsiliasi harus dilakukan manual tanpa pencocokan otomatis.
-- Sebelum edit/hapus membalikkan setoran Tabungan Wajib, baris saldo dikunci. Bila pembalikan membuat saldo negatif, seluruh transaction ditolak dan di-rollback.
 
 ### Makan, Sorga, dan Infaq
 
@@ -328,8 +327,8 @@ git diff --check
 
 - Uji CRUD dasar dan Advance siswa, preservasi field, audit, arsip, perubahan nomor induk, dan cascade.
 - Uji pembayaran Komite sebagian, penuh, berlebih, dan pada dua periode berbeda.
-- Uji satu siswa dengan dua pembayaran pada tanggal sama: edit/hapus salah satunya hanya boleh memengaruhi `bayar_du` dan `transaksi_m` yang memiliki `bayar_id` miliknya; setoran manual pada tanggal sama harus tetap utuh.
-- Uji penolakan update/hapus ketika pembalikan setoran Tabungan Wajib membuat saldo negatif, serta penolakan edit/hapus pembayaran legacy.
+- Uji satu siswa dengan dua pembayaran pada tanggal sama: edit/hapus salah satunya hanya boleh memengaruhi `bayar_du` yang memiliki `bayar_id` miliknya; setoran tabungan manual pada tanggal sama harus tetap utuh.
+- Uji penolakan POST `tabungan_wajib > 0`, serta penolakan edit/hapus pembayaran legacy.
 - Uji biaya lain aktif/nonaktif, snapshot, edit, penghapusan master terpakai, dan cascade detail.
 - Uji tabungan masuk, keluar, saldo tidak cukup, dan siswa arsip.
 - Bandingkan total web, PDF, Excel, dan data database.

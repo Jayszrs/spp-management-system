@@ -22,8 +22,8 @@ Dokumen kerja ini melacak pekerjaan teknis yang sedang dan sudah dilakukan. Perb
 
 | ID | Temuan | Prioritas | Status | Bukti / tindak lanjut |
 | --- | --- | --- | --- | --- |
-| FIN-001 | Edit/hapus pembayaran dahulu dapat menyentuh Daftar Ulang atau jurnal tabungan lain dengan NIS dan tanggal/tahun yang sama. | Kritis | Selesai | `bayar_du.bayar_id` dan `transaksi_m.bayar_id` sekarang unik dan ber-FK ke header pembayaran. Handler hanya mengakses child lewat `bayar_id`. |
-| FIN-002 | Pembalikan setoran Tabungan Wajib dapat membuat saldo tabungan negatif. | Kritis | Selesai | Saldo dikunci dalam transaction sebelum dibalikkan; update/hapus ditolak dan di-rollback bila saldo tidak cukup. |
+| FIN-001 | Edit/hapus pembayaran dahulu dapat menyentuh Daftar Ulang atau jurnal tabungan lain dengan NIS dan tanggal/tahun yang sama. | Kritis | Selesai | `bayar_du.bayar_id` tetap menjadi relasi child pembayaran. Relasi tabungan pembayaran sudah diputus oleh PAY-012. |
+| FIN-002 | Pembalikan setoran Tabungan Wajib dapat membuat saldo tabungan negatif. | Kritis | Ditutup oleh PAY-012 | Alur setoran tabungan lewat pembayaran dihapus; cleanup menolak penghapusan linked saving lama bila saldo tidak cukup. |
 | DB-001 | Database lama belum memiliki relasi pembayaran eksplisit. | Kritis | Selesai | Migrasi idempoten dan `verify_schema.sql` tersedia; migrasi dijalankan dua kali pada database lokal dan pemeriksaan mengembalikan `OK`. |
 | COMP-001 | Histori pembayaran lama tidak dapat dibuktikan relasinya secara aman. | Tinggi | Diterima / dibatasi | Tetap legacy (`payment_link_version=0`, child `bayar_id=NULL`), tidak dicocokkan otomatis, dan hanya dapat direkonsiliasi manual. |
 | SEC-001 | CSRF serta lokasi SQL injection/XSS lain masih belum ditangani menyeluruh. | Tinggi | Terbuka | Perbaikan SEC-002 menutup filter NIS riwayat tabungan; endpoint mutasi dan lokasi lain tetap menjadi pekerjaan terpisah. |
@@ -41,6 +41,7 @@ Dokumen kerja ini melacak pekerjaan teknis yang sedang dan sudah dilakukan. Perb
 | PAY-009 | Tarif Master Daftar Ulang yang tersimpan belum otomatis menerbitkan tagihan dan informasi DU tampil di bagian Potongan & Tabungan. | Tinggi | Selesai | Tahun draf memakai aksi atomik Simpan & Terbitkan Tagihan; input/edit membaca tagihan materialized dan menampilkan total, terbayar, sisa, kelas, tahun ajaran, status, serta warning langsung pada baris Daftar Ulang. |
 | PAY-010 | Makan, Sorga, dan Infaq memiliki kolom transaksi tetapi tidak mempunyai sumber total tagihan sehingga selalu nol. | Tinggi | Selesai | Tiga tarif satu kali ditambahkan pada Data Siswa Advance; input/edit menghitung cicilan dari histori, mengunci tarif nol/lunas, dan backend menolak pembayaran di atas sisa serta penurunan tarif di bawah nominal terbayar. |
 | PAY-011 | Riwayat Daftar Ulang memuat seluruh tagihan dan seluruh cicilan ke PHP sehingga tidak efisien untuk ratusan siswa. | Sedang | Selesai | Agregasi, ringkasan, LIMIT/OFFSET, dan detail per halaman dipindahkan ke SQL; UI menyediakan ukuran 25/50/100 serta navigasi desktop/mobile yang mempertahankan filter. |
+| PAY-012 | Tabungan masih bisa dicatat dari Input Pembayaran sehingga bercampur dengan modul Tabungan Masuk/Keluar. | Tinggi | Selesai | Field tabungan dihapus dari input/edit pembayaran, backend menolak `tabungan_wajib > 0`, struk/laporan pembayaran tidak lagi menghitung linked tabungan, dan cleanup `sql/remove_payment_linked_savings.sql` menghapus jurnal pembayaran lama. |
 | REP-001 | Export Excel langsung download tanpa preview. | Sedang | Selesai | Alur diubah menjadi preview terlebih dahulu, lalu tombol `Download Excel`. |
 | REP-002 | Slip PDF pernah bergantung pada print browser dan memunculkan header/footer URL. | Tinggi | Selesai | Slip dirender server-side memakai Dompdf dengan ukuran landscape `210mm x 148mm`; header/footer browser tidak ikut tercetak. |
 | UI-001 | Beberapa tampilan mobile dan dark mode kurang rapi/user friendly. | Sedang | Selesai bertahap | Sidebar mobile, logout, bottom nav, preview Excel, riwayat tabungan, avatar role, dan palet dark mode sudah direvisi. |
@@ -119,8 +120,8 @@ Dokumen kerja ini melacak pekerjaan teknis yang sedang dan sudah dilakukan. Perb
 
 - Tabungan masuk dan keluar tetap berjalan dengan saldo per siswa.
 - Penarikan tabungan tidak boleh melebihi saldo.
-- Setoran Tabungan Wajib dari pembayaran dihubungkan dengan `transaksi_m.bayar_id`.
-- Saat edit/hapus pembayaran, pembalikan tabungan wajib dilakukan dengan transaction dan row lock agar saldo tidak negatif.
+- Pembayaran siswa tidak lagi membuat setoran tabungan; kasir harus memakai menu Tabungan Masuk.
+- POST lama dengan `tabungan_wajib > 0` ditolak agar cache browser tidak menghidupkan alur lama.
 - Riwayat tabungan mobile sudah dirapikan pada filter, tombol, dan tabel.
 
 ### Laporan dan export
@@ -141,7 +142,7 @@ Dokumen kerja ini melacak pekerjaan teknis yang sedang dan sudah dilakukan. Perb
 
 ## Kontrak kompatibilitas pembayaran
 
-- Pembayaran baru diberi `bayar.payment_link_version=1` dan setiap Daftar Ulang atau setoran Tabungan Wajib miliknya menyimpan `bayar_id`.
+- Pembayaran baru diberi `bayar.payment_link_version=1` dan setiap Daftar Ulang miliknya menyimpan `bayar_id`.
 - Pembayaran berhistori tetap `payment_link_version=0`. Sistem tidak menebak relasi berdasarkan NIS, tanggal, atau tahun ajaran.
 - Pembayaran legacy ditandai di daftar dan tidak bisa diedit atau dihapus melalui UI maupun endpoint langsung. Selesaikan hanya melalui rekonsiliasi manual yang terdokumentasi dan disetujui.
 - Transaksi tabungan manual (`transaksi_m.bayar_id IS NULL`) dan semua penarikan (`transaksi_k`) bukan child pembayaran; edit/hapus pembayaran tidak boleh mengubahnya.

@@ -200,7 +200,6 @@ $stmt = $koneksi->prepare("
         du.tagihan_daftar_ulang_id,
         COALESCE(du.jumlah, 0) AS uang_du,
         COALESCE(tdu.nominal_tagihan, 0) AS du_nominal_tagihan,
-        COALESCE(tab.MASUK, 0) AS tabungan_wajib,
         COALESCE(op.nama, NULLIF(b.user_id, '')) AS operator_name,
         COALESCE((SELECT SUM(bp.U_PANGKAL) FROM bayar bp WHERE bp.NO_INDUK = b.NO_INDUK), 0) AS total_pangkal_bayar,
         COALESCE((SELECT SUM(bd.jumlah) FROM bayar_du bd WHERE bd.no_induk = b.NO_INDUK), 0) AS total_du_bayar
@@ -209,7 +208,6 @@ $stmt = $koneksi->prepare("
     LEFT JOIN admin op ON op.id = CAST(b.user_id AS UNSIGNED)
     LEFT JOIN bayar_du du ON du.bayar_id = b.id
     LEFT JOIN tagihan_daftar_ulang tdu ON tdu.id = du.tagihan_daftar_ulang_id
-    LEFT JOIN transaksi_m tab ON tab.bayar_id = b.id
     WHERE b.id = ?
     LIMIT 1
 ");
@@ -243,7 +241,6 @@ $primaryLines = [
     ['Uang Daftar Ulang', $payment['uang_du']],
     ['Uang SPP', $payment['U_SPP']],
     ['Komite Sekolah', $payment['U_KOMITE']],
-    ['Tabungan', $payment['tabungan_wajib']],
 ];
 $otherLines = [
     ['Uang Bangunan', $payment['U_BANGUNAN']],

@@ -57,7 +57,6 @@ $stmt = $koneksi->prepare("
     SELECT
         b.*,
         COALESCE(du.daftar_ulang, 0) AS daftar_ulang,
-        COALESCE(tab.tabungan, 0) AS tabungan,
         COALESCE(lain.biaya_lain, 0) AS biaya_lain
     FROM bayar b
     LEFT JOIN (
@@ -65,12 +64,6 @@ $stmt = $koneksi->prepare("
         FROM bayar_du
         GROUP BY bayar_id
     ) du ON du.bayar_id = b.id
-    LEFT JOIN (
-        SELECT bayar_id, SUM(MASUK) AS tabungan
-        FROM transaksi_m
-        WHERE bayar_id IS NOT NULL
-        GROUP BY bayar_id
-    ) tab ON tab.bayar_id = b.id
     LEFT JOIN (
         SELECT bayar_id, SUM(nominal_snapshot) AS biaya_lain
         FROM bayar_biaya_lain
@@ -101,7 +94,6 @@ $summary = [
     'transactions' => count($transactions),
     'total' => 0.0,
     'spp' => 0.0,
-    'tabungan' => 0.0,
     'first_date' => null,
     'last_date' => null,
 ];
@@ -128,9 +120,6 @@ foreach ($transactions as &$transaction) {
     if ((float)$transaction['daftar_ulang'] > 0) {
         $transaction['lines'][] = ['label' => 'Daftar Ulang', 'amount' => (float)$transaction['daftar_ulang']];
     }
-    if ((float)$transaction['tabungan'] > 0) {
-        $transaction['lines'][] = ['label' => 'Tabungan Wajib', 'amount' => (float)$transaction['tabungan']];
-    }
     foreach ($otherDetails[(int)$transaction['id']] ?? [] as $detail) {
         $label = $detail['nama_biaya_snapshot'];
         if (trim((string)$detail['keterangan']) !== '') $label .= ' - ' . $detail['keterangan'];
@@ -139,10 +128,9 @@ foreach ($transactions as &$transaction) {
     if ((float)$transaction['potong_spp'] > 0) {
         $transaction['lines'][] = ['label' => 'Potongan SPP', 'amount' => -(float)$transaction['potong_spp']];
     }
-    $transaction['grand_total'] = (float)$transaction['total_jumlah'] + (float)$transaction['tabungan'];
+    $transaction['grand_total'] = (float)$transaction['total_jumlah'];
     $summary['total'] += $transaction['grand_total'];
     $summary['spp'] += (float)$transaction['U_SPP'];
-    $summary['tabungan'] += (float)$transaction['tabungan'];
     $timestamp = strtotime((string)$transaction['TGL_BYR']);
     if ($timestamp) {
         if ($summary['first_date'] === null || $timestamp < $summary['first_date']) $summary['first_date'] = $timestamp;
@@ -206,7 +194,6 @@ $schoolPeriod = $summary['first_date']
           <div><span>Total Transaksi</span><strong><?= number_format($summary['transactions']) ?></strong></div>
           <div><span>Total Pembayaran</span><strong><?= history_money($summary['total']) ?></strong></div>
           <div><span>Total SPP</span><strong><?= history_money($summary['spp']) ?></strong></div>
-          <div><span>Total Tabungan</span><strong><?= history_money($summary['tabungan']) ?></strong></div>
         </div>
 
         <div class="history-section-heading">

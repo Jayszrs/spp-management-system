@@ -996,7 +996,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
   // Format all numeric fields dynamically
   const numericInputs = document.querySelectorAll(
-    '.tbl-input, #potongan-spp, #tab-wajib, #kewajiban-spp, .biaya-lain-nominal'
+    '.tbl-input, #potongan-spp, #kewajiban-spp, .biaya-lain-nominal'
   );
   
   numericInputs.forEach(input => {
@@ -1007,7 +1007,7 @@ document.addEventListener('DOMContentLoaded', function () {
   const form = document.getElementById('form-bayar');
   if (form) {
     form.addEventListener('submit', function () {
-      document.querySelectorAll('.tbl-input, #potongan-spp, #tab-wajib, #kewajiban-spp, .biaya-lain-nominal').forEach(input => {
+      document.querySelectorAll('.tbl-input, #potongan-spp, #kewajiban-spp, .biaya-lain-nominal').forEach(input => {
         input.value = input.value.replace(/\./g, '');
       });
     });

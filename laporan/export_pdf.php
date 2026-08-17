@@ -134,7 +134,6 @@ $stmt = $koneksi->prepare("
         s.potong_du,
         s.tot_du,
         COALESCE(du_current.jumlah, 0) AS uang_du,
-        COALESCE(tab_current.tabungan_wajib, 0) AS tabungan_wajib,
         COALESCE(psb_paid.total_pangkal_bayar, 0) AS total_pangkal_bayar,
         COALESCE(du_paid.total_du_bayar, 0) AS total_du_bayar,
         COALESCE(op.nama, NULLIF(b.user_id, '')) AS operator_name
@@ -150,11 +149,6 @@ $stmt = $koneksi->prepare("
         AND du_current.th_ajaran = b.th_ajaran
         AND du_current.kelas = b.kelas_du
         AND b.kelas_du <> ''
-    LEFT JOIN (
-        SELECT NO_INDUK, DATE(TANGGAL) AS tanggal, SUM(MASUK) AS tabungan_wajib
-        FROM transaksi_m
-        GROUP BY NO_INDUK, DATE(TANGGAL)
-    ) tab_current ON tab_current.NO_INDUK = b.NO_INDUK AND tab_current.tanggal = DATE(b.TGL_BYR)
     LEFT JOIN (
         SELECT NO_INDUK, SUM(U_PANGKAL) AS total_pangkal_bayar
         FROM bayar
@@ -229,7 +223,6 @@ if (!$rows && !$selected_mode) {
         'potong_du' => 0,
         'tot_du' => 0,
         'uang_du' => 0,
-        'tabungan_wajib' => 0,
         'total_pangkal_bayar' => 0,
         'total_du_bayar' => 0,
     ];
@@ -241,7 +234,6 @@ function primary_lines(array $row): array {
         payment_line('Uang Daftar Ulang', $row['uang_du']),
         payment_line('Uang SPP', $row['U_SPP']),
         payment_line('Komite Sekolah', $row['U_KOMITE']),
-        payment_line('Tabungan Wajib', $row['tabungan_wajib']),
     ];
 }
 

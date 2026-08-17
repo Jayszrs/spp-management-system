@@ -13,6 +13,36 @@ File ini mencatat perubahan proyek secara reverse chronological. Baca [PROJECT_C
 - Jangan menghapus atau menulis ulang entri lama. Tambahkan entri koreksi bila diperlukan.
 - Perubahan implementasi dan entri changelog wajib masuk commit yang sama.
 
+## 2026-08-17 - Pemisahan Tabungan dari Pembayaran
+
+**AI/Aktor:** Codex berbasis GPT-5, bersama pemilik proyek
+
+**Tujuan:** Mengunci tahun ajaran pembayaran pada periode Juli-Juni, mempertahankan SPP bulanan berbasis `SPP_PERBULAN`, dan memisahkan input tabungan dari transaksi pembayaran.
+
+**Perubahan fitur dan perilaku:**
+
+- Input dan edit pembayaran tidak lagi menampilkan field Tabungan; bagian penyesuaian hanya berisi Potongan SPP dan Kewajiban SPP.
+- Backend menolak POST lama dengan `tabungan_wajib` bernilai lebih dari nol dan mengarahkan kasir memakai menu Tabungan Masuk.
+- Struk, export PDF, detail siswa, dan rekap kelas tidak lagi menambahkan tabungan yang terhubung pembayaran ke total transaksi pembayaran.
+- Tahun ajaran laporan memakai helper `du_academic_year_label()` yang sama dengan pembayaran Daftar Ulang.
+
+**Database dan migrasi:**
+
+- Menambahkan `sql/remove_payment_linked_savings.sql` untuk mengurangi saldo tabungan dari jurnal pembayaran lama, lalu menghapus jurnal `transaksi_m` yang memiliki `bayar_id`.
+- Migrasi dijalankan pada database lokal dan menghasilkan `remaining_payment_linked_savings = 0`.
+
+**Kompatibilitas:**
+
+- Kolom `transaksi_m.bayar_id` dipertahankan untuk kompatibilitas schema, tetapi alur pembayaran baru tidak mengisinya.
+- Modul Tabungan Masuk, Tabungan Keluar, Riwayat Tabungan, serta laporan tabungan tetap berjalan sebagai sumber tabungan resmi.
+
+**Verifikasi:**
+
+- Cleanup SQL dijalankan pada database lokal, lalu diuji dengan fixture linked saving sementara; saldo turun sesuai nominal dan `transaksi_m.bayar_id IS NOT NULL` menjadi 0.
+- PHP lint XAMPP untuk 37 file, Node syntax check `assets/js/app.js`, dan `sql/verify_schema.sql` berhasil.
+- Regression test `spp_installment`, `academic_year_billing`, `student_optional_fees`, `registration_history_pagination`, `payment_process_integration`, dan `legacy_compatibility` berhasil.
+- HTTP terautentikasi ke form dan edit pembayaran memastikan field `tabungan_wajib`, `tab-wajib`, dan label `Potongan & Tabungan` tidak muncul.
+
 ## 2026-08-06 - Pagination Riwayat Daftar Ulang
 
 **AI/Aktor:** Codex berbasis GPT-5, bersama pemilik proyek

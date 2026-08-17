@@ -70,8 +70,7 @@ $sql = "
         COALESCE(p.komite, 0) AS komite,
         COALESCE(du.daftar_ulang, 0) AS daftar_ulang,
         COALESCE(lain.biaya_lain, 0) AS biaya_lain,
-        COALESCE(tab.tabungan, 0) AS tabungan,
-        COALESCE(p.total_bayar, 0) + COALESCE(tab.tabungan, 0) AS total_bayar
+        COALESCE(p.total_bayar, 0) AS total_bayar
     FROM siswa s
     LEFT JOIN (
         SELECT
@@ -102,13 +101,6 @@ $sql = "
         WHERE $periodSql
         GROUP BY b.NO_INDUK
     ) lain ON lain.NO_INDUK = s.NO_INDUK
-    LEFT JOIN (
-        SELECT b.NO_INDUK, SUM(t.MASUK) AS tabungan
-        FROM transaksi_m t
-        JOIN bayar b ON b.id = t.bayar_id
-        WHERE $periodSql
-        GROUP BY b.NO_INDUK
-    ) tab ON tab.NO_INDUK = s.NO_INDUK
     WHERE s.is_active = 1 AND s.KELAS = ?
 ";
 
@@ -260,7 +252,7 @@ unset($row);
             <thead>
               <tr>
                 <th colspan="3" class="recap-identity-group-head">Data Siswa</th>
-                <th colspan="10" class="recap-group-head">Pembayaran <?= recap_e($monthNames[$filterMonth]) ?> <?= $filterYear ?></th>
+                <th colspan="9" class="recap-group-head">Pembayaran <?= recap_e($monthNames[$filterMonth]) ?> <?= $filterYear ?></th>
               </tr>
               <tr>
                 <th class="recap-identity-head recap-number-head">No</th>
@@ -274,13 +266,12 @@ unset($row);
                 <th class="recap-component-head">Komite</th>
                 <th class="recap-component-head">Daftar Ulang</th>
                 <th class="recap-component-head">Biaya Lain</th>
-                <th class="recap-component-head">Tabungan</th>
                 <th class="recap-component-head">Total</th>
               </tr>
             </thead>
             <tbody>
               <?php if (!$rows): ?>
-              <tr><td colspan="13" class="text-center recap-empty">Belum ada siswa aktif di kelas <?= recap_e($filterClass) ?> untuk filter ini.</td></tr>
+              <tr><td colspan="12" class="text-center recap-empty">Belum ada siswa aktif di kelas <?= recap_e($filterClass) ?> untuk filter ini.</td></tr>
               <?php else: ?>
               <?php foreach ($rows as $index => $row): ?>
               <?php $detailUrl = 'detail_siswa.php?' . http_build_query([
@@ -302,7 +293,6 @@ unset($row);
                 <td class="recap-money"><?= recap_money($row['komite']) ?></td>
                 <td class="recap-money"><?= recap_money($row['daftar_ulang']) ?></td>
                 <td class="recap-money"><?= recap_money($row['biaya_lain']) ?></td>
-                <td class="recap-money"><?= recap_money($row['tabungan']) ?></td>
                 <td class="recap-money recap-total"><?= recap_money($row['total_bayar']) ?></td>
               </tr>
               <?php endforeach; ?>
@@ -336,7 +326,6 @@ unset($row);
               <div><span>Komite</span><strong><?= recap_money($row['komite']) ?></strong></div>
               <div><span>Daftar Ulang</span><strong><?= recap_money($row['daftar_ulang']) ?></strong></div>
               <div><span>Biaya Lain</span><strong><?= recap_money($row['biaya_lain']) ?></strong></div>
-              <div><span>Tabungan</span><strong><?= recap_money($row['tabungan']) ?></strong></div>
               <div class="is-total"><span>Total</span><strong><?= recap_money($row['total_bayar']) ?></strong></div>
             </div>
             <a class="recap-mobile-detail" href="<?= recap_e($detailUrl) ?>">Lihat riwayat selama sekolah <span>→</span></a>

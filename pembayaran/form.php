@@ -72,14 +72,7 @@ while ($bill = $du_bill_result->fetch_assoc()) {
     ];
 }
 
-function active_academic_year_from_today(): string {
-    $year = (int)date('Y');
-    $month = (int)date('n');
-    $start = $month >= 7 ? $year : $year - 1;
-    return $start . '/' . ($start + 1);
-}
-
-$activeAcademicYear = active_academic_year_from_today();
+$activeAcademicYear = du_current_academic_year();
 
 $biaya_lain_paid = [];
 $biaya_lain_paid_result = $koneksi->query("
@@ -439,16 +432,12 @@ unset($_SESSION['flash']);
             </div>
           </template>
 
-          <!-- Potongan & Tabungan -->
-          <div class="section-divider"><span>Potongan & Tabungan</span></div>
+          <!-- Penyesuaian SPP -->
+          <div class="section-divider"><span>Penyesuaian SPP</span></div>
           <div class="fields-grid">
             <div class="field-row">
               <label class="field-label" for="potongan-spp">Potongan SPP</label>
               <input class="field-input" type="text" id="potongan-spp" name="potongan_spp" placeholder="Rp 0" />
-            </div>
-            <div class="field-row">
-              <label class="field-label" for="tab-wajib">Tabungan</label>
-              <input class="field-input" type="text" id="tab-wajib" name="tabungan_wajib" placeholder="Rp 0" />
             </div>
             <div class="field-row">
               <label class="field-label" for="kewajiban-spp">Kewajiban SPP</label>
@@ -490,7 +479,7 @@ unset($_SESSION['flash']);
     window.sppDaftarUlangMasters = {};
     window.sppDaftarUlangHasMasters = true;
   </script>
-  <script src="../assets/js/app.js?v=6.2"></script>
+  <script src="../assets/js/app.js?v=6.3"></script>
 </body>
 </html>
 

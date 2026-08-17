@@ -96,9 +96,18 @@ try {
         'tahun_bayar' => '2026',
         'sistem_pembayaran' => 'Tunai',
     ];
-    $response = payment_process_request($baseUrl . '/pembayaran/proses.php', $common + [
+    $legacySavingsResponse = payment_process_request($baseUrl . '/pembayaran/proses.php', $common + [
         'uang_spp' => 100000,
         'tabungan_wajib' => 20000,
+    ], $cookies);
+    payment_process_assert($legacySavingsResponse['status'] === 302, 'POST tabungan legacy tidak mengembalikan redirect yang diharapkan.');
+    $legacySavingsFeedback = payment_process_request($baseUrl . '/pembayaran/form.php', [], $cookies);
+    payment_process_assert(str_contains($legacySavingsFeedback['body'], 'Input tabungan lewat pembayaran sudah dinonaktifkan'), 'POST tabungan legacy tidak ditolak backend.');
+    payment_process_assert(!str_contains($legacySavingsFeedback['body'], 'name="tabungan_wajib"'), 'Form input masih memiliki field tabungan pembayaran.');
+    payment_process_assert(!str_contains($legacySavingsFeedback['body'], 'id="tab-wajib"'), 'Form input masih memiliki kontrol tabungan pembayaran.');
+
+    $response = payment_process_request($baseUrl . '/pembayaran/proses.php', $common + [
+        'uang_spp' => 100000,
         'biaya_lain_detail_id' => [0, 0, 0, 0, 0],
         'biaya_lain_master_id' => $otherFeeMasterIds,
         'biaya_lain_nominal' => [11000, 12000, 13000, 14000, 15000],
@@ -144,7 +153,7 @@ try {
     $adminId = (string)$koneksi->query("SELECT id FROM admin WHERE username='admin' LIMIT 1")->fetch_assoc()['id'];
     $stmtOperator = $koneksi->prepare("
         SELECT b.user_id AS payment_operator,
-               COALESCE((SELECT user_id FROM transaksi_m WHERE bayar_id = b.id), '') AS savings_operator
+               (SELECT COUNT(*) FROM transaksi_m WHERE bayar_id = b.id) AS linked_savings
         FROM bayar b
         WHERE b.id = ?
     ");
@@ -154,8 +163,8 @@ try {
     $stmtOperator->close();
     payment_process_assert(
         (string)$operatorRow['payment_operator'] === $adminId
-        && (string)$operatorRow['savings_operator'] === $adminId,
-        'Transaksi pembayaran atau tabungan terkait tidak menyimpan ID kasir/operator login.'
+        && (int)$operatorRow['linked_savings'] === 0,
+        'Transaksi pembayaran belum menyimpan ID kasir atau masih membuat tabungan terkait.'
     );
 
     $stmtLegacyOther = $koneksi->prepare("\n        SELECT U_LAIN, LAIN_LAIN1, JUMLAH1, LAIN_LAIN2, JUMLAH2,\n               LAIN_LAIN3, JUMLAH3, LAIN_LAIN4, JUMLAH4,\n               (SELECT COUNT(*) FROM bayar_biaya_lain WHERE bayar_id = bayar.id) AS detail_count\n        FROM bayar WHERE id = ?\n    ");
@@ -182,15 +191,14 @@ try {
     $savings = $stmtSavings->get_result()->fetch_assoc();
     $stmtSavings->close();
     payment_process_assert(
-        abs((float)$savings['saldo'] - 20000.0) < 0.001
-        && abs((float)$savings['linked_saving'] - 20000.0) < 0.001,
-        'Tabungan dari input pembayaran tidak tersimpan ke saldo atau jurnal terkait.'
+        abs((float)$savings['saldo']) < 0.001
+        && abs((float)$savings['linked_saving']) < 0.001,
+        'Pembayaran masih membuat saldo atau jurnal tabungan terkait.'
     );
 
     $receipt = payment_process_request($baseUrl . '/laporan/cetak_struk.php?id=' . $firstPaymentId, [], $cookies);
     payment_process_assert($receipt['status'] === 200, 'Struk pembayaran tidak dapat dibuka.');
-    payment_process_assert(str_contains($receipt['body'], 'Tabungan'), 'Struk belum memakai label Tabungan.');
-    payment_process_assert(!str_contains($receipt['body'], 'Tabungan Wajib'), 'Struk masih memakai label Tabungan Wajib.');
+    payment_process_assert(!str_contains($receipt['body'], 'Tabungan'), 'Struk pembayaran masih menampilkan tabungan.');
     payment_process_assert(str_contains($receipt['body'], 'Sisa SPP'), 'Struk belum menampilkan sisa SPP dari database.');
     payment_process_assert(str_contains($receipt['body'], 'Administrator'), 'Struk belum menampilkan operator dari ID transaksi.');
 
@@ -199,7 +207,6 @@ try {
         'id' => $firstPaymentId,
         'tanggal_bayar' => date('Y-m-d'),
         'uang_spp' => 50000,
-        'tabungan_wajib' => 5000,
         'biaya_lain_detail_id' => [0, 0],
         'biaya_lain_master_id' => array_slice($otherFeeMasterIds, 0, 2),
         'biaya_lain_nominal' => [21000, 22000],
@@ -240,9 +247,9 @@ try {
     $savingsEdit = $stmtSavingsEdit->get_result()->fetch_assoc();
     $stmtSavingsEdit->close();
     payment_process_assert(
-        abs((float)$savingsEdit['saldo'] - 5000.0) < 0.001
-        && abs((float)$savingsEdit['linked_saving'] - 5000.0) < 0.001,
-        'Edit tabungan pembayaran tidak menyesuaikan saldo atau jurnal terkait.'
+        abs((float)$savingsEdit['saldo']) < 0.001
+        && abs((float)$savingsEdit['linked_saving']) < 0.001,
+        'Edit pembayaran masih membuat saldo atau jurnal tabungan terkait.'
     );
 
     $finalInstallment = payment_process_request($baseUrl . '/pembayaran/proses.php', $common + ['uang_spp' => 50000], $cookies);
@@ -278,7 +285,6 @@ try {
         'tanggal_bayar' => date('Y-m-d'),
         'bulan_bayar' => '07',
         'uang_spp' => 50000,
-        'tabungan_wajib' => 7000,
     ]), $cookies);
     payment_process_assert($move['status'] === 302, 'Pemindahan cicilan ke siswa atau periode lain gagal.');
     $moveFeedback = payment_process_request($baseUrl . '/pembayaran/lihat.php', [], $cookies);
@@ -306,40 +312,16 @@ try {
         . json_encode($moved) . ($moveMessage !== '' ? ' | ' . $moveMessage : '')
     );
 
-    $stmtSavingsMove = $koneksi->prepare("
-        SELECT
-          COALESCE((SELECT SALDO FROM tabungan WHERE NO_INDUK = ?), 0) AS old_saldo,
-          COALESCE((SELECT SALDO FROM tabungan WHERE NO_INDUK = ?), 0) AS new_saldo,
-          COALESCE((SELECT MASUK FROM transaksi_m WHERE bayar_id = ?), 0) AS linked_amount,
-          COALESCE((SELECT NO_INDUK FROM transaksi_m WHERE bayar_id = ?), '') AS linked_nis
-    ");
-    $stmtSavingsMove->bind_param('ssii', $noInduk, $targetNoInduk, $firstPaymentId, $firstPaymentId);
-    $stmtSavingsMove->execute();
-    $savingsMove = $stmtSavingsMove->get_result()->fetch_assoc();
-    $stmtSavingsMove->close();
-    payment_process_assert(
-        abs((float)$savingsMove['old_saldo']) < 0.001
-        && abs((float)$savingsMove['new_saldo'] - 7000.0) < 0.001
-        && abs((float)$savingsMove['linked_amount'] - 7000.0) < 0.001
-        && (string)$savingsMove['linked_nis'] === $targetNoInduk,
-        'Pindah transaksi bertabungan tidak memindahkan saldo atau jurnal tabungan.'
-    );
-
     $deleteMoved = payment_process_request($baseUrl . '/pembayaran/proses.php?aksi=hapus&id=' . $firstPaymentId, [], $cookies);
-    payment_process_assert($deleteMoved['status'] === 302, 'Hapus pembayaran bertabungan tidak mengembalikan redirect yang diharapkan.');
-    $stmtSavingsDelete = $koneksi->prepare("
-        SELECT
-          COALESCE((SELECT SALDO FROM tabungan WHERE NO_INDUK = ?), 0) AS saldo,
-          (SELECT COUNT(*) FROM transaksi_m WHERE bayar_id = ?) AS linked_count
-    ");
-    $stmtSavingsDelete->bind_param('si', $targetNoInduk, $firstPaymentId);
+    payment_process_assert($deleteMoved['status'] === 302, 'Hapus pembayaran tidak mengembalikan redirect yang diharapkan.');
+    $stmtSavingsDelete = $koneksi->prepare('SELECT COUNT(*) AS linked_count FROM transaksi_m WHERE bayar_id = ?');
+    $stmtSavingsDelete->bind_param('i', $firstPaymentId);
     $stmtSavingsDelete->execute();
-    $savingsDelete = $stmtSavingsDelete->get_result()->fetch_assoc();
+    $linkedAfterDelete = (int)$stmtSavingsDelete->get_result()->fetch_assoc()['linked_count'];
     $stmtSavingsDelete->close();
     payment_process_assert(
-        abs((float)$savingsDelete['saldo']) < 0.001
-        && (int)$savingsDelete['linked_count'] === 0,
-        'Hapus pembayaran bertabungan tidak membalik saldo atau menghapus jurnal terkait.'
+        $linkedAfterDelete === 0,
+        'Hapus pembayaran masih meninggalkan jurnal tabungan terkait.'
     );
 } catch (Throwable $error) {
     $failure = $error;
@@ -376,4 +358,4 @@ if ($failure) {
     exit(1);
 }
 
-echo "OK: endpoint cicilan menangani input, overlimit, edit, pindah periode/siswa, hapus, tanggal server, tabungan, Biaya Lain legacy, dan struk.\n";
+echo "OK: endpoint cicilan menangani input, overlimit, edit, pindah periode/siswa, hapus, tanggal server, penolakan tabungan legacy, Biaya Lain legacy, dan struk.\n";

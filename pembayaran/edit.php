@@ -25,7 +25,7 @@ if ((int)($d['payment_link_version'] ?? 0) !== 1) {
     exit;
 }
 
-// Ambil Daftar Ulang dan tabungan wajib yang secara eksplisit milik pembayaran ini.
+// Ambil Daftar Ulang yang secara eksplisit milik pembayaran ini.
 $stmt_du = $koneksi->prepare("SELECT jumlah, kelas, th_ajaran FROM bayar_du WHERE bayar_id = ? LIMIT 1");
 $stmt_du->bind_param('i', $id);
 $stmt_du->execute();
@@ -36,14 +36,6 @@ if ($res_du) {
     $d['th_ajaran'] = $res_du['th_ajaran'];
 }
 $stmt_du->close();
-
-// Ambil tabungan wajib dari jurnal yang terhubung ke pembayaran ini.
-$stmt_tab = $koneksi->prepare("SELECT MASUK FROM transaksi_m WHERE bayar_id = ? LIMIT 1");
-$stmt_tab->bind_param('i', $id);
-$stmt_tab->execute();
-$res_tab = $stmt_tab->get_result()->fetch_assoc();
-$d['tabungan_wajib'] = $res_tab ? (float)$res_tab['MASUK'] : 0.0;
-$stmt_tab->close();
 
 $d['kewajiban_spp'] = 0.0;
 
@@ -143,18 +135,9 @@ function active_academic_year_from_payment_period($bulan, $tahun): string {
     $month = (int)month_code($bulan);
     $year = (int)$tahun;
     if ($month < 1 || $month > 12 || $year < 2000) {
-        $year = (int)date('Y');
-        $month = (int)date('n');
+        return du_current_academic_year();
     }
-    $start = $month >= 7 ? $year : $year - 1;
-    return $start . '/' . ($start + 1);
-}
-
-function active_academic_year_from_today(): string {
-    $year = (int)date('Y');
-    $month = (int)date('n');
-    $start = $month >= 7 ? $year : $year - 1;
-    return $start . '/' . ($start + 1);
+    return du_academic_year_label($month, $year);
 }
 
 $selectedAcademicYear = active_academic_year_from_payment_period($d['BULAN'], $d['TAHUN']);
@@ -508,18 +491,13 @@ $selectedPaymentMethod = $d['sistem_pembayaran'] ?? 'VA';
             </div>
           </template>
 
-          <!-- Potongan & Tabungan -->
-          <div class="section-divider"><span>Potongan & Tabungan</span></div>
+          <!-- Penyesuaian SPP -->
+          <div class="section-divider"><span>Penyesuaian SPP</span></div>
           <div class="fields-grid">
             <div class="field-row">
               <label class="field-label">Potongan SPP</label>
               <input class="field-input" type="text" name="potongan_spp" id="potongan-spp"
                 value="<?= number_format((float)$d['potong_spp'], 0, ',', '.') ?>" />
-            </div>
-            <div class="field-row">
-              <label class="field-label">Tabungan</label>
-              <input class="field-input" type="text" name="tabungan_wajib" id="tab-wajib"
-                value="<?= number_format((float)$d['tabungan_wajib'], 0, ',', '.') ?>" />
             </div>
             <div class="field-row">
               <label class="field-label">Kewajiban SPP</label>
@@ -554,7 +532,7 @@ $selectedPaymentMethod = $d['sistem_pembayaran'] ?? 'VA';
     window.sppDaftarUlangMasters = {};
     window.sppDaftarUlangHasMasters = true;
   </script>
-  <script src="../assets/js/app.js?v=6.2"></script>
+  <script src="../assets/js/app.js?v=6.3"></script>
 </body>
 </html>
 

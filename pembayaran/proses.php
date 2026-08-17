@@ -29,6 +29,15 @@ function validate_payment_amounts(array $amounts): void {
     }
 }
 
+function reject_disabled_payment_savings(float $amount): void {
+    if (!is_finite($amount) || $amount < 0) {
+        throw new RuntimeException('Nominal Tabungan harus berupa angka positif atau nol.');
+    }
+    if ($amount > 0.001) {
+        throw new RuntimeException('Input tabungan lewat pembayaran sudah dinonaktifkan. Gunakan menu Tabungan Masuk.');
+    }
+}
+
 function validate_payment_context(string $tanggal, string $bulan, string $tahun): void {
     if (!in_array($bulan, ['01','02','03','04','05','06','07','08','09','10','11','12'], true)) {
         throw new RuntimeException('Bulan pembayaran tidak valid.');
@@ -77,13 +86,6 @@ function sync_spp_period_claim(mysqli $db, int $bayarId, string $noInduk, string
     $stmt->bind_param('isss', $bayarId, $noInduk, $bulan, $tahun);
     $stmt->execute();
     $stmt->close();
-}
-
-function academic_year_from_payment_period(string $bulan, string $tahun): string {
-    $month = (int)$bulan;
-    $year = (int)$tahun;
-    $start = $month >= 7 ? $year : $year - 1;
-    return $start . '/' . ($start + 1);
 }
 
 function normalize_student_class_for_du(array $student): string {
@@ -487,72 +489,6 @@ function find_linked_payment(mysqli $db, int $bayarId): array {
     return $payment;
 }
 
-/**
- * Membatalkan setoran tabungan wajib yang benar-benar terhubung ke pembayaran.
- * Mutasi dibatalkan bila saldo saat ini tidak cukup untuk dibalikkan.
- */
-function reverse_linked_savings(mysqli $db, int $bayarId): void {
-    $stmt = $db->prepare('SELECT id, NO_INDUK, MASUK FROM transaksi_m WHERE bayar_id = ? FOR UPDATE');
-    $stmt->bind_param('i', $bayarId);
-    $stmt->execute();
-    $saving = $stmt->get_result()->fetch_assoc();
-    $stmt->close();
-    if (!$saving) return;
-
-    $amount = (float)$saving['MASUK'];
-    if ($amount < 0) throw new RuntimeException('Jurnal tabungan pembayaran tidak valid.');
-
-    $stmtSaldo = $db->prepare('SELECT SALDO FROM tabungan WHERE NO_INDUK = ? FOR UPDATE');
-    $stmtSaldo->bind_param('s', $saving['NO_INDUK']);
-    $stmtSaldo->execute();
-    $saldoRow = $stmtSaldo->get_result()->fetch_assoc();
-    $stmtSaldo->close();
-    if (!$saldoRow) throw new RuntimeException('Saldo tabungan terkait pembayaran tidak ditemukan.');
-    if ((float)$saldoRow['SALDO'] + 0.001 < $amount) {
-        throw new RuntimeException('Pembayaran tidak dapat diubah atau dihapus karena tabungan wajibnya sudah dipakai. Selesaikan rekonsiliasi tabungan terlebih dahulu.');
-    }
-
-    $stmtUpdate = $db->prepare('UPDATE tabungan SET SALDO = SALDO - ? WHERE NO_INDUK = ?');
-    $stmtUpdate->bind_param('ds', $amount, $saving['NO_INDUK']);
-    $stmtUpdate->execute();
-    $stmtUpdate->close();
-
-    $stmtDelete = $db->prepare('DELETE FROM transaksi_m WHERE bayar_id = ?');
-    $stmtDelete->bind_param('i', $bayarId);
-    $stmtDelete->execute();
-    $stmtDelete->close();
-}
-
-/**
- * Menambah saldo dan jurnal setoran tabungan wajib untuk satu pembayaran.
- */
-function save_linked_savings(mysqli $db, int $bayarId, string $noInduk, string $tanggal, float $amount, string $userId): void {
-    if ($amount <= 0) return;
-
-    $stmtCheck = $db->prepare('SELECT SALDO FROM tabungan WHERE NO_INDUK = ? FOR UPDATE');
-    $stmtCheck->bind_param('s', $noInduk);
-    $stmtCheck->execute();
-    $tabungan = $stmtCheck->get_result()->fetch_assoc();
-    $stmtCheck->close();
-
-    if ($tabungan) {
-        $stmtUpdate = $db->prepare('UPDATE tabungan SET SALDO = SALDO + ? WHERE NO_INDUK = ?');
-        $stmtUpdate->bind_param('ds', $amount, $noInduk);
-        $stmtUpdate->execute();
-        $stmtUpdate->close();
-    } else {
-        $stmtInsert = $db->prepare('INSERT INTO tabungan (NO_INDUK, SALDO) VALUES (?, ?)');
-        $stmtInsert->bind_param('sd', $noInduk, $amount);
-        $stmtInsert->execute();
-        $stmtInsert->close();
-    }
-
-    $stmtJournal = $db->prepare('INSERT INTO transaksi_m (bayar_id, NO_INDUK, TANGGAL, MASUK, KELUAR, user_id) VALUES (?, ?, ?, ?, 0, ?)');
-    $stmtJournal->bind_param('issds', $bayarId, $noInduk, $tanggal, $amount, $userId);
-    $stmtJournal->execute();
-    $stmtJournal->close();
-}
-
 // ── INSERT ──────────────────────────────────
 if ($aksi === 'input') {
     $no_induk        = trim($_POST['no_induk'] ?? '');
@@ -577,7 +513,7 @@ if ($aksi === 'input') {
     $ll_1_nom = $ll_2_nom = $ll_3_nom = $ll_4_nom = 0.0;
     
     $potongan_spp    = parse_amount($_POST['potongan_spp'] ?? 0);
-    $tabungan_wajib  = parse_amount($_POST['tabungan_wajib'] ?? 0);
+    $legacy_tabungan_input = parse_amount($_POST['tabungan_wajib'] ?? 0);
     $total_jumlah    = 0.0;
     $catatan         = trim((string)($_POST['catatan'] ?? ''));
     if (mb_strlen($catatan) > 255) {
@@ -605,8 +541,9 @@ if ($aksi === 'input') {
             'Seragam' => $uang_seragam, 'Kegiatan' => $uang_kegiatan,
             'SPP' => $uang_spp, 'Komite' => $uang_komite, 'Makan' => $uang_makan,
             'Sorga' => $uang_sorga, 'Infaq' => $uang_infaq, 'Daftar Ulang' => $uang_du,
-            'Potongan SPP' => $potongan_spp, 'Tabungan' => $tabungan_wajib
+            'Potongan SPP' => $potongan_spp
         ]);
+        reject_disabled_payment_savings($legacy_tabungan_input);
         validate_payment_context($tanggal_bayar, $bulan_bayar, (string)$tahun_bayar);
         if ($potongan_spp > $uang_spp) throw new RuntimeException('Potongan SPP tidak boleh melebihi pembayaran SPP.');
         $siswa_data = validate_student_and_komite($koneksi, $no_induk, $bulan_bayar, $tahun_bayar, $uang_komite);
@@ -724,7 +661,6 @@ if ($aksi === 'input') {
                 $stmt_du->execute();
                 $stmt_du->close();
             }
-            save_linked_savings($koneksi, $bayar_id, $no_induk, $tanggal_bayar, $tabungan_wajib, $user_id);
         }
         $stmt->close();
 
@@ -782,7 +718,7 @@ if ($aksi === 'update') {
     $ll_1_nom = $ll_2_nom = $ll_3_nom = $ll_4_nom = 0.0;
     
     $potongan_spp    = parse_amount($_POST['potongan_spp'] ?? 0);
-    $tabungan_wajib  = parse_amount($_POST['tabungan_wajib'] ?? 0);
+    $legacy_tabungan_input = parse_amount($_POST['tabungan_wajib'] ?? 0);
     $total_jumlah    = 0.0;
     $catatan         = trim((string)($_POST['catatan'] ?? ''));
     if (mb_strlen($catatan) > 255) {
@@ -808,8 +744,9 @@ if ($aksi === 'update') {
             'Seragam' => $uang_seragam, 'Kegiatan' => $uang_kegiatan,
             'SPP' => $uang_spp, 'Komite' => $uang_komite, 'Makan' => $uang_makan,
             'Sorga' => $uang_sorga, 'Infaq' => $uang_infaq, 'Daftar Ulang' => $uang_du,
-            'Potongan SPP' => $potongan_spp, 'Tabungan' => $tabungan_wajib
+            'Potongan SPP' => $potongan_spp
         ]);
+        reject_disabled_payment_savings($legacy_tabungan_input);
         validate_payment_context($tanggal_bayar, $bulan_bayar, (string)$tahun_bayar);
         if ($potongan_spp > $uang_spp) throw new RuntimeException('Potongan SPP tidak boleh melebihi pembayaran SPP.');
         $allowedArchived = $no_induk === $old_bayar['NO_INDUK'] ? $old_bayar['NO_INDUK'] : null;
@@ -908,10 +845,6 @@ if ($aksi === 'update') {
             $stmt_ins_du->close();
         }
 
-        // 3. Balikkan dan buat ulang hanya setoran tabungan milik pembayaran ini.
-        reverse_linked_savings($koneksi, $id);
-        save_linked_savings($koneksi, $id, $no_induk, $tanggal_bayar, $tabungan_wajib, $user_id);
-
         $koneksi->commit();
         $_SESSION['flash'] = [
             'type' => 'success',
@@ -943,9 +876,6 @@ if ($aksi === 'hapus') {
     try {
         $old_bayar = find_linked_payment($koneksi, $id);
 
-        // 1. Balikkan setoran milik pembayaran ini. Jika saldo tidak cukup,
-        // seluruh penghapusan akan di-rollback.
-        reverse_linked_savings($koneksi, $id);
         sync_student_initial_fee_paid(
             $koneksi,
             (string)$old_bayar['NO_INDUK'],
@@ -955,7 +885,7 @@ if ($aksi === 'hapus') {
             -(float)$old_bayar['U_KEGIATAN']
         );
 
-        // 2. Hapus header; FK cascade hanya akan menghapus child dengan bayar_id ini.
+        // Hapus header; FK cascade hanya akan menghapus child dengan bayar_id ini.
         $stmt_del = $koneksi->prepare("DELETE FROM bayar WHERE id = ?");
         $stmt_del->bind_param('i', $id);
         $stmt_del->execute();

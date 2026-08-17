@@ -6,6 +6,7 @@ session_start();
 require_once '../koneksi.php';
 require_once '../includes/auth.php';
 require_once '../includes/pagination.php';
+require_once '../includes/daftar_ulang.php';
 requireRole(['admin', 'bendahara']);
 
 $flash = $_SESSION['flash'] ?? null;
@@ -33,7 +34,7 @@ function report_month_code($value): string {
 function report_academic_year($bulan, $tahun): string {
     $month = (int)report_month_code($bulan);
     $year = (int)$tahun;
-    return $month >= 7 ? $year . '/' . ($year + 1) : ($year - 1) . '/' . $year;
+    return du_academic_year_label($month, $year);
 }
 
 function report_bind(mysqli_stmt $stmt, string $types, array $params): void {

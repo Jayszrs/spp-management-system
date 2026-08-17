@@ -76,7 +76,7 @@ try {
         $duplicateName = 'UJI DUPLIKAT DIKNAS';
         $stmt = $koneksi->prepare('INSERT INTO siswa (NO_INDUK,NAMA,KELAS,NO_induk_diknas) VALUES (?,?,?,?)');
         $stmt->bind_param('ssss', $duplicateNumber, $duplicateName, $class, $diknas);
-        $stmt->execute();
+        $duplicateRejected = !$stmt->execute() && (int)$stmt->errno === 1062;
         $stmt->close();
     } catch (mysqli_sql_exception $error) {
         $duplicateRejected = $error->getCode() === 1062;
