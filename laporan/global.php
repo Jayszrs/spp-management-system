@@ -31,14 +31,30 @@ function global_date_param(string $key): string {
     return preg_match('/^\d{4}-\d{2}-\d{2}$/', $value) ? $value : '';
 }
 
+function global_date_label_id(int $timestamp): string {
+    $months = [
+        1 => 'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+        'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
+    ];
+    return date('d', $timestamp) . ' ' . $months[(int)date('n', $timestamp)] . ' ' . date('Y', $timestamp);
+}
+
+function global_month_name_id(int $month): string {
+    $months = [
+        1 => 'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+        'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
+    ];
+    return $months[$month] ?? '';
+}
+
 function global_transaction_date_label(string $startDate, string $endDate): string {
     $startTs = strtotime($startDate);
     $endTs = strtotime($endDate);
-    if ($startDate === $endDate) return date('d M Y', $startTs);
+    if ($startDate === $endDate) return global_date_label_id($startTs);
     if (date('Y-m', $startTs) === date('Y-m', $endTs)) {
-        return date('d', $startTs) . ' - ' . date('d M Y', $endTs);
+        return date('d', $startTs) . '-' . date('d', $endTs) . ' ' . global_month_name_id((int)date('n', $endTs)) . ' ' . date('Y', $endTs);
     }
-    return date('d M Y', $startTs) . ' - ' . date('d M Y', $endTs);
+    return global_date_label_id($startTs) . ' - ' . global_date_label_id($endTs);
 }
 
 $legacyTanggal = global_date_param('tanggal');
@@ -244,7 +260,7 @@ $tanggalLabel = global_transaction_date_label($tanggalAwal, $tanggalAkhir);
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
   <script>(function(){var t=localStorage.getItem('spp_theme')||'dark';document.documentElement.setAttribute('data-theme',t);})();</script>
-  <link rel="stylesheet" href="../assets/css/style.css?v=6.1" />
+  <link rel="stylesheet" href="../assets/css/style.css?v=6.4" />
 </head>
 <body>
 <div class="bg-orbs"><div class="orb orb-1"></div><div class="orb orb-2"></div><div class="orb orb-3"></div></div>
@@ -268,10 +284,26 @@ $tanggalLabel = global_transaction_date_label($tanggalAwal, $tanggalAkhir);
         </div>
         <form method="GET" class="report-global-filter">
           <label class="field-row report-date-range-field"><span class="field-label">Tanggal transaksi</span>
-            <span class="report-date-range-control">
-              <input type="date" name="tanggal_awal" value="<?= global_e($tanggalAwal) ?>" aria-label="Tanggal transaksi mulai">
-              <span>s/d</span>
-              <input type="date" name="tanggal_akhir" value="<?= global_e($tanggalAkhir) ?>" aria-label="Tanggal transaksi sampai">
+            <span class="report-date-range-control report-date-range-picker" data-range-picker data-empty-label="<?= global_e($tanggalLabel) ?>">
+              <input type="hidden" name="tanggal_awal" value="<?= global_e($tanggalAwal) ?>">
+              <input type="hidden" name="tanggal_akhir" value="<?= global_e($tanggalAkhir) ?>">
+              <button type="button" class="report-date-range-button" aria-expanded="false">
+                <span class="report-date-range-icon">📅</span>
+                <span class="report-date-range-value"><?= global_e($tanggalLabel) ?></span>
+              </button>
+              <span class="report-date-range-popover" hidden>
+                <label>
+                  <span>Mulai</span>
+                  <input type="date" value="<?= global_e($tanggalAwal) ?>" data-range-start aria-label="Tanggal transaksi mulai">
+                </label>
+                <label>
+                  <span>Sampai</span>
+                  <input type="date" value="<?= global_e($tanggalAkhir) ?>" data-range-end aria-label="Tanggal transaksi sampai">
+                </label>
+                <span class="report-date-range-popover-actions">
+                  <button type="button" class="btn btn-primary btn-sm" data-range-apply>Terapkan</button>
+                </span>
+              </span>
             </span>
           </label>
           <label class="field-row"><span class="field-label">Kasir / operator</span>
@@ -388,7 +420,7 @@ $tanggalLabel = global_transaction_date_label($tanggalAwal, $tanggalAkhir);
   </main>
 </div>
 <div class="toast" id="toast"><span id="toast-icon"></span><span id="toast-msg"></span></div>
-<script src="../assets/js/app.js?v=3.1"></script>
+<script src="../assets/js/app.js?v=6.4"></script>
 <script>document.addEventListener('DOMContentLoaded', function(){ autoHideFlash(); });</script>
 </body>
 </html>

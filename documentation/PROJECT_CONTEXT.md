@@ -183,6 +183,10 @@ Tabel `Daftar_ulang` dipakai sebagai template tarif per kombinasi `kelas + th_aj
 - Halaman edit pembayaran harus auto-bind siswa yang sedang diedit saat load sehingga rincian tagihan langsung memakai konteks siswa aktif, master/tarif terbaru, dan histori lain yang mengecualikan `bayar.id` transaksi tersebut.
 - Sistem pembayaran dipilih dari opsi `Tunai`, `VA`, atau `Qris` dan divalidasi ulang di backend.
 - Nominal negatif, periode tidak valid, pembayaran Komite melebihi sisa periode, dan input komponen yang melebihi sisa tagihan harus ditolak.
+- Pembayaran SPP wajib berurutan dalam tahun ajaran Juli-Juni. Bulan berikutnya hanya dapat dibayar bila seluruh bulan sebelumnya dalam tahun ajaran yang sama sudah lunas terhadap `siswa.SPP_PERBULAN`.
+- Juli adalah bulan pertama tahun ajaran sehingga tidak memiliki prasyarat bulan sebelumnya. Januari-Juni mengecek tunggakan dari Juli-Desember tahun kalender sebelumnya terlebih dahulu.
+- Cicilan SPP bulan berjalan tetap boleh dilakukan selama tidak melebihi sisa bulan tersebut; edit transaksi mengecualikan `bayar.id` yang sedang diedit dari hitungan sisa dan urutan.
+- Edit atau hapus SPP bulan sebelumnya tidak boleh membuat bulan setelahnya yang sudah memiliki pembayaran menjadi tidak valid; kasir harus melunasi bulan prasyarat atau mengoreksi transaksi bulan setelahnya terlebih dahulu.
 - Form pembayaran menampilkan alert bila `Sudah Terbayar` lebih besar dari `Total Tagihan`; sisa ditampilkan sebagai nol dan input bayar pada komponen tersebut dikunci.
 - Form pembayaran juga menampilkan alert inline bila `Input Bayar` lebih besar dari sisa tagihan sebelum submit; input tersebut diberi invalid state dan browser menahan submit melalui custom validity.
 - Simpan, edit, dan hapus transaksi utama, daftar ulang, serta detail biaya lain dijalankan dalam transaction.
@@ -240,12 +244,14 @@ Tabel `Daftar_ulang` dipakai sebagai template tarif per kombinasi `kelas + th_aj
 ### Laporan
 
 - Rekap web, PDF, dan Excel mengambil data transaksi berdasarkan periode tanggal bayar.
+- Filter tanggal laporan ditampilkan sebagai satu kontrol date-range custom lokal dengan popover `Mulai` dan `Sampai`. Backend tetap menerima `tanggal_awal` dan `tanggal_akhir` agar URL lama dan export tetap kompatibel.
 - Rekap komponen tetap mencakup Uang Komite.
 - Biaya lain diagregasi berdasarkan `nama_biaya_snapshot`, bukan nama master saat ini.
 - Siswa arsip tidak dikeluarkan dari histori laporan.
 - Filter laporan yang menerima input pengguna, termasuk filter NIS riwayat tabungan, wajib menggunakan prepared statement; input tidak boleh dirangkai ke SQL.
 - Export PDF memakai Dompdf server-side sehingga hasil PDF tidak memuat header/footer bawaan print browser.
 - Tombol `Export PDF` pada laporan mencetak seluruh transaksi periode, sedangkan detail transaksi pembayaran menyediakan `Cetak Dipilih` dan cetak per baris untuk slip transaksi tertentu.
+- Area `Sisa Pembayaran` pada struk biasa dan struk tahunan hanya menampilkan `Sisa PSB` dan `Sisa DU`; rincian pembayaran utama tetap menampilkan komponen transaksi yang dibayar.
 
 ## 8. Instalasi dan Migrasi Database
 

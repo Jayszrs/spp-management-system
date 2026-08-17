@@ -106,6 +106,23 @@ try {
     payment_process_assert(!str_contains($legacySavingsFeedback['body'], 'name="tabungan_wajib"'), 'Form input masih memiliki field tabungan pembayaran.');
     payment_process_assert(!str_contains($legacySavingsFeedback['body'], 'id="tab-wajib"'), 'Form input masih memiliki kontrol tabungan pembayaran.');
 
+    $blockedAugust = payment_process_request($baseUrl . '/pembayaran/proses.php', array_merge($common, [
+        'no_induk' => $targetNoInduk,
+        'uang_spp' => 50000,
+    ]), $cookies);
+    payment_process_assert($blockedAugust['status'] === 302, 'POST SPP Agustus tanpa Juli lunas tidak mengembalikan redirect.');
+    $blockedFeedback = payment_process_request($baseUrl . '/pembayaran/form.php', [], $cookies);
+    payment_process_assert(
+        str_contains($blockedFeedback['body'], 'belum bisa dibayar karena Juli 2026 belum lunas'),
+        'SPP Agustus tidak ditolak saat Juli belum lunas.'
+    );
+
+    $julyResponse = payment_process_request($baseUrl . '/pembayaran/proses.php', array_merge($common, [
+        'bulan_bayar' => '07',
+        'uang_spp' => 250000,
+    ]), $cookies);
+    payment_process_assert($julyResponse['status'] === 302, 'Pelunasan SPP Juli sebagai prasyarat Agustus gagal.');
+
     $response = payment_process_request($baseUrl . '/pembayaran/proses.php', $common + [
         'uang_spp' => 100000,
         'biaya_lain_detail_id' => [0, 0, 0, 0, 0],
@@ -144,7 +161,30 @@ try {
     $form = payment_process_request($baseUrl . '/pembayaran/form.php', [], $cookies);
     payment_process_assert(str_contains($form['body'], 'melebihi sisa tagihan'), 'Pesan penolakan pembayaran setelah lunas tidak tampil.');
 
-    $stmtFirst = $koneksi->prepare('SELECT MIN(id) AS id FROM bayar WHERE NO_INDUK = ?');
+    $stmtJuly = $koneksi->prepare("
+        SELECT MIN(id) AS id
+        FROM bayar
+        WHERE NO_INDUK = ? AND TAHUN = '2026'
+          AND (BULAN = '07' OR BULAN = '7' OR BULAN = 'Juli')
+    ");
+    $stmtJuly->bind_param('s', $noInduk);
+    $stmtJuly->execute();
+    $julyPaymentId = (int)$stmtJuly->get_result()->fetch_assoc()['id'];
+    $stmtJuly->close();
+    $deleteJuly = payment_process_request($baseUrl . '/pembayaran/proses.php?aksi=hapus&id=' . $julyPaymentId, [], $cookies);
+    payment_process_assert($deleteJuly['status'] === 302, 'Hapus SPP Juli yang menjadi prasyarat tidak mengembalikan redirect.');
+    $deleteJulyFeedback = payment_process_request($baseUrl . '/pembayaran/lihat.php', [], $cookies);
+    payment_process_assert(
+        str_contains($deleteJulyFeedback['body'], 'tidak bisa dihapus karena Agustus 2026 sudah memiliki pembayaran'),
+        'Hapus SPP Juli tidak ditolak saat Agustus sudah memiliki pembayaran.'
+    );
+
+    $stmtFirst = $koneksi->prepare("
+        SELECT MIN(id) AS id
+        FROM bayar
+        WHERE NO_INDUK = ? AND TAHUN = '2026'
+          AND (BULAN = '08' OR BULAN = '8' OR BULAN = 'Agustus')
+    ");
     $stmtFirst->bind_param('s', $noInduk);
     $stmtFirst->execute();
     $firstPaymentId = (int)$stmtFirst->get_result()->fetch_assoc()['id'];
@@ -199,7 +239,7 @@ try {
     $receipt = payment_process_request($baseUrl . '/laporan/cetak_struk.php?id=' . $firstPaymentId, [], $cookies);
     payment_process_assert($receipt['status'] === 200, 'Struk pembayaran tidak dapat dibuka.');
     payment_process_assert(!str_contains($receipt['body'], 'Tabungan'), 'Struk pembayaran masih menampilkan tabungan.');
-    payment_process_assert(str_contains($receipt['body'], 'Sisa SPP'), 'Struk belum menampilkan sisa SPP dari database.');
+    payment_process_assert(!str_contains($receipt['body'], 'Sisa SPP'), 'Struk masih menampilkan Sisa SPP pada bagian Sisa Pembayaran.');
     payment_process_assert(str_contains($receipt['body'], 'Administrator'), 'Struk belum menampilkan operator dari ID transaksi.');
 
     $update = payment_process_request($baseUrl . '/pembayaran/proses.php', array_merge($common, [
@@ -214,7 +254,12 @@ try {
     ]), $cookies);
     payment_process_assert($update['status'] === 302, 'Edit cicilan tidak mengembalikan redirect yang diharapkan.');
 
-    $stmtAfterEdit = $koneksi->prepare('SELECT COUNT(*) AS total, COALESCE(SUM(U_SPP), 0) AS paid FROM bayar WHERE NO_INDUK = ?');
+    $stmtAfterEdit = $koneksi->prepare("
+        SELECT COUNT(*) AS total, COALESCE(SUM(U_SPP), 0) AS paid
+        FROM bayar
+        WHERE NO_INDUK = ? AND TAHUN = '2026'
+          AND (BULAN = '08' OR BULAN = '8' OR BULAN = 'Agustus')
+    ");
     $stmtAfterEdit->bind_param('s', $noInduk);
     $stmtAfterEdit->execute();
     $afterEdit = $stmtAfterEdit->get_result()->fetch_assoc();
@@ -264,8 +309,10 @@ try {
     payment_process_assert($delete['status'] === 302, 'Hapus cicilan tidak mengembalikan redirect yang diharapkan.');
     $stmtAfterDelete = $koneksi->prepare("
         SELECT COUNT(*) AS total, COALESCE(SUM(U_SPP), 0) AS paid,
-               (SELECT COUNT(*) FROM bayar_spp_periode WHERE no_induk = ?) AS claims
-        FROM bayar WHERE NO_INDUK = ?
+               (SELECT COUNT(*) FROM bayar_spp_periode WHERE no_induk = ? AND tahun = '2026' AND bulan = '08') AS claims
+        FROM bayar
+        WHERE NO_INDUK = ? AND TAHUN = '2026'
+          AND (BULAN = '08' OR BULAN = '8' OR BULAN = 'Agustus')
     ");
     $stmtAfterDelete->bind_param('ss', $noInduk, $noInduk);
     $stmtAfterDelete->execute();
@@ -294,8 +341,8 @@ try {
     }
     $stmtMoved = $koneksi->prepare("
         SELECT
-          (SELECT COALESCE(SUM(U_SPP), 0) FROM bayar WHERE NO_INDUK = ?) AS old_paid,
-          (SELECT COALESCE(SUM(U_SPP), 0) FROM bayar WHERE NO_INDUK = ?) AS new_paid,
+          (SELECT COALESCE(SUM(U_SPP), 0) FROM bayar WHERE NO_INDUK = ? AND TAHUN = '2026' AND (BULAN = '08' OR BULAN = '8' OR BULAN = 'Agustus')) AS old_paid,
+          (SELECT COALESCE(SUM(U_SPP), 0) FROM bayar WHERE NO_INDUK = ? AND TAHUN = '2026' AND (BULAN = '07' OR BULAN = '7' OR BULAN = 'Juli')) AS new_paid,
           (SELECT COUNT(*) FROM bayar_spp_periode WHERE no_induk = ? AND bulan = '08') AS old_claims,
           (SELECT COUNT(*) FROM bayar_spp_periode WHERE no_induk = ? AND bulan = '07') AS new_claims
     ");

@@ -13,6 +13,33 @@ File ini mencatat perubahan proyek secara reverse chronological. Baca [PROJECT_C
 - Jangan menghapus atau menulis ulang entri lama. Tambahkan entri koreksi bila diperlukan.
 - Perubahan implementasi dan entri changelog wajib masuk commit yang sama.
 
+## 2026-08-17 - Validasi Urutan SPP dan Filter Tanggal Laporan
+
+**AI/Aktor:** Codex berbasis GPT-5, bersama pemilik proyek
+
+**Tujuan:** Mencegah pembayaran SPP melompati bulan sebelumnya dalam tahun ajaran Juli-Juni, menyederhanakan sisa pembayaran pada struk, dan merapikan filter tanggal laporan.
+
+**Perubahan fitur dan perilaku:**
+
+- Backend menolak pembayaran SPP untuk bulan terpilih bila ada SPP bulan sebelumnya dalam tahun ajaran yang sama belum lunas terhadap `siswa.SPP_PERBULAN`.
+- Edit atau hapus pembayaran SPP bulan sebelumnya ditolak bila membuat bulan setelahnya yang sudah dibayar menjadi bolong.
+- UI input/edit pembayaran mengunci input SPP dan menampilkan alasan bila bulan sebelumnya belum lunas; cicilan bulan berjalan tetap boleh selama tidak melebihi sisa.
+- Bagian `Sisa Pembayaran` pada struk biasa dan struk tahunan hanya menampilkan `Sisa PSB` dan `Sisa DU`; rincian pembayaran utama tetap lengkap.
+- Laporan Keuangan dan Laporan Global memakai satu kontrol date-range custom lokal yang tetap mengirim `tanggal_awal` dan `tanggal_akhir` untuk kompatibilitas export dan URL lama.
+
+**Database dan migrasi:**
+
+- Tidak ada perubahan schema atau migrasi baru.
+
+**Kompatibilitas:**
+
+- URL lama laporan dengan `tanggal_awal` dan `tanggal_akhir` tetap berjalan.
+- Struk tahunan lama tetap dapat dibuka, hanya tampilan area sisa pembayaran yang diringkas.
+
+**Verifikasi:**
+
+- PHP lint, Node syntax check, schema check, regression test SPP/DU/biaya lain/pagination/legacy, dan HTTP terautentikasi untuk pembayaran serta laporan dijalankan pada lingkungan lokal.
+
 ## 2026-08-17 - Pemisahan Tabungan dari Pembayaran
 
 **AI/Aktor:** Codex berbasis GPT-5, bersama pemilik proyek

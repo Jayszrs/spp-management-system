@@ -48,16 +48,32 @@ function report_date_param(string $key): string {
     return preg_match('/^\d{4}-\d{2}-\d{2}$/', $value) ? $value : '';
 }
 
+function report_date_label_id(int $timestamp): string {
+    $months = [
+        1 => 'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+        'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
+    ];
+    return date('d', $timestamp) . ' ' . $months[(int)date('n', $timestamp)] . ' ' . date('Y', $timestamp);
+}
+
+function report_month_name_id(int $month): string {
+    $months = [
+        1 => 'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+        'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
+    ];
+    return $months[$month] ?? '';
+}
+
 function report_transaction_date_label(string $startDate, string $endDate, string $fallback): string {
     if ($startDate === '' || $endDate === '') return $fallback;
     $startTs = strtotime($startDate);
     $endTs = strtotime($endDate);
     if (!$startTs || !$endTs) return $fallback;
-    if ($startDate === $endDate) return date('d M Y', $startTs);
+    if ($startDate === $endDate) return report_date_label_id($startTs);
     if (date('Y-m', $startTs) === date('Y-m', $endTs)) {
-        return date('d', $startTs) . ' - ' . date('d M Y', $endTs);
+        return date('d', $startTs) . '-' . date('d', $endTs) . ' ' . report_month_name_id((int)date('n', $endTs)) . ' ' . date('Y', $endTs);
     }
-    return date('d M Y', $startTs) . ' - ' . date('d M Y', $endTs);
+    return report_date_label_id($startTs) . ' - ' . report_date_label_id($endTs);
 }
 
 $bln_names = [
@@ -331,7 +347,7 @@ $exportQuery = http_build_query([
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
   <script>(function(){var t=localStorage.getItem('spp_theme')||'dark';document.documentElement.setAttribute('data-theme',t);})();</script>
-  <link rel="stylesheet" href="../assets/css/style.css?v=6.1" />
+  <link rel="stylesheet" href="../assets/css/style.css?v=6.4" />
 </head>
 <body>
 <div class="bg-orbs"><div class="orb orb-1"></div><div class="orb orb-2"></div><div class="orb orb-3"></div></div>
@@ -362,10 +378,26 @@ $exportQuery = http_build_query([
         <form method="GET" class="report-filter-grid">
           <div class="field-row report-date-range-field">
             <label class="field-label">Tanggal transaksi</label>
-            <div class="report-date-range-control">
-              <input type="date" name="tanggal_awal" value="<?= report_e($filter_tanggal_awal) ?>" aria-label="Tanggal transaksi mulai">
-              <span>s/d</span>
-              <input type="date" name="tanggal_akhir" value="<?= report_e($filter_tanggal_akhir) ?>" aria-label="Tanggal transaksi sampai">
+            <div class="report-date-range-control report-date-range-picker" data-range-picker data-empty-label="<?= report_e($periodLabel) ?>">
+              <input type="hidden" name="tanggal_awal" value="<?= report_e($filter_tanggal_awal) ?>">
+              <input type="hidden" name="tanggal_akhir" value="<?= report_e($filter_tanggal_akhir) ?>">
+              <button type="button" class="report-date-range-button" aria-expanded="false">
+                <span class="report-date-range-icon">📅</span>
+                <span class="report-date-range-value"><?= report_e($periodLabel) ?></span>
+              </button>
+              <div class="report-date-range-popover" hidden>
+                <label>
+                  <span>Mulai</span>
+                  <input type="date" value="<?= report_e($filter_tanggal_awal) ?>" data-range-start aria-label="Tanggal transaksi mulai">
+                </label>
+                <label>
+                  <span>Sampai</span>
+                  <input type="date" value="<?= report_e($filter_tanggal_akhir) ?>" data-range-end aria-label="Tanggal transaksi sampai">
+                </label>
+                <div class="report-date-range-popover-actions">
+                  <button type="button" class="btn btn-primary btn-sm" data-range-apply>Terapkan</button>
+                </div>
+              </div>
             </div>
           </div>
           <div class="field-row">
@@ -567,7 +599,7 @@ $exportQuery = http_build_query([
 </div>
 
 <div class="toast" id="toast"><span id="toast-icon"></span><span id="toast-msg"></span></div>
-<script src="../assets/js/app.js?v=3.1"></script>
+<script src="../assets/js/app.js?v=6.4"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function(){
   autoHideFlash();

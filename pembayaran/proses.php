@@ -64,6 +64,133 @@ function payment_month_label(string $bulan): string {
     return $months[$bulan] ?? $bulan;
 }
 
+function spp_prior_periods_in_academic_year(string $bulan, string $tahun): array {
+    $month = (int)$bulan;
+    $year = (int)$tahun;
+    if ($month < 1 || $month > 12 || $year < 1) return [];
+
+    $periods = [];
+    if ($month >= 7) {
+        for ($m = 7; $m < $month; $m++) {
+            $periods[] = ['bulan' => str_pad((string)$m, 2, '0', STR_PAD_LEFT), 'tahun' => (string)$year];
+        }
+        return $periods;
+    }
+
+    $previousYear = $year - 1;
+    for ($m = 7; $m <= 12; $m++) {
+        $periods[] = ['bulan' => str_pad((string)$m, 2, '0', STR_PAD_LEFT), 'tahun' => (string)$previousYear];
+    }
+    for ($m = 1; $m < $month; $m++) {
+        $periods[] = ['bulan' => str_pad((string)$m, 2, '0', STR_PAD_LEFT), 'tahun' => (string)$year];
+    }
+    return $periods;
+}
+
+function spp_following_periods_in_academic_year(string $bulan, string $tahun): array {
+    $month = (int)$bulan;
+    $year = (int)$tahun;
+    if ($month < 1 || $month > 12 || $year < 1) return [];
+
+    $periods = [];
+    if ($month >= 7) {
+        for ($m = $month + 1; $m <= 12; $m++) {
+            $periods[] = ['bulan' => str_pad((string)$m, 2, '0', STR_PAD_LEFT), 'tahun' => (string)$year];
+        }
+        for ($m = 1; $m <= 6; $m++) {
+            $periods[] = ['bulan' => str_pad((string)$m, 2, '0', STR_PAD_LEFT), 'tahun' => (string)($year + 1)];
+        }
+        return $periods;
+    }
+
+    for ($m = $month + 1; $m <= 6; $m++) {
+        $periods[] = ['bulan' => str_pad((string)$m, 2, '0', STR_PAD_LEFT), 'tahun' => (string)$year];
+    }
+    return $periods;
+}
+
+function spp_paid_for_period(mysqli $db, string $noInduk, string $bulan, string $tahun, int $excludePaymentId = 0): float {
+    $monthLabel = payment_month_label($bulan);
+    $legacyMonth = (string)(int)$bulan;
+    $stmt = $db->prepare('
+        SELECT U_SPP
+        FROM bayar
+        WHERE NO_INDUK = ?
+          AND TAHUN = ?
+          AND (BULAN = ? OR BULAN = ? OR BULAN = ?)
+          AND id <> ?
+        FOR UPDATE
+    ');
+    $stmt->bind_param('sssssi', $noInduk, $tahun, $bulan, $monthLabel, $legacyMonth, $excludePaymentId);
+    $stmt->execute();
+    $paid = 0.0;
+    $result = $stmt->get_result();
+    while ($row = $result->fetch_assoc()) {
+        $paid += (float)$row['U_SPP'];
+    }
+    $stmt->close();
+    return $paid;
+}
+
+function spp_monthly_bill_for_student(mysqli $db, string $noInduk): float {
+    $stmt = $db->prepare('SELECT SPP_PERBULAN FROM siswa WHERE NO_INDUK = ? FOR UPDATE');
+    $stmt->bind_param('s', $noInduk);
+    $stmt->execute();
+    $row = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+    return (float)($row['SPP_PERBULAN'] ?? 0);
+}
+
+function validate_spp_sequence(mysqli $db, string $noInduk, string $bulan, string $tahun, float $monthlyBill, int $excludePaymentId = 0): void {
+    if ($monthlyBill <= 0) return;
+
+    foreach (spp_prior_periods_in_academic_year($bulan, $tahun) as $period) {
+        $paid = spp_paid_for_period($db, $noInduk, $period['bulan'], $period['tahun'], $excludePaymentId);
+        if ($paid + 0.001 >= $monthlyBill) continue;
+
+        $selectedLabel = payment_month_label($bulan) . ' ' . $tahun;
+        $missingLabel = payment_month_label($period['bulan']) . ' ' . $period['tahun'];
+        $remaining = max(0, $monthlyBill - $paid);
+        throw new RuntimeException(
+            'SPP ' . $selectedLabel . ' belum bisa dibayar karena ' . $missingLabel .
+            ' belum lunas. Sisa ' . $missingLabel . ': Rp ' . number_format($remaining, 0, ',', '.') . '.'
+        );
+    }
+}
+
+function first_paid_spp_following_period(mysqli $db, string $noInduk, string $bulan, string $tahun, int $excludePaymentId = 0): ?array {
+    foreach (spp_following_periods_in_academic_year($bulan, $tahun) as $period) {
+        $paid = spp_paid_for_period($db, $noInduk, $period['bulan'], $period['tahun'], $excludePaymentId);
+        if ($paid > 0.001) {
+            return ['bulan' => $period['bulan'], 'tahun' => $period['tahun'], 'paid' => $paid];
+        }
+    }
+    return null;
+}
+
+function validate_spp_period_not_breaking_future(
+    mysqli $db,
+    string $noInduk,
+    string $bulan,
+    string $tahun,
+    float $monthlyBill,
+    float $paidAfterChange,
+    int $excludePaymentId = 0,
+    string $action = 'diubah'
+): void {
+    if ($monthlyBill <= 0 || $paidAfterChange + 0.001 >= $monthlyBill) return;
+
+    $future = first_paid_spp_following_period($db, $noInduk, $bulan, $tahun, $excludePaymentId);
+    if (!$future) return;
+
+    $currentLabel = payment_month_label($bulan) . ' ' . $tahun;
+    $futureLabel = payment_month_label($future['bulan']) . ' ' . $future['tahun'];
+    throw new RuntimeException(
+        'SPP ' . $currentLabel . ' tidak bisa ' . $action . ' karena ' . $futureLabel .
+        ' sudah memiliki pembayaran. Lunaskan kembali ' . $currentLabel . ' atau koreksi transaksi bulan setelahnya terlebih dahulu.'
+    );
+}
+
 function split_payment_amount(float $amount, int $parts): array {
     $totalCents = (int)round($amount * 100);
     $baseCents = intdiv($totalCents, $parts);
@@ -231,6 +358,21 @@ function validate_component_remaining(
         $stmtDu->execute();
         $paid['du'] = (float)($stmtDu->get_result()->fetch_assoc()['du'] ?? 0);
         $stmtDu->close();
+    }
+
+    $sppInput = (float)($components['spp'] ?? 0);
+    if ($sppInput > 0) {
+        validate_spp_sequence($db, $noInduk, $bulan, $tahun, (float)$student['SPP_PERBULAN'], $excludePaymentId);
+        validate_spp_period_not_breaking_future(
+            $db,
+            $noInduk,
+            $bulan,
+            $tahun,
+            (float)$student['SPP_PERBULAN'],
+            (float)($paid['spp'] ?? 0) + $sppInput,
+            $excludePaymentId,
+            'dicicil sebagian'
+        );
     }
 
     $limits = [
@@ -771,6 +913,28 @@ if ($aksi === 'update') {
             'sorga' => $uang_sorga,
             'infaq' => $uang_infaq,
         ], $uang_du, $kelas_du, $tahun_ajaran_du, $id);
+
+        $oldSppMonth = normalize_month_code((string)$old_bayar['BULAN']);
+        $oldSppYear = (string)$old_bayar['TAHUN'];
+        $sameSppContext = (string)$old_bayar['NO_INDUK'] === $no_induk
+            && $oldSppMonth === $bulan_bayar
+            && $oldSppYear === (string)$tahun_bayar;
+        if ((float)$old_bayar['U_SPP'] > 0 && (!$sameSppContext || $uang_spp <= 0)) {
+            $oldBill = $sameSppContext ? (float)$siswa_data['SPP_PERBULAN'] : spp_monthly_bill_for_student($koneksi, (string)$old_bayar['NO_INDUK']);
+            $oldPaidAfter = spp_paid_for_period($koneksi, (string)$old_bayar['NO_INDUK'], $oldSppMonth, $oldSppYear, $id);
+            if ($sameSppContext) $oldPaidAfter += $uang_spp;
+            validate_spp_period_not_breaking_future(
+                $koneksi,
+                (string)$old_bayar['NO_INDUK'],
+                $oldSppMonth,
+                $oldSppYear,
+                $oldBill,
+                $oldPaidAfter,
+                $id,
+                $sameSppContext ? 'dikosongkan' : 'dipindahkan'
+            );
+        }
+
         $kelas_siswa = $siswa_data['KELAS'];
         $biaya_lain = collect_biaya_lain($koneksi, $no_induk, $id);
         $legacy_biaya_lain = legacy_biaya_lain_values($biaya_lain);
@@ -875,6 +1039,21 @@ if ($aksi === 'hapus') {
 
     try {
         $old_bayar = find_linked_payment($koneksi, $id);
+
+        if ((float)$old_bayar['U_SPP'] > 0) {
+            $oldSppMonth = normalize_month_code((string)$old_bayar['BULAN']);
+            $oldSppYear = (string)$old_bayar['TAHUN'];
+            validate_spp_period_not_breaking_future(
+                $koneksi,
+                (string)$old_bayar['NO_INDUK'],
+                $oldSppMonth,
+                $oldSppYear,
+                spp_monthly_bill_for_student($koneksi, (string)$old_bayar['NO_INDUK']),
+                spp_paid_for_period($koneksi, (string)$old_bayar['NO_INDUK'], $oldSppMonth, $oldSppYear, $id),
+                $id,
+                'dihapus'
+            );
+        }
 
         sync_student_initial_fee_paid(
             $koneksi,

@@ -321,6 +321,104 @@ function selectedPaymentPeriod() {
   return bulan && tahun ? bulan + '-' + tahun : '';
 }
 
+function paymentMonthLabelByCode(month) {
+  const labels = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
+  const index = parseInt(month, 10) - 1;
+  return labels[index] || '';
+}
+
+function paymentPeriodDisplayLabel(period) {
+  if (!period || !period.includes('-')) return '';
+  const [month, year] = period.split('-');
+  const monthLabel = paymentMonthLabelByCode(month);
+  return monthLabel && year ? monthLabel + ' ' + year : period;
+}
+
+function priorSppPeriodsInAcademicYear() {
+  const month = parseInt(document.getElementById('bulan-bayar')?.value || '0', 10);
+  const year = parseInt(document.getElementById('tahun-bayar')?.value || '0', 10);
+  if (!month || !year) return [];
+
+  const periods = [];
+  if (month >= 7) {
+    for (let m = 7; m < month; m++) {
+      periods.push(String(m).padStart(2, '0') + '-' + year);
+    }
+    return periods;
+  }
+
+  for (let m = 7; m <= 12; m++) {
+    periods.push(String(m).padStart(2, '0') + '-' + (year - 1));
+  }
+  for (let m = 1; m < month; m++) {
+    periods.push(String(m).padStart(2, '0') + '-' + year);
+  }
+  return periods;
+}
+
+function followingSppPeriodsInAcademicYear() {
+  const month = parseInt(document.getElementById('bulan-bayar')?.value || '0', 10);
+  const year = parseInt(document.getElementById('tahun-bayar')?.value || '0', 10);
+  if (!month || !year) return [];
+
+  const periods = [];
+  if (month >= 7) {
+    for (let m = month + 1; m <= 12; m++) {
+      periods.push(String(m).padStart(2, '0') + '-' + year);
+    }
+    for (let m = 1; m <= 6; m++) {
+      periods.push(String(m).padStart(2, '0') + '-' + (year + 1));
+    }
+    return periods;
+  }
+
+  for (let m = month + 1; m <= 6; m++) {
+    periods.push(String(m).padStart(2, '0') + '-' + year);
+  }
+  return periods;
+}
+
+function firstUnpaidPriorSppPeriod(opt, monthlyBill) {
+  if (!opt || monthlyBill <= 0) return null;
+  let periods = {};
+  try {
+    periods = JSON.parse(opt.dataset.paidSppPeriods || '{}');
+  } catch (_) {
+    periods = {};
+  }
+
+  for (const period of priorSppPeriodsInAcademicYear()) {
+    const paid = parseNumber(periods[period] || 0);
+    if (paid + 0.001 < monthlyBill) {
+      return {
+        period,
+        paid,
+        remaining: Math.max(0, monthlyBill - paid),
+        label: paymentPeriodDisplayLabel(period)
+      };
+    }
+  }
+  return null;
+}
+
+function firstPaidFollowingSppPeriod(opt) {
+  if (!opt) return null;
+  let periods = {};
+  try {
+    periods = JSON.parse(opt.dataset.paidSppPeriods || '{}');
+  } catch (_) {
+    periods = {};
+  }
+
+  for (const period of followingSppPeriodsInAcademicYear()) {
+    const paid = parseNumber(periods[period] || 0);
+    if (paid > 0.001) {
+      return { period, paid, label: paymentPeriodDisplayLabel(period) };
+    }
+  }
+  return null;
+}
+
 function isAnnualPaymentPlan() {
   return document.getElementById('payment-plan')?.value === 'annual';
 }
@@ -390,9 +488,8 @@ function selectedPaymentMonthLabel() {
   const select = document.getElementById('bulan-bayar');
   const option = select?.options[select.selectedIndex];
   if (option?.dataset.label) return option.dataset.label;
-  const labels = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
   const month = parseNumber(select?.value || 0);
-  return labels[month - 1] || '';
+  return paymentMonthLabelByCode(month);
 }
 
 function refreshSppPeriodLabel() {
@@ -682,7 +779,17 @@ function refreshSppInstallmentAvailability() {
   if (!opt) lockedMessage = 'Pilih siswa terlebih dahulu';
   else if (total <= 0) lockedMessage = 'Tarif SPP belum diatur';
   else if (remaining <= 0.001) lockedMessage = 'Lunas untuk ' + monthLabel + ' ' + year;
+  else {
+    const unpaidPrior = firstUnpaidPriorSppPeriod(opt, total);
+    if (unpaidPrior) {
+      lockedMessage = 'SPP ' + monthLabel + ' ' + year + ' belum bisa dibayar karena ' + unpaidPrior.label + ' belum lunas';
+      if (unpaidPrior.remaining > 0) lockedMessage += ' (sisa Rp ' + formatRupiah(unpaidPrior.remaining) + ')';
+    }
+  }
 
+  const paidFollowing = firstPaidFollowingSppPeriod(opt);
+  const mustSettleCurrent = !lockedMessage && !!paidFollowing && remaining > 0.001;
+  const inputValue = parseNumber(input.value || 0);
   const locked = lockedMessage !== '';
   input.readOnly = locked;
   input.classList.toggle('tbl-readonly', locked);
@@ -692,12 +799,20 @@ function refreshSppInstallmentAvailability() {
     input.setCustomValidity('');
   } else {
     input.removeAttribute('title');
+    if (mustSettleCurrent && inputValue > 0.001 && inputValue + 0.001 < remaining) {
+      input.setCustomValidity('SPP ' + monthLabel + ' ' + year + ' harus dilunasi karena ' + paidFollowing.label + ' sudah memiliki pembayaran.');
+    } else {
+      input.setCustomValidity('');
+    }
   }
 
   if (context) {
     if (lockedMessage) context.textContent = lockedMessage;
     else if (paid > 0) context.textContent = 'Cicilan ' + monthLabel + ' ' + year + ' · sisa Rp ' + formatRupiah(remaining);
     else context.textContent = 'Tagihan bulanan · dapat dicicil';
+  }
+  if (context && !lockedMessage && mustSettleCurrent) {
+    context.textContent = 'Harus dilunasi sebelum ' + paidFollowing.label + ' tetap valid · sisa Rp ' + formatRupiah(remaining);
   }
   hitungSisa('spp');
 }
@@ -1271,6 +1386,125 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 
 /* ── Hitung Sisa ─────────────────────────── */
+function reportRangeDateLabel(value) {
+  if (!value) return '';
+  const date = new Date(value + 'T00:00:00');
+  if (Number.isNaN(date.getTime())) return '';
+  return String(date.getDate()).padStart(2, '0') + ' ' + paymentMonthLabelByCode(date.getMonth() + 1) + ' ' + date.getFullYear();
+}
+
+function reportRangeDateValue(date) {
+  return date.getFullYear() + '-' + String(date.getMonth() + 1).padStart(2, '0') + '-' + String(date.getDate()).padStart(2, '0');
+}
+
+function reportRangeDisplayLabel(startValue, endValue, emptyLabel) {
+  const fallback = emptyLabel || 'Pilih tanggal transaksi';
+  if (!startValue && !endValue) return fallback;
+  if (startValue && !endValue) endValue = startValue;
+  if (!startValue && endValue) startValue = endValue;
+
+  let start = new Date(startValue + 'T00:00:00');
+  let end = new Date(endValue + 'T00:00:00');
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return fallback;
+  if (start > end) [start, end] = [end, start];
+
+  const startDate = reportRangeDateValue(start);
+  const endDate = reportRangeDateValue(end);
+  if (startDate === endDate) return reportRangeDateLabel(startDate);
+
+  if (start.getMonth() === end.getMonth() && start.getFullYear() === end.getFullYear()) {
+    return String(start.getDate()).padStart(2, '0') + '-' + String(end.getDate()).padStart(2, '0') + ' ' +
+      paymentMonthLabelByCode(end.getMonth() + 1) + ' ' + end.getFullYear();
+  }
+  return reportRangeDateLabel(startDate) + ' - ' + reportRangeDateLabel(endDate);
+}
+
+function closeReportDateRangePicker(picker) {
+  const popover = picker?.querySelector('.report-date-range-popover');
+  const button = picker?.querySelector('.report-date-range-button');
+  if (!popover || !button) return;
+  popover.hidden = true;
+  button.setAttribute('aria-expanded', 'false');
+}
+
+function initReportDateRangePickers() {
+  document.querySelectorAll('[data-range-picker]').forEach(picker => {
+    if (picker.dataset.rangePickerReady === '1') return;
+    picker.dataset.rangePickerReady = '1';
+
+    const button = picker.querySelector('.report-date-range-button');
+    const valueLabel = picker.querySelector('.report-date-range-value');
+    const popover = picker.querySelector('.report-date-range-popover');
+    const hiddenStart = picker.querySelector('input[type="hidden"][name="tanggal_awal"]');
+    const hiddenEnd = picker.querySelector('input[type="hidden"][name="tanggal_akhir"]');
+    const startInput = picker.querySelector('[data-range-start]');
+    const endInput = picker.querySelector('[data-range-end]');
+    const applyButton = picker.querySelector('[data-range-apply]');
+    if (!button || !valueLabel || !popover || !hiddenStart || !hiddenEnd || !startInput || !endInput) return;
+
+    const syncLabel = () => {
+      valueLabel.textContent = reportRangeDisplayLabel(hiddenStart.value, hiddenEnd.value, picker.dataset.emptyLabel);
+    };
+    const syncInputsFromHidden = () => {
+      startInput.value = hiddenStart.value;
+      endInput.value = hiddenEnd.value || hiddenStart.value;
+    };
+    const applyRange = () => {
+      let start = startInput.value;
+      let end = endInput.value || start;
+      if (!start && end) start = end;
+      if (start && end && start > end) [start, end] = [end, start];
+      hiddenStart.value = start;
+      hiddenEnd.value = end || start;
+      syncInputsFromHidden();
+      syncLabel();
+      closeReportDateRangePicker(picker);
+    };
+
+    syncInputsFromHidden();
+    syncLabel();
+
+    button.addEventListener('click', function () {
+      const willOpen = popover.hidden;
+      document.querySelectorAll('[data-range-picker]').forEach(closeReportDateRangePicker);
+      popover.hidden = !willOpen;
+      button.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+      if (willOpen) {
+        syncInputsFromHidden();
+        setTimeout(() => startInput.focus(), 0);
+      }
+    });
+
+    [startInput, endInput].forEach(input => {
+      input.addEventListener('keydown', function (event) {
+        if (event.key === 'Enter') {
+          event.preventDefault();
+          applyRange();
+        }
+      });
+      input.addEventListener('change', function () {
+        if (startInput.value && endInput.value && startInput.value > endInput.value) {
+          valueLabel.textContent = reportRangeDisplayLabel(startInput.value, endInput.value, picker.dataset.emptyLabel);
+        }
+      });
+    });
+    applyButton?.addEventListener('click', applyRange);
+  });
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+  initReportDateRangePickers();
+  document.addEventListener('mousedown', function (event) {
+    document.querySelectorAll('[data-range-picker]').forEach(picker => {
+      if (!picker.contains(event.target)) closeReportDateRangePicker(picker);
+    });
+  });
+  document.addEventListener('keydown', function (event) {
+    if (event.key !== 'Escape') return;
+    document.querySelectorAll('[data-range-picker]').forEach(closeReportDateRangePicker);
+  });
+});
+
 function hitungSisa(key) {
   const total  = parseNumber(document.getElementById(key + '-total')?.value  || 0);
   const bayar  = parseNumber(document.getElementById(key + '-bayar')?.value  || 0);

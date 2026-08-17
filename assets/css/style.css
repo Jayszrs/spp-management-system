@@ -1817,37 +1817,107 @@ h1, h2, h3, h4, h5, h6, .card-title, .topbar-title h2, .sidebar-brand-name {
   min-width: 0;
 }
 .report-date-range-control {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-  align-items: center;
-  gap: 8px;
+  position: relative;
+  display: block;
   min-height: 42px;
-  padding: 0 10px;
+}
+.report-date-range-picker {
+  z-index: 140;
+}
+.report-date-range-button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 42px;
+  padding: 0 14px;
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   background: var(--bg-elevated);
+  color: var(--text-primary);
+  cursor: pointer;
   transition: border-color var(--transition), box-shadow var(--transition);
+  font: 700 13px/1.2 'Inter', sans-serif;
+  text-align: left;
 }
-.report-date-range-control:focus-within {
+.report-date-range-button:hover,
+.report-date-range-button:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(31, 157, 85, 0.12);
+  outline: 0;
+}
+.report-date-range-icon {
+  width: 26px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: rgba(31, 157, 85, 0.12);
+  color: var(--accent);
+  flex: 0 0 auto;
+}
+.report-date-range-value {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.report-date-range-popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  right: auto;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(150px, 1fr));
+  gap: 12px;
+  min-width: min(420px, calc(100vw - 48px));
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: var(--bg-card);
+  box-shadow: var(--shadow-lg);
+  z-index: 320;
+}
+.report-date-range-popover[hidden] {
+  display: none;
+}
+.report-date-range-popover label {
+  display: grid;
+  gap: 6px;
+}
+.report-date-range-popover label > span {
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.report-date-range-popover input[type="date"] {
+  width: 100%;
+  min-width: 0;
+  height: 42px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  outline: 0;
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  font: 600 13px/1 'Inter', sans-serif;
+}
+.report-date-range-popover input[type="date"]:focus {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px rgba(31, 157, 85, 0.12);
 }
-.report-date-range-control > span {
-  color: var(--text-muted);
-  font-size: 11px;
-  font-weight: 800;
-  text-transform: uppercase;
+.report-date-range-popover-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: flex-end;
 }
-.report-date-range-control input[type="date"] {
-  width: 100%;
-  min-width: 0;
-  height: 38px;
-  padding: 0;
-  border: 0;
-  outline: 0;
-  background: transparent;
-  color: var(--text-primary);
-  font: 600 13px/1 'Inter', sans-serif;
+.btn-sm {
+  min-height: 36px;
+  padding: 0 14px;
+  font-size: 12px;
 }
 .report-year-picker {
   position: relative;
@@ -3577,16 +3647,16 @@ input[list]::-webkit-calendar-picker-indicator { display: none !important; }
     justify-content: center;
   }
   .report-date-range-control {
+    min-height: 42px;
+  }
+  .report-date-range-button {
+    justify-content: flex-start;
+  }
+  .report-date-range-popover {
+    left: 0;
+    right: 0;
     grid-template-columns: 1fr;
-    gap: 2px;
-    padding: 8px 10px;
-  }
-  .report-date-range-control > span {
-    text-align: center;
-  }
-  .report-date-range-control input[type="date"] {
-    height: 34px;
-    text-align: center;
+    min-width: 0;
   }
   .report-stats-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));

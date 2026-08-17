@@ -134,22 +134,11 @@ function receipt_add_remaining_line(array &$lines, string $label, float $current
 
 function receipt_remaining_lines(mysqli $db, array $payment, array $otherDetails): array {
     $lines = [];
-    $noInduk = (string)$payment['NO_INDUK'];
-    $periodPaid = receipt_period_paid($db, $noInduk, (string)$payment['BULAN'], (string)$payment['TAHUN']);
-    $oneTimePaid = receipt_one_time_paid($db, $noInduk);
 
     $psbBill = (float)$payment['tot_pangkal'] > 0
         ? (float)$payment['tot_pangkal']
         : max(0, (float)$payment['PANGKAL'] - (float)$payment['potong_pangkal']);
     receipt_add_remaining_line($lines, 'Sisa PSB', (float)$payment['U_PANGKAL'], $psbBill, (float)$payment['PANGKAL_BAYAR']);
-    receipt_add_remaining_line($lines, 'Sisa Bangunan', (float)$payment['U_BANGUNAN'], (float)$payment['BANGUNAN'], (float)$payment['BANGUNAN_BAYAR']);
-    receipt_add_remaining_line($lines, 'Sisa Seragam', (float)$payment['U_SERAGAM'], (float)$payment['SERAGAM'], (float)$payment['SERAGAM_BAYAR']);
-    receipt_add_remaining_line($lines, 'Sisa Kegiatan', (float)$payment['U_KEGIATAN'], (float)$payment['KEGIATAN'], (float)$payment['KEGIATAN_BAYAR']);
-    receipt_add_remaining_line($lines, 'Sisa SPP', (float)$payment['U_SPP'], (float)$payment['SPP_PERBULAN'], $periodPaid['spp']);
-    receipt_add_remaining_line($lines, 'Sisa Komite', (float)$payment['U_KOMITE'], (float)$payment['POMG'], $periodPaid['komite']);
-    receipt_add_remaining_line($lines, 'Sisa Makan', (float)$payment['U_MAKAN'], (float)$payment['MAKAN'], $oneTimePaid['makan']);
-    receipt_add_remaining_line($lines, 'Sisa Sorga', (float)$payment['U_SORGA'], (float)$payment['SORGA'], $oneTimePaid['sorga']);
-    receipt_add_remaining_line($lines, 'Sisa Infaq', (float)$payment['U_INFAQ'], (float)$payment['INFAQ'], $oneTimePaid['infaq']);
 
     $duBillId = (int)($payment['tagihan_daftar_ulang_id'] ?? 0);
     $duTotal = (float)($payment['du_nominal_tagihan'] ?? 0);
@@ -160,15 +149,6 @@ function receipt_remaining_lines(mysqli $db, array $payment, array $otherDetails
     }
     $duPaid = $duBillId > 0 ? receipt_du_paid($db, $duBillId) : (float)($payment['total_du_bayar'] ?? 0);
     receipt_add_remaining_line($lines, 'Sisa DU', (float)$payment['uang_du'], $duTotal, $duPaid);
-
-    foreach ($otherDetails as $detail) {
-        $masterId = (int)($detail['master_biaya_lain_id'] ?? 0);
-        $masterTotal = (float)($detail['master_nominal'] ?? 0);
-        if ($masterId <= 0 || $masterTotal <= 0) continue;
-        $label = 'Sisa ' . (string)$detail['nama_biaya_snapshot'];
-        if (trim((string)$detail['keterangan']) !== '') $label .= ' - ' . $detail['keterangan'];
-        receipt_add_remaining_line($lines, $label, (float)$detail['nominal_snapshot'], $masterTotal, receipt_biaya_lain_paid($db, $noInduk, $masterId));
-    }
 
     return $lines;
 }

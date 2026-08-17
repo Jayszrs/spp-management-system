@@ -479,7 +479,7 @@ unset($_SESSION['flash']);
     window.sppDaftarUlangMasters = {};
     window.sppDaftarUlangHasMasters = true;
   </script>
-  <script src="../assets/js/app.js?v=6.3"></script>
+  <script src="../assets/js/app.js?v=6.4"></script>
 </body>
 </html>
 
