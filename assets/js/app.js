@@ -146,6 +146,7 @@ function pilihSiswaDatalist(input) {
       document.getElementById('disp-nama').value = nama || '';
       document.getElementById('disp-kelas').value = opt.dataset.kelas || '';
       applyDefaultDaftarUlangClass(opt);
+      refreshBiayaLainOptions();
       applyStudentPaymentDetails(opt);
       found = true;
       break;
@@ -634,11 +635,11 @@ function selectedBiayaLainSummary() {
   let paid = 0;
   document.querySelectorAll('.biaya-lain-select').forEach(select => {
     const option = select.options[select.selectedIndex];
-    const masterId = option?.value || '';
-    if (!masterId || selected.has(masterId)) return;
-    selected.add(masterId);
+    const billId = option?.value || '';
+    if (!billId || selected.has(billId)) return;
+    selected.add(billId);
     total += parseNumber(option.dataset.nominal || 0);
-    paid += paidBiayaLainForSelectedStudent(masterId);
+    paid += paidBiayaLainForSelectedStudent(billId);
   });
   return { total, paid };
 }
@@ -703,6 +704,7 @@ function applyStudentPaymentDetails(opt) {
   });
   refreshAnnualPaymentState(opt);
   refreshDaftarUlangMasterWarning(opt);
+  refreshBiayaLainOptions();
   document.querySelectorAll('.biaya-lain-row').forEach(row => refreshBiayaLainRow(row, true));
   updateTotal();
 }
@@ -716,6 +718,7 @@ function clearPaymentDetails() {
   });
   refreshDaftarUlangMasterWarning(null);
   refreshAnnualPaymentState(null);
+  refreshBiayaLainOptions();
   document.querySelectorAll('.biaya-lain-row').forEach(row => refreshBiayaLainRow(row, true));
   updateTotal();
 }
@@ -1142,15 +1145,64 @@ function renumberBiayaLainRows() {
   });
 }
 
-function paidBiayaLainForSelectedStudent(masterId) {
+function biayaLainBillsForSelectedStudent() {
   const opt = selectedStudentOption();
-  if (!opt || !masterId) return 0;
+  if (!opt) return [];
   try {
-    const paidMap = JSON.parse(opt.dataset.paidBiayaLain || '{}');
-    return parseNumber(paidMap[masterId] || paidMap[String(masterId)] || 0);
+    const bills = JSON.parse(opt.dataset.biayaLainBills || '[]');
+    return Array.isArray(bills) ? bills : [];
   } catch (_) {
-    return 0;
+    return [];
   }
+}
+
+function paidBiayaLainForSelectedStudent(billId) {
+  if (!billId) return 0;
+  const bill = biayaLainBillsForSelectedStudent().find(item => String(item.id) === String(billId));
+  if (bill) return parseNumber(bill.paid || bill.terbayar || 0);
+  const selected = Array.from(document.querySelectorAll('.biaya-lain-select option'))
+    .find(option => option.value === String(billId));
+  return parseNumber(selected?.dataset.paid || 0);
+}
+
+function refreshBiayaLainOptions() {
+  const bills = biayaLainBillsForSelectedStudent();
+  document.querySelectorAll('.biaya-lain-select').forEach(select => {
+    const current = select.value;
+    const currentOption = select.options[select.selectedIndex];
+    const legacyPlaceholder = Array.from(select.options).find(option => option.dataset.legacy === '1');
+    const legacy = current && !bills.some(bill => String(bill.id) === String(current))
+      ? {
+          id: current,
+          master_id: currentOption?.dataset.masterId || '',
+          nama: currentOption?.dataset.baseLabel || currentOption?.textContent || 'Biaya Lain (histori)',
+          nominal: currentOption?.dataset.nominal || 0,
+          paid: currentOption?.dataset.paid || 0
+        }
+      : null;
+    const available = legacy ? [...bills, legacy] : bills;
+    select.innerHTML = '';
+    const placeholder = document.createElement('option');
+    placeholder.value = '';
+    placeholder.textContent = legacyPlaceholder?.textContent || '-- Pilih Tagihan --';
+    if (legacyPlaceholder) {
+      placeholder.dataset.legacy = '1';
+      placeholder.dataset.nominal = legacyPlaceholder.dataset.nominal || '0';
+    }
+    select.appendChild(placeholder);
+    available.forEach(bill => {
+      const option = document.createElement('option');
+      option.value = String(bill.id);
+      option.dataset.masterId = String(bill.master_id || bill.master_biaya_lain_id || '');
+      option.dataset.nominal = String(bill.nominal || bill.nominal_tagihan || 0);
+      option.dataset.paid = String(bill.paid || bill.terbayar || 0);
+      option.dataset.baseLabel = String(bill.nama || bill.nama_snapshot || 'Biaya Lain');
+      option.textContent = option.dataset.baseLabel;
+      select.appendChild(option);
+    });
+    if (current && Array.from(select.options).some(option => option.value === current)) select.value = current;
+  });
+  refreshBiayaLainAvailability();
 }
 
 function refreshAnnualPaymentState(opt) {
@@ -1253,16 +1305,17 @@ function refreshBiayaLainRow(row, preserveInput) {
   if (!select || !nominal) return;
 
   const option = select.options[select.selectedIndex];
-  const masterId = option?.value || '';
+  const billId = option?.value || '';
   const masterTotal = parseNumber(option?.dataset.nominal || 0);
-  const alreadyPaid = masterId ? paidBiayaLainForSelectedStudent(masterId) : 0;
+  const alreadyPaid = billId ? paidBiayaLainForSelectedStudent(billId) : 0;
   const remainingBeforeInput = Math.max(0, masterTotal - alreadyPaid);
   const currentInput = parseNumber(nominal.value || 0);
 
-  if (!masterId) {
-    if (totalEl) totalEl.value = '0';
+  if (!billId) {
+    const legacy = option?.dataset.legacy === '1';
+    if (totalEl) totalEl.value = legacy ? formatRupiahString(masterTotal) : '0';
     if (paidEl) paidEl.value = '0';
-    if (sisaEl) sisaEl.value = '0';
+    if (sisaEl) sisaEl.value = legacy ? formatRupiahString(Math.max(0, masterTotal - currentInput)) : '0';
     if (!preserveInput) nominal.value = '0';
     nominal.setCustomValidity('');
     nominal.removeAttribute('title');
@@ -1342,6 +1395,7 @@ function addBiayaLainRow() {
   list.appendChild(template.content.cloneNode(true));
   const row = list.lastElementChild;
   bindNumericInput(row?.querySelector('.biaya-lain-nominal'));
+  refreshBiayaLainOptions();
   refreshBiayaLainRow(row, false);
   renumberBiayaLainRows();
   refreshBiayaLainAvailability();
@@ -1381,6 +1435,7 @@ document.addEventListener('DOMContentLoaded', function () {
     updateTotal();
   });
   renumberBiayaLainRows();
+  refreshBiayaLainOptions();
   document.querySelectorAll('.biaya-lain-row').forEach(row => refreshBiayaLainRow(row, true));
   refreshBiayaLainAvailability();
 });

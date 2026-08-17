@@ -304,7 +304,20 @@ Seluruh migrasi bertahap dirancang idempotent. Migrasi siswa melakukan preflight
 - Nomor induk, ID, nominal, role, hidden input, dan atribut `readonly` dari browser tetap dianggap tidak tepercaya.
 - Jangan menulis password plaintext, dump data siswa nyata, cookie, token session, atau secret ke repository maupun dokumentasi.
 
-Cakupan CSRF saat ini belum merata. Master Siswa dan Role Management sudah memakai CSRF, sedangkan pembayaran, tabungan, dan Master Biaya Lain masih menjadi technical debt. Jangan menyatakan endpoint tersebut sudah terlindungi sebelum implementasinya benar-benar ditambahkan dan diuji.
+Cakupan CSRF saat ini belum merata. Master Siswa, Role Management, Master Kelas, dan Master Biaya Lain sudah memakai CSRF, sedangkan pembayaran dan tabungan masih menjadi technical debt. Jangan menyatakan endpoint tersebut sudah terlindungi sebelum implementasinya benar-benar ditambahkan dan diuji.
+
+## 9A. Master Kelas, Tagihan Biaya Lain, dan Laporan Global Modular
+
+- `master_kelas` memisahkan tingkat 1–6 dari kode rombel. Enam rombel placeholder `BELUM` menjaga kompatibilitas data lama; admin membuat rombel nyata melalui `master_kelas.php` dan memilihnya di Data Siswa.
+- `siswa.KELAS` tetap menjadi tingkat kompatibilitas, sedangkan `siswa.master_kelas_id` menjadi kelas aktif. `siswa_tahun_ajaran` menyimpan snapshot label rombel, tarif SPP, dan tarif Komite agar laporan historis tidak mengikuti perubahan tarif/kelas berikutnya.
+- Transaksi baru menyimpan `master_kelas_id` dan `kelas_rombel_snapshot`. Perpindahan kelas aktif tidak menulis ulang snapshot transaksi maupun penempatan yang sudah mempunyai pembayaran.
+- Biaya Lain baru dapat dibayar setelah `tagihan_biaya_lain` diterbitkan dari Master Biaya Lain kepada semua siswa, tingkat, rombel, atau siswa terpilih. Nominal tagihan adalah snapshot dan pembayaran dapat dicicil sampai lunas.
+- `laporan/global.php` hanya berisi katalog tujuh template. Query dan aturan laporan berada di `includes/reports.php`, halaman web di `laporan/template.php`, serta cetak/PDF/Excel di `laporan/export_global.php`.
+- Tujuh template terdiri dari Status Pembayaran, Penerimaan Harian, SPP Tahun Ajaran per Kelas, Pembayaran per Item, Mutasi Tabungan per Kelas, Tabungan Siswa, dan Setoran Kas Harian.
+- Laporan Umum (`laporan/index.php`) tetap khusus admin/bendahara. Seluruh template Laporan Global dapat dibuka admin, bendahara, dan kasir. URL `laporan/rekap_kelas.php` dipertahankan sebagai redirect kompatibilitas.
+- Tahun ajaran selalu Juli–Juni. Laporan transaksi memakai `TGL_BYR`, sedangkan laporan SPP memakai periode `bayar_spp_periode`; kedua konsep tidak boleh dipertukarkan.
+- PDF memerlukan Composer dependency dan ekstensi GD untuk menampilkan logo PNG. XAMPP menyediakan `php_gd.dll`; aktifkan `extension=gd` lalu restart Apache.
+- Upgrade database memakai `sql/add_modular_global_reports.sql`, wajib didahului backup dan dijalankan dua kali pada salinan database untuk membuktikan idempotensi.
 
 ## 10. Checklist Verifikasi
 
@@ -347,7 +360,7 @@ git diff --check
 
 ## 11. Keterbatasan dan Technical Debt
 
-- Belum ada automated test suite; pengujian saat ini memakai lint, HTTP request, query database, dan screenshot manual/headless.
+- Regression test berbasis PHP tersedia di folder `tests`; pengujian visual tetap dilakukan manual pada browser/PDF viewer.
 - Export Excel masih berupa HTML table dengan ekstensi `.xls`, bukan file XLSX native.
 - Export PDF memakai Dompdf; validasi visual tetap perlu dilakukan pada viewer PDF/browser karena engine PDF berbeda dari rendering HTML browser.
 - CSRF belum diterapkan pada seluruh endpoint mutasi.

@@ -290,6 +290,28 @@ FROM (
       AND TABLE_NAME='bayar_du' AND CONSTRAINT_NAME='fk_bayar_du_tagihan' AND CONSTRAINT_TYPE='FOREIGN KEY'
   )
   UNION ALL
+  SELECT 'table.master_kelas', EXISTS(SELECT 1 FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='master_kelas')
+  UNION ALL
+  SELECT 'siswa.master_kelas_id', EXISTS(SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='siswa' AND COLUMN_NAME='master_kelas_id')
+  UNION ALL
+  SELECT 'siswa_tahun_ajaran.kelas_rombel_snapshot', EXISTS(SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='siswa_tahun_ajaran' AND COLUMN_NAME='kelas_rombel_snapshot')
+  UNION ALL
+  SELECT 'siswa_tahun_ajaran.spp_perbulan_snapshot', EXISTS(SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='siswa_tahun_ajaran' AND COLUMN_NAME='spp_perbulan_snapshot')
+  UNION ALL
+  SELECT 'siswa_tahun_ajaran.komite_snapshot', EXISTS(SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='siswa_tahun_ajaran' AND COLUMN_NAME='komite_snapshot')
+  UNION ALL
+  SELECT 'bayar.kelas_rombel_snapshot', EXISTS(SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='bayar' AND COLUMN_NAME='kelas_rombel_snapshot')
+  UNION ALL
+  SELECT 'table.tagihan_biaya_lain', EXISTS(SELECT 1 FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='tagihan_biaya_lain')
+  UNION ALL
+  SELECT 'table.tagihan_biaya_lain_audit_log', EXISTS(SELECT 1 FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='tagihan_biaya_lain_audit_log')
+  UNION ALL
+  SELECT 'bayar_biaya_lain.tagihan_biaya_lain_id', EXISTS(SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='bayar_biaya_lain' AND COLUMN_NAME='tagihan_biaya_lain_id')
+  UNION ALL
+  SELECT 'uk_tagihan_biaya_lain_siswa_master', EXISTS(SELECT 1 FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='tagihan_biaya_lain' AND INDEX_NAME='uk_tagihan_biaya_lain_siswa_master' AND NON_UNIQUE=0)
+  UNION ALL
+  SELECT 'fk_bayar_biaya_lain_tagihan', EXISTS(SELECT 1 FROM information_schema.TABLE_CONSTRAINTS WHERE CONSTRAINT_SCHEMA=DATABASE() AND TABLE_NAME='bayar_biaya_lain' AND CONSTRAINT_NAME='fk_bayar_biaya_lain_tagihan' AND CONSTRAINT_TYPE='FOREIGN KEY')
+  UNION ALL
   SELECT 'idx_siswa_status_kelas_nama',
          EXISTS(
            SELECT 1 FROM information_schema.STATISTICS

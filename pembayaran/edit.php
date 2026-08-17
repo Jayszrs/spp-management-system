@@ -7,6 +7,7 @@ if (!isset($_SESSION['admin_id'])) { header('Location: ../login.php'); exit; }
 require_once '../koneksi.php';
 require_once '../includes/auth.php';
 require_once '../includes/daftar_ulang.php';
+require_once '../includes/biaya_lain.php';
 requireRole(['admin', 'kasir']);
 
 $id = (int)($_GET['id'] ?? 0);
@@ -49,8 +50,10 @@ $siswa_sql = "
         COALESCE(p.paid_makan, 0) AS paid_makan,
         COALESCE(p.paid_sorga, 0) AS paid_sorga,
         COALESCE(p.paid_infaq, 0) AS paid_infaq,
-        COALESCE(du.paid_du, 0) AS paid_du
+        COALESCE(du.paid_du, 0) AS paid_du,
+        mk.tingkat AS master_tingkat, mk.kode_rombel, mk.is_placeholder
     FROM siswa s
+    LEFT JOIN master_kelas mk ON mk.id=s.master_kelas_id
     LEFT JOIN (
         SELECT
             NO_INDUK,
@@ -142,31 +145,22 @@ function active_academic_year_from_payment_period($bulan, $tahun): string {
 
 $selectedAcademicYear = active_academic_year_from_payment_period($d['BULAN'], $d['TAHUN']);
 
-$biaya_lain_paid = [];
-$stmt_biaya_lain_paid = $koneksi->prepare("
-    SELECT b.NO_INDUK, d.master_biaya_lain_id, COALESCE(SUM(d.nominal_snapshot), 0) AS paid
-    FROM bayar_biaya_lain d
-    JOIN bayar b ON b.id = d.bayar_id
-    WHERE b.id <> ? AND d.master_biaya_lain_id IS NOT NULL
-    GROUP BY b.NO_INDUK, d.master_biaya_lain_id
-");
-$stmt_biaya_lain_paid->bind_param('i', $id);
-$stmt_biaya_lain_paid->execute();
-$biaya_lain_paid_result = $stmt_biaya_lain_paid->get_result();
-while ($paid = $biaya_lain_paid_result->fetch_assoc()) {
-    $biaya_lain_paid[$paid['NO_INDUK']][(int)$paid['master_biaya_lain_id']] = (float)$paid['paid'];
+$biaya_lain_bills = [];
+$stmtBills = $koneksi->prepare("SELECT t.id,t.no_induk,t.master_biaya_lain_id,t.nama_snapshot nama,
+    t.nominal_tagihan nominal,t.status,
+    COALESCE(SUM(CASE WHEN d.bayar_id<>? THEN d.nominal_snapshot ELSE 0 END),0) paid
+    FROM tagihan_biaya_lain t
+    LEFT JOIN bayar_biaya_lain d ON d.tagihan_biaya_lain_id=t.id
+    WHERE t.status='open' OR EXISTS(SELECT 1 FROM bayar_biaya_lain own WHERE own.bayar_id=? AND own.tagihan_biaya_lain_id=t.id)
+    GROUP BY t.id ORDER BY t.nama_snapshot");
+$stmtBills->bind_param('ii',$id,$id); $stmtBills->execute();
+foreach($stmtBills->get_result()->fetch_all(MYSQLI_ASSOC) as $bill){
+    $bill['id']=(int)$bill['id']; $bill['master_id']=(int)$bill['master_biaya_lain_id'];
+    $bill['nominal']=(float)$bill['nominal']; $bill['paid']=(float)$bill['paid'];
+    $bill['sisa']=max(0,$bill['nominal']-$bill['paid']);
+    if($bill['sisa']>.001 || $bill['no_induk']===$d['NO_INDUK']) $biaya_lain_bills[$bill['no_induk']][]=$bill;
 }
-$stmt_biaya_lain_paid->close();
-
-$master_biaya_lain = $koneksi->query("
-    SELECT id, nama, nominal, is_active
-    FROM master_biaya_lain
-    ORDER BY is_active DESC, nama ASC
-")->fetch_all(MYSQLI_ASSOC);
-$master_biaya_lain_by_id = [];
-foreach ($master_biaya_lain as $biaya) {
-    $master_biaya_lain_by_id[(int)$biaya['id']] = $biaya;
-}
+$stmtBills->close();
 
 $stmt_biaya_lain = $koneksi->prepare("
     SELECT d.*
@@ -180,7 +174,7 @@ $biaya_lain_details = $stmt_biaya_lain->get_result()->fetch_all(MYSQLI_ASSOC);
 $stmt_biaya_lain->close();
 if (!$biaya_lain_details) {
     $biaya_lain_details[] = [
-        'id' => '', 'master_biaya_lain_id' => '', 'nama_biaya_snapshot' => '',
+        'id' => '', 'master_biaya_lain_id' => '', 'tagihan_biaya_lain_id' => '', 'nama_biaya_snapshot' => '',
         'nominal_snapshot' => 0, 'keterangan' => ''
     ];
 }
@@ -328,7 +322,7 @@ $selectedPaymentMethod = $d['sistem_pembayaran'] ?? 'VA';
                   data-nis="<?= htmlspecialchars($s['NO_INDUK']) ?>"
                   data-diknas="<?= htmlspecialchars((string)($s['NO_induk_diknas'] ?? '')) ?>"
                   data-nama="<?= htmlspecialchars($s['NAMA']) ?>"
-                  data-kelas="<?= htmlspecialchars($s['KELAS']) ?>"
+                  data-kelas="<?= htmlspecialchars(class_label(['tingkat'=>$s['master_tingkat']?:$s['KELAS'],'kode_rombel'=>$s['kode_rombel']??'BELUM','is_placeholder'=>$s['is_placeholder']??1])) ?>"
                   data-total-pangkal="<?= money_attr(total_after_discount($s['PANGKAL'], $s['potong_pangkal'], $s['tot_pangkal'])) ?>"
                   data-total-bangunan="<?= money_attr($s['BANGUNAN']) ?>"
                   data-total-seragam="<?= money_attr($s['SERAGAM']) ?>"
@@ -348,8 +342,8 @@ $selectedPaymentMethod = $d['sistem_pembayaran'] ?? 'VA';
                   data-paid-sorga="<?= money_attr($s['paid_sorga']) ?>"
                   data-paid-infaq="<?= money_attr($s['paid_infaq']) ?>"
                   data-du-bills="<?= htmlspecialchars(json_encode($du_bills[$s['NO_INDUK']] ?? []), ENT_QUOTES, 'UTF-8') ?>"
-                  data-paid-biaya-lain="<?= htmlspecialchars(json_encode($biaya_lain_paid[$s['NO_INDUK']] ?? []), ENT_QUOTES, 'UTF-8') ?>">
-                  <?= htmlspecialchars($s['NAMA']) ?> (Kelas <?= htmlspecialchars($s['KELAS']) ?>)
+                  data-biaya-lain-bills="<?= htmlspecialchars(json_encode($biaya_lain_bills[$s['NO_INDUK']] ?? [], JSON_UNESCAPED_UNICODE), ENT_QUOTES, 'UTF-8') ?>">
+                  <?= htmlspecialchars($s['NAMA']) ?> (<?= htmlspecialchars(class_label(['tingkat'=>$s['master_tingkat']?:$s['KELAS'],'kode_rombel'=>$s['kode_rombel']??'BELUM','is_placeholder'=>$s['is_placeholder']??1])) ?>)
                 </option>
                 <?php endwhile; ?>
               </datalist>
@@ -364,7 +358,7 @@ $selectedPaymentMethod = $d['sistem_pembayaran'] ?? 'VA';
             </div>
             <div class="field-row">
               <label class="field-label">Kelas</label>
-              <input class="field-input" type="text" id="disp-kelas" value="<?= htmlspecialchars($d['KELAS']) ?>" readonly />
+              <input class="field-input" type="text" id="disp-kelas" value="<?= htmlspecialchars($d['kelas_rombel_snapshot'] ?: ('Kelas '.$d['KELAS'].' (Belum Ditentukan)')) ?>" readonly />
             </div>
           </div>
 
@@ -422,27 +416,24 @@ $selectedPaymentMethod = $d['sistem_pembayaran'] ?? 'VA';
           <div class="alert alert-warning biaya-lain-overpaid-alert" id="biaya-lain-overpaid-alert" hidden></div>
           <div class="lainlain-grid" id="biaya-lain-list">
             <?php foreach ($biaya_lain_details as $index => $detail):
-              $selectedMasterId = (int)($detail['master_biaya_lain_id'] ?? 0);
+              $selectedBillId = (int)($detail['tagihan_biaya_lain_id'] ?? 0);
               $currentNominal = (float)($detail['nominal_snapshot'] ?? 0);
-              $masterTotal = $selectedMasterId && isset($master_biaya_lain_by_id[$selectedMasterId])
-                ? (float)$master_biaya_lain_by_id[$selectedMasterId]['nominal']
-                : $currentNominal;
-              $paidOther = $selectedMasterId ? (float)($biaya_lain_paid[$d['NO_INDUK']][$selectedMasterId] ?? 0) : 0.0;
-              $remainingAfterCurrent = max(0, $masterTotal - $paidOther - $currentNominal);
+              $selectedBill = null;
+              foreach($biaya_lain_bills[$d['NO_INDUK']] ?? [] as $candidate) if((int)$candidate['id']===$selectedBillId){$selectedBill=$candidate;break;}
+              $masterTotal = $selectedBill ? (float)$selectedBill['nominal'] : $currentNominal;
+              $paidOther = $selectedBill ? (float)$selectedBill['paid'] : 0.0;
+              $remainingAfterCurrent = max(0, $masterTotal - $paidOther);
             ?>
             <div class="lainlain-row biaya-lain-row">
               <span class="ll-num"><?= $index + 1 ?></span>
               <input type="hidden" name="biaya_lain_detail_id[]" value="<?= (int)($detail['id'] ?? 0) ?: '' ?>" />
               <label class="ll-field">
                 <span class="ll-field-label">Jenis</span>
-                <select class="field-input field-select biaya-lain-select" name="biaya_lain_master_id[]">
-                  <option value="" <?= $selectedMasterId === 0 ? 'selected' : '' ?>><?= $selectedMasterId === 0 && !empty($detail['id']) ? htmlspecialchars($detail['nama_biaya_snapshot']) . ' (Data lama)' : '-- Pilih Biaya --' ?></option>
-                  <?php foreach ($master_biaya_lain as $biaya):
-                    $isSelected = (int)$biaya['id'] === $selectedMasterId;
-                    if (!(int)$biaya['is_active'] && !$isSelected) continue;
-                  ?>
-                  <option value="<?= (int)$biaya['id'] ?>" data-nominal="<?= money_attr($biaya['nominal']) ?>" data-base-label="<?= htmlspecialchars($isSelected ? $detail['nama_biaya_snapshot'] : $biaya['nama']) ?><?= !(int)$biaya['is_active'] ? ' (Nonaktif)' : '' ?>" <?= $isSelected ? 'selected' : '' ?>>
-                    <?= htmlspecialchars($isSelected ? $detail['nama_biaya_snapshot'] : $biaya['nama']) ?><?= !(int)$biaya['is_active'] ? ' (Nonaktif)' : '' ?>
+                <select class="field-input field-select biaya-lain-select" name="biaya_lain_tagihan_id[]">
+                  <option value="" <?= $selectedBillId === 0 ? 'selected' : '' ?> <?= $selectedBillId === 0 && !empty($detail['id']) ? 'data-legacy="1" data-nominal="'.money_attr($currentNominal).'"' : '' ?>><?= $selectedBillId === 0 && !empty($detail['id']) ? htmlspecialchars($detail['nama_biaya_snapshot']) . ' (Data lama)' : '-- Pilih Tagihan --' ?></option>
+                  <?php foreach ($biaya_lain_bills[$d['NO_INDUK']] ?? [] as $bill): $isSelected=(int)$bill['id']===$selectedBillId; ?>
+                  <option value="<?= (int)$bill['id'] ?>" data-master-id="<?= (int)$bill['master_id'] ?>" data-nominal="<?= money_attr($bill['nominal']) ?>" data-paid="<?= money_attr($bill['paid']) ?>" data-base-label="<?= htmlspecialchars($bill['nama']) ?>" <?= $isSelected ? 'selected' : '' ?>>
+                    <?= htmlspecialchars($bill['nama']) ?>
                   </option>
                   <?php endforeach; ?>
                 </select>
@@ -473,10 +464,10 @@ $selectedPaymentMethod = $d['sistem_pembayaran'] ?? 'VA';
               <input type="hidden" name="biaya_lain_detail_id[]" value="" />
               <label class="ll-field">
                 <span class="ll-field-label">Jenis</span>
-                <select class="field-input field-select biaya-lain-select" name="biaya_lain_master_id[]">
-                  <option value="">-- Pilih Biaya --</option>
-                  <?php foreach ($master_biaya_lain as $biaya): if (!(int)$biaya['is_active']) continue; ?>
-                  <option value="<?= (int)$biaya['id'] ?>" data-nominal="<?= money_attr($biaya['nominal']) ?>" data-base-label="<?= htmlspecialchars($biaya['nama']) ?>"><?= htmlspecialchars($biaya['nama']) ?></option>
+                <select class="field-input field-select biaya-lain-select" name="biaya_lain_tagihan_id[]">
+                  <option value="">-- Pilih Tagihan --</option>
+                  <?php foreach ($biaya_lain_bills[$d['NO_INDUK']] ?? [] as $bill): ?>
+                  <option value="<?= (int)$bill['id'] ?>" data-master-id="<?= (int)$bill['master_id'] ?>" data-nominal="<?= money_attr($bill['nominal']) ?>" data-paid="<?= money_attr($bill['paid']) ?>" data-base-label="<?= htmlspecialchars($bill['nama']) ?>"><?= htmlspecialchars($bill['nama']) ?></option>
                   <?php endforeach; ?>
                 </select>
               </label>

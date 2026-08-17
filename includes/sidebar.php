@@ -34,6 +34,10 @@ $allNavItems = [
    '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
    ['admin'], 'Data Master'],
 
+  ['master_kelas.php', 'Master Kelas/Rombel',
+   '<path d="M3 3h18v18H3z"/><path d="M3 9h18M9 3v18"/>',
+   ['admin'], 'Data Master'],
+
   ['master_biaya_lain.php', 'Master Biaya Lain',
    '<path d="M20 12V8H6a2 2 0 0 1 0-4h12v4"/><path d="M4 6v12a2 2 0 0 0 2 2h14v-4"/><path d="M18 12a2 2 0 0 0 0 4h4v-4z"/>',
    ['admin'], 'Data Master'],
@@ -54,17 +58,13 @@ $allNavItems = [
    '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/>',
    ['admin', 'kasir', 'bendahara'], 'Tabungan'],
 
-  ['laporan/index.php', 'Laporan',
+  ['laporan/index.php', 'Laporan Umum',
    '<path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>',
    ['admin', 'bendahara'], 'Laporan'],
 
   ['laporan/global.php', 'Laporan Global',
    '<path d="M3 3v18h18"/><path d="M7 15l3-3 3 2 5-6"/><path d="M7 19h12"/>',
    ['admin', 'bendahara', 'kasir'], 'Laporan'],
-
-  ['laporan/rekap_kelas.php', 'Rekap per Kelas',
-   '<path d="M3 3h18v18H3z"/><path d="M3 9h18M9 3v18"/>',
-   ['admin', 'bendahara'], 'Laporan'],
 
   ['role_management.php', 'Role Management',
    '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/>',
@@ -81,15 +81,15 @@ $shortLabels = [
   'Riwayat Pembayaran' => 'Riwayat',
   'Riwayat Daftar Ulang' => 'Riwayat DU',
   'Data Siswa'        => 'Siswa',
+  'Master Kelas/Rombel' => 'Kelas',
   'Master Biaya Lain' => 'Biaya',
   'Master Daftar Ulang' => 'DU',
   'Role Management'   => 'Akun',
   'Tabungan Masuk'    => 'Masuk',
   'Tabungan Keluar'   => 'Keluar',
   'Riwayat Tabungan'  => 'Riwayat',
-  'Laporan'           => 'Laporan',
+  'Laporan Umum'      => 'Umum',
   'Laporan Global'    => 'Global',
-  'Rekap per Kelas'   => 'Rekap',
 ];
 
 // Role label
@@ -116,8 +116,8 @@ $roleAvatar = $roleAvatars[$role] ?? 'US';
   <nav class="sidebar-nav">
     <?php $lastSection = null; ?>
     <?php foreach ($navItems as [$href, $label, $icon, $roles, $section]):
-      $isRecapDetail = $href === 'laporan/rekap_kelas.php' && strpos($_SERVER['PHP_SELF'], 'laporan/detail_siswa.php') !== false;
-      $isActive = (strpos($_SERVER['PHP_SELF'], str_replace('../', '', $href)) !== false || $isRecapDetail) ? 'active' : '';
+      $isGlobalDetail = $href === 'laporan/global.php' && in_array($current, ['template.php','export_global.php'], true);
+      $isActive = (strpos($_SERVER['PHP_SELF'], str_replace('../', '', $href)) !== false || $isGlobalDetail) ? 'active' : '';
     ?>
     <?php if ($section !== $lastSection): $lastSection = $section; ?>
     <div class="nav-section-label"><?= htmlspecialchars($section) ?></div>
@@ -160,8 +160,8 @@ $roleAvatar = $roleAvatars[$role] ?? 'US';
 <!-- Material 3 Bottom Navigation for Mobile -->
 <nav class="bottom-nav">
   <?php foreach ($navItems as [$href, $label, $icon, $roles, $section]):
-    $isRecapDetail = $href === 'laporan/rekap_kelas.php' && strpos($_SERVER['PHP_SELF'], 'laporan/detail_siswa.php') !== false;
-    $isActive   = (strpos($_SERVER['PHP_SELF'], str_replace('../', '', $href)) !== false || $isRecapDetail) ? 'active' : '';
+    $isGlobalDetail = $href === 'laporan/global.php' && in_array($current, ['template.php','export_global.php'], true);
+    $isActive   = (strpos($_SERVER['PHP_SELF'], str_replace('../', '', $href)) !== false || $isGlobalDetail) ? 'active' : '';
     $shortLabel = $shortLabels[$label] ?? $label;
   ?>
   <a href="<?= $root . $href ?>" class="bottom-nav-item <?= $isActive ?>">

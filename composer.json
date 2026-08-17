@@ -3,9 +3,13 @@
     "description": "Aplikasi administrasi pembayaran sekolah SistemSPP.",
     "license": "proprietary",
     "require": {
+        "ext-gd": "*",
         "dompdf/dompdf": "^3.1.6"
     },
     "config": {
+        "platform": {
+            "php": "8.0.30"
+        },
         "audit": {
             "abandoned": "report"
         }

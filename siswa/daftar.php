@@ -4,6 +4,7 @@ if (!isset($_SESSION['admin_id'])) { header('Location: ../login.php'); exit; }
 require_once '../koneksi.php';
 require_once '../includes/auth.php';
 require_once '../includes/daftar_ulang.php';
+require_once '../includes/kelas.php';
 require_once '../includes/pagination.php';
 requireRole(['admin']);
 
@@ -66,7 +67,7 @@ function find_student(mysqli $db, int $id, bool $forUpdate = false): ?array {
 
 function student_snapshot(array $student): array {
     $keys = [
-        'id', 'NO_INDUK', 'NAMA', 'KELAS', 'SPP_PERBULAN', 'PANGKAL', 'BANGUNAN',
+        'id', 'NO_INDUK', 'NAMA', 'KELAS', 'master_kelas_id', 'SPP_PERBULAN', 'PANGKAL', 'BANGUNAN',
         'SERAGAM', 'KEGIATAN', 'MAKAN', 'SORGA', 'INFAQ',
         'PANGKAL_BAYAR', 'BANGUNAN_BAYAR', 'SERAGAM_BAYAR',
         'KEGIATAN_BAYAR', 'POMG', 'DAFTAR_ULANG', 'NO_induk_diknas',
@@ -95,40 +96,25 @@ function student_redirect(string $location = 'daftar.php'): void {
     exit;
 }
 
-function add_student_to_current_academic_year(mysqli $db, string $noInduk, string $class): void {
-    $label = du_current_academic_year();
-    $stmt = $db->prepare('SELECT id, status FROM tahun_ajaran WHERE label = ? LIMIT 1 FOR UPDATE');
-    $stmt->bind_param('s', $label); $stmt->execute();
-    $year = $stmt->get_result()->fetch_assoc(); $stmt->close();
-    if (!$year) return;
-    $yearId = (int)$year['id'];
-    $stmt = $db->prepare("INSERT INTO siswa_tahun_ajaran (tahun_ajaran_id,no_induk,kelas,status) VALUES (?,?,?,'aktif') ON DUPLICATE KEY UPDATE id=LAST_INSERT_ID(id)");
-    $stmt->bind_param('iss', $yearId, $noInduk, $class); $stmt->execute();
-    $placementId = (int)$db->insert_id; $stmt->close();
-    if ($placementId > 0 && in_array($year['status'], ['published','closed'], true)) du_create_bill_for_placement($db, $placementId);
-}
-
 function fail_student(string $message, array $oldInput, string $location): void {
     $_SESSION['flash'] = ['type' => 'error', 'msg' => $message];
     $_SESSION['student_old_input'] = $oldInput;
     student_redirect($location);
 }
 
-function validate_student_identity(array $source, ?string $legacyClass = null): array {
+function validate_student_identity(mysqli $db, array $source): array {
     $noInduk = trim((string)($source['no_induk'] ?? ''));
     $name = trim((string)($source['nama'] ?? ''));
-    $class = trim((string)($source['kelas'] ?? ''));
+    $classId = (int)($source['master_kelas_id'] ?? 0);
     if (!preg_match('/^[0-9]{1,10}$/', $noInduk)) {
         throw new RuntimeException('Nomor induk wajib berupa 1 sampai 10 digit.');
     }
     if ($name === '' || mb_strlen($name) > 100) {
         throw new RuntimeException('Nama siswa wajib diisi dan maksimal 100 karakter.');
     }
-    $isExistingLegacyClass = $legacyClass !== null && $class === $legacyClass;
-    if (!in_array($class, ['1','2','3','4','5','6'], true) && !$isExistingLegacyClass) {
-        throw new RuntimeException('Kelas siswa hanya boleh 1 sampai 6. Label kelas lama hanya dapat dipertahankan pada data yang sudah ada.');
-    }
-    return [$noInduk, $name, $class];
+    $class = class_find($db, $classId, true);
+    if (!$class) throw new RuntimeException('Pilih kelas/rombel aktif dari Master Kelas.');
+    return [$noInduk, $name, (string)$class['tingkat'], $classId];
 }
 
 $flash = $_SESSION['flash'] ?? null;
@@ -151,7 +137,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $koneksi->begin_transaction();
             $oldStudent = $action === 'update' ? find_student($koneksi, $id, true) : null;
             if ($action === 'update' && !$oldStudent) throw new RuntimeException('Data siswa tidak ditemukan.');
-            [$noInduk, $name, $class] = validate_student_identity($_POST, $oldStudent['KELAS'] ?? null);
+            [$noInduk, $name, $class, $classId] = validate_student_identity($koneksi, $_POST);
 
             $stmtDuplicate = $koneksi->prepare('SELECT id FROM siswa WHERE NO_INDUK = ? AND id <> ? LIMIT 1');
             $stmtDuplicate->bind_param('si', $noInduk, $id);
@@ -259,6 +245,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $potongDu = $values['potong_du'];
             $active = (int)($oldStudent['is_active'] ?? 1);
 
+            if ($oldStudent) {
+                class_validate_tariff_snapshot_change(
+                    $koneksi,
+                    (string)$oldStudent['NO_INDUK'],
+                    (float)$oldStudent['SPP_PERBULAN'],
+                    $spp,
+                    (float)$oldStudent['POMG'],
+                    $pomg
+                );
+            }
+
             if ($action === 'tambah') {
                 $stmt = $koneksi->prepare("
                     INSERT INTO siswa (
@@ -282,7 +279,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $stmt->execute();
                 $id = $koneksi->insert_id;
                 $stmt->close();
-                add_student_to_current_academic_year($koneksi, $noInduk, $class);
+                $stmtClass = $koneksi->prepare('UPDATE siswa SET master_kelas_id = ? WHERE id = ?');
+                $stmtClass->bind_param('ii', $classId, $id); $stmtClass->execute(); $stmtClass->close();
+                $placementId = class_sync_student_current_year($koneksi, $noInduk, $classId, $spp, $pomg, true);
+                if ($placementId) du_create_bill_for_placement($koneksi, $placementId);
                 $after = find_student($koneksi, $id);
                 write_student_audit($koneksi, $id, $noInduk, 'tambah', null, student_snapshot($after));
                 $successMessage = "Siswa $name berhasil ditambahkan.";
@@ -305,6 +305,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 );
                 $stmt->execute();
                 $stmt->close();
+                $stmtClass = $koneksi->prepare('UPDATE siswa SET master_kelas_id = ? WHERE id = ?');
+                $stmtClass->bind_param('ii', $classId, $id); $stmtClass->execute(); $stmtClass->close();
+                $placementId = class_sync_student_current_year($koneksi, $noInduk, $classId, $spp, $pomg, $active === 1);
+                if ($placementId) du_create_bill_for_placement($koneksi, $placementId);
                 $duChanged =
                     abs((float)$oldStudent['DAFTAR_ULANG'] - $daftarUlang) > .001 ||
                     abs((float)$oldStudent['potong_du'] - $potongDu) > .001 ||
@@ -330,6 +334,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt->bind_param('ii', $newStatus, $id);
             $stmt->execute();
             $stmt->close();
+            if (!empty($student['master_kelas_id'])) {
+                class_sync_student_current_year(
+                    $koneksi,
+                    (string)$student['NO_INDUK'],
+                    (int)$student['master_kelas_id'],
+                    (float)$student['SPP_PERBULAN'],
+                    (float)$student['POMG'],
+                    $newStatus === 1
+                );
+            }
             $after = find_student($koneksi, $id);
             $auditAction = $newStatus ? 'pulihkan' : 'arsipkan';
             write_student_audit($koneksi, $id, $student['NO_INDUK'], $auditAction, $before, student_snapshot($after));
@@ -351,11 +365,9 @@ if ($editId > 0 && !$editStudent) {
 }
 
 $query = trim((string)($_GET['q'] ?? ''));
-$filterClass = (string)($_GET['kelas'] ?? '');
-$classOptions = [];
-$classResult = $koneksi->query("SELECT DISTINCT KELAS FROM siswa WHERE KELAS <> '' ORDER BY KELAS");
-while ($classRow = $classResult->fetch_assoc()) $classOptions[] = (string)$classRow['KELAS'];
-if ($filterClass !== '' && !in_array($filterClass, $classOptions, true)) $filterClass = '';
+$filterClass = (int)($_GET['kelas'] ?? 0);
+$classOptions = class_all($koneksi, true, true);
+if ($filterClass > 0 && !array_filter($classOptions, fn($row) => (int)$row['id'] === $filterClass)) $filterClass = 0;
 $filterStatus = (string)($_GET['status'] ?? 'active');
 if (!in_array($filterStatus, ['active', 'archived', 'all'], true)) $filterStatus = 'active';
 $allowedPageSizes = [10, 25, 50];
@@ -365,10 +377,10 @@ $page = page_int_param('page');
 $listWhereSql = "
     FROM siswa s
     WHERE (? = '' OR s.NO_INDUK LIKE CONCAT('%', ?, '%') OR s.NAMA LIKE CONCAT('%', ?, '%') OR s.NO_induk_diknas LIKE CONCAT('%', ?, '%'))
-      AND (? = '' OR s.KELAS = ?)
+      AND (? = 0 OR s.master_kelas_id = ?)
       AND (? = 'all' OR s.is_active = IF(? = 'archived', 0, 1))
 ";
-$listTypes = 'ssssssss';
+$listTypes = 'ssssiiss';
 $listParams = [$query, $query, $query, $query, $filterClass, $filterClass, $filterStatus, $filterStatus];
 
 $stmtCount = $koneksi->prepare("SELECT COUNT(*) AS total " . $listWhereSql);
@@ -382,13 +394,17 @@ $page = min($page, $totalPages);
 $offset = ($page - 1) * $perPage;
 
 $stmtList = $koneksi->prepare("
-    SELECT s.*,
+    SELECT s.*, mk.tingkat AS master_tingkat, mk.kode_rombel, mk.is_placeholder,
       (SELECT COUNT(*) FROM bayar p WHERE p.NO_INDUK = s.NO_INDUK) AS jml_bayar,
       ((SELECT COUNT(*) FROM bayar p WHERE p.NO_INDUK = s.NO_INDUK) +
        (SELECT COUNT(*) FROM bayar_du du WHERE du.no_induk = s.NO_INDUK) +
        (SELECT COUNT(*) FROM transaksi_m tm WHERE tm.NO_INDUK = s.NO_INDUK) +
        (SELECT COUNT(*) FROM transaksi_k tk WHERE tk.NO_INDUK = s.NO_INDUK)) AS history_count
-    " . $listWhereSql . "
+    FROM siswa s
+    LEFT JOIN master_kelas mk ON mk.id = s.master_kelas_id
+    WHERE (? = '' OR s.NO_INDUK LIKE CONCAT('%', ?, '%') OR s.NAMA LIKE CONCAT('%', ?, '%') OR s.NO_induk_diknas LIKE CONCAT('%', ?, '%'))
+      AND (? = 0 OR s.master_kelas_id = ?)
+      AND (? = 'all' OR s.is_active = IF(? = 'archived', 0, 1))
     ORDER BY s.is_active DESC,
       CASE WHEN s.KELAS REGEXP '^[1-6]$' THEN 0 ELSE 1 END,
       CAST(s.KELAS AS UNSIGNED), s.KELAS, s.NAMA ASC
@@ -405,6 +421,7 @@ $studentPaginationQuery = pagination_query(['per_page' => $perPage]);
 $formStudent = $editStudent ?? [];
 $fieldMap = [
     'no_induk' => 'NO_INDUK', 'nama' => 'NAMA', 'kelas' => 'KELAS',
+    'master_kelas_id' => 'master_kelas_id',
     'no_induk_diknas' => 'NO_induk_diknas', 'spp_perbulan' => 'SPP_PERBULAN',
     'pangkal' => 'PANGKAL', 'bangunan' => 'BANGUNAN', 'seragam' => 'SERAGAM',
     'kegiatan' => 'KEGIATAN', 'makan' => 'MAKAN', 'sorga' => 'SORGA',
@@ -474,19 +491,14 @@ $canEditOpening = !$editStudent || (int)($editStudent['history_count'] ?? 0) ===
                 value="<?= htmlspecialchars((string)form_student_value('nama', $oldInput, $formStudent, $fieldMap)) ?>" />
             </div>
             <div class="field-row">
-              <label class="field-label" for="kelas-baru">Kelas</label>
-              <select class="field-input field-select" id="kelas-baru" name="kelas" required>
-                <option value="">-- Pilih Kelas --</option>
-                <?php
-                $selectedClass = (string)form_student_value('kelas', $oldInput, $formStudent, $fieldMap);
-                $isLegacySelectedClass = $selectedClass !== '' && !in_array($selectedClass, ['1','2','3','4','5','6'], true);
-                if ($isLegacySelectedClass):
-                ?>
-                <option value="<?= htmlspecialchars($selectedClass) ?>" selected>Kelas <?= htmlspecialchars($selectedClass) ?> (data lama)</option>
-                <?php endif; for ($class = 1; $class <= 6; $class++): ?>
-                <option value="<?= $class ?>" <?= $selectedClass === (string)$class ? 'selected' : '' ?>>Kelas <?= $class ?></option>
-                <?php endfor; ?>
+              <label class="field-label" for="kelas-baru">Kelas/Rombel</label>
+              <select class="field-input field-select" id="kelas-baru" name="master_kelas_id" required>
+                <option value="">-- Pilih Kelas/Rombel --</option>
+                <?php $selectedClassId = (int)form_student_value('master_kelas_id', $oldInput, $formStudent, $fieldMap, 0); foreach ($classOptions as $classOption): ?>
+                <option value="<?= (int)$classOption['id'] ?>" <?= $selectedClassId === (int)$classOption['id'] ? 'selected' : '' ?>><?= htmlspecialchars($classOption['label']) ?></option>
+                <?php endforeach; ?>
               </select>
+              <small class="payment-auto-note">Kelola pilihan melalui menu Master Kelas.</small>
             </div>
           </div>
 
@@ -582,7 +594,7 @@ $canEditOpening = !$editStudent || (int)($editStudent['history_count'] ?? 0) ===
           </div>
           <select class="field-input field-select filter-sel" name="kelas">
             <option value="">Semua Kelas</option>
-            <?php foreach ($classOptions as $class): ?><option value="<?= htmlspecialchars($class) ?>" <?= $filterClass === $class ? 'selected' : '' ?>>Kelas <?= htmlspecialchars($class) ?></option><?php endforeach; ?>
+            <?php foreach ($classOptions as $classOption): ?><option value="<?= (int)$classOption['id'] ?>" <?= $filterClass === (int)$classOption['id'] ? 'selected' : '' ?>><?= htmlspecialchars($classOption['label']) ?></option><?php endforeach; ?>
           </select>
           <select class="field-input field-select filter-sel" name="status">
             <option value="active" <?= $filterStatus === 'active' ? 'selected' : '' ?>>Aktif</option>
@@ -609,7 +621,11 @@ $canEditOpening = !$editStudent || (int)($editStudent['history_count'] ?? 0) ===
                 <td data-label="No"><?= $offset + $index + 1 ?></td>
                 <td data-label="No. Induk"><span class="badge-nis"><?= htmlspecialchars($student['NO_INDUK']) ?></span><?php if (!empty($student['NO_induk_diknas'])): ?><small class="du-history-nis">Diknas <?= htmlspecialchars($student['NO_induk_diknas']) ?></small><?php endif; ?></td>
                 <td data-label="Nama Siswa"><?= htmlspecialchars($student['NAMA']) ?></td>
-                <td data-label="Kelas">Kelas <?= htmlspecialchars($student['KELAS']) ?></td>
+                <td data-label="Kelas"><?= htmlspecialchars(class_label([
+                  'tingkat' => $student['master_tingkat'] ?: $student['KELAS'],
+                  'kode_rombel' => $student['kode_rombel'] ?? 'BELUM',
+                  'is_placeholder' => $student['is_placeholder'] ?? 1,
+                ])) ?></td>
                 <td data-label="SPP/Bulan" class="nominal">Rp <?= number_format((float)$student['SPP_PERBULAN'], 0, ',', '.') ?></td>
                 <td data-label="Status"><span class="master-status <?= $student['is_active'] ? 'is-active' : 'is-inactive' ?>"><?= $student['is_active'] ? 'Aktif' : 'Diarsipkan' ?></span></td>
                 <td data-label="Riwayat Transaksi" class="student-history-col"><span class="badge-count"><?= (int)$student['history_count'] ?>x</span></td>

@@ -7,6 +7,7 @@ if (!isset($_SESSION['admin_id'])) { header('Location: ../login.php'); exit; }
 require_once '../koneksi.php';
 require_once '../includes/auth.php';
 require_once '../includes/daftar_ulang.php';
+require_once '../includes/biaya_lain.php';
 requireRole(['admin', 'kasir']);
 
 $aksi = $_POST['aksi'] ?? $_GET['aksi'] ?? '';
@@ -241,7 +242,10 @@ function validate_student_and_komite(
     int $excludePaymentId = 0,
     ?string $archivedStudentAllowed = null
 ): array {
-    $stmt = $db->prepare('SELECT KELAS, POMG, SPP_PERBULAN, is_active FROM siswa WHERE NO_INDUK = ? FOR UPDATE');
+    $stmt = $db->prepare('SELECT s.KELAS, s.master_kelas_id, s.POMG, s.SPP_PERBULAN, s.is_active,
+        mk.tingkat, mk.kode_rombel, mk.is_placeholder
+        FROM siswa s LEFT JOIN master_kelas mk ON mk.id=s.master_kelas_id
+        WHERE s.NO_INDUK = ? FOR UPDATE');
     $stmt->bind_param('s', $noInduk);
     $stmt->execute();
     $student = $stmt->get_result()->fetch_assoc();
@@ -413,40 +417,17 @@ function normalize_month_code($value) {
     return str_pad((string)$value, 2, '0', STR_PAD_LEFT);
 }
 
-function get_biaya_lain_master(mysqli $koneksi, int $masterId, bool $requireActive): ?array {
-    $sql = 'SELECT id, nama, nominal, is_active FROM master_biaya_lain WHERE id = ? AND nominal > 0';
-    if ($requireActive) $sql .= ' AND is_active = 1';
-    $sql .= ' LIMIT 1';
-
-    $stmt = $koneksi->prepare($sql);
-    $stmt->bind_param('i', $masterId);
-    $stmt->execute();
-    $master = $stmt->get_result()->fetch_assoc();
-    $stmt->close();
-    return $master ?: null;
-}
-
-function paid_biaya_lain_total(mysqli $koneksi, string $noInduk, int $masterId, int $excludePaymentId = 0): float {
-    $stmt = $koneksi->prepare('
-        SELECT COALESCE(SUM(d.nominal_snapshot), 0) AS paid
-        FROM bayar_biaya_lain d
-        JOIN bayar b ON b.id = d.bayar_id
-        WHERE b.NO_INDUK = ? AND d.master_biaya_lain_id = ? AND b.id <> ?
-    ');
-    $stmt->bind_param('sii', $noInduk, $masterId, $excludePaymentId);
-    $stmt->execute();
-    $paid = (float)($stmt->get_result()->fetch_assoc()['paid'] ?? 0);
-    $stmt->close();
-    return $paid;
-}
-
 function collect_biaya_lain(mysqli $koneksi, string $noInduk, int $bayarId = 0): array {
     $detailIds = $_POST['biaya_lain_detail_id'] ?? [];
-    $masterIds = $_POST['biaya_lain_master_id'] ?? [];
+    $billIds = $_POST['biaya_lain_tagihan_id'] ?? [];
     $nominals = $_POST['biaya_lain_nominal'] ?? [];
     $notes = $_POST['biaya_lain_keterangan'] ?? [];
-    if (!is_array($detailIds) || !is_array($masterIds) || !is_array($nominals) || !is_array($notes)) {
+    if (!is_array($detailIds) || !is_array($billIds) || !is_array($nominals) || !is_array($notes)) {
         throw new RuntimeException('Format biaya lain tidak valid.');
+    }
+    $legacyMasterIds = $_POST['biaya_lain_master_id'] ?? [];
+    if (!$billIds && is_array($legacyMasterIds) && array_filter(array_map('intval', $legacyMasterIds))) {
+        throw new RuntimeException('Form Biaya Lain sudah diperbarui. Muat ulang halaman dan pilih tagihan siswa.');
     }
 
     $existing = [];
@@ -460,11 +441,11 @@ function collect_biaya_lain(mysqli $koneksi, string $noInduk, int $bayarId = 0):
     }
 
     $lines = [];
-    $submittedByMaster = [];
-    $rowCount = max(count($detailIds), count($masterIds), count($nominals), count($notes));
+    $submittedByBill = [];
+    $rowCount = max(count($detailIds), count($billIds), count($nominals), count($notes));
     for ($index = 0; $index < $rowCount; $index++) {
         $detailId = (int)($detailIds[$index] ?? 0);
-        $masterId = (int)($masterIds[$index] ?? 0);
+        $billId = (int)($billIds[$index] ?? 0);
         $nominalInput = parse_amount($nominals[$index] ?? null);
         $note = trim((string)($notes[$index] ?? ''));
         if (mb_strlen($note) > 255) $note = mb_substr($note, 0, 255);
@@ -474,11 +455,12 @@ function collect_biaya_lain(mysqli $koneksi, string $noInduk, int $bayarId = 0):
             throw new RuntimeException('Nominal biaya lain harus berupa angka positif atau nol.');
         }
 
-        if ($masterId <= 0) {
+        if ($billId <= 0) {
             // Detail hasil migrasi tidak memiliki master, tetapi snapshot-nya tetap sah.
-            if ($oldLine && $oldLine['master_biaya_lain_id'] === null) {
+            if ($oldLine && $oldLine['tagihan_biaya_lain_id'] === null) {
                 if ($nominalInput <= 0) continue;
                 $lines[] = [
+                    'bill_id' => null,
                     'master_id' => null,
                     'nama' => $oldLine['nama_biaya_snapshot'],
                     'nominal' => $nominalInput,
@@ -490,34 +472,33 @@ function collect_biaya_lain(mysqli $koneksi, string $noInduk, int $bayarId = 0):
 
         if ($nominalInput <= 0) continue;
 
-        $sameMasterAsOldLine = $oldLine && (int)$oldLine['master_biaya_lain_id'] === $masterId;
-        $master = get_biaya_lain_master($koneksi, $masterId, !$sameMasterAsOldLine);
-        if (!$master) throw new RuntimeException('Pilihan master biaya lain tidak tersedia atau sudah nonaktif.');
-
-        $masterTotal = (float)$master['nominal'];
-        $paidBefore = paid_biaya_lain_total($koneksi, $noInduk, $masterId, $bayarId);
+        $sameBillAsOldLine = $oldLine && (int)$oldLine['tagihan_biaya_lain_id'] === $billId;
+        $bill = other_fee_bill_find($koneksi, $billId, $noInduk, true);
+        if (!$bill || ($bill['status'] !== 'open' && !$sameBillAsOldLine)) {
+            throw new RuntimeException('Tagihan Biaya Lain tidak tersedia untuk siswa ini.');
+        }
+        $masterTotal = (float)$bill['nominal_tagihan'];
+        $stmtPaid = $koneksi->prepare('SELECT COALESCE(SUM(d.nominal_snapshot),0) paid FROM bayar_biaya_lain d WHERE d.tagihan_biaya_lain_id=? AND d.bayar_id<>?');
+        $stmtPaid->bind_param('ii', $billId, $bayarId); $stmtPaid->execute();
+        $paidBefore = (float)($stmtPaid->get_result()->fetch_assoc()['paid'] ?? 0); $stmtPaid->close();
         if ($paidBefore > $masterTotal + 0.001) {
-            throw new RuntimeException($master['nama'] . ' sudah melebihi total tagihan. Total: Rp ' . number_format($masterTotal, 0, ',', '.') . ', sudah terbayar: Rp ' . number_format($paidBefore, 0, ',', '.') . '. Cek ulang transaksi sebelumnya.');
+            throw new RuntimeException($bill['nama_snapshot'] . ' sudah melebihi total tagihan. Periksa transaksi sebelumnya.');
         }
-
-        if ($paidBefore >= $masterTotal - 0.001) {
-            throw new RuntimeException($master['nama'] . ' sudah lunas dan tidak dapat ditambahkan lagi.');
+        if ($paidBefore >= $masterTotal - 0.001 && !$sameBillAsOldLine) {
+            throw new RuntimeException($bill['nama_snapshot'] . ' sudah lunas dan tidak dapat ditambahkan lagi.');
         }
-
-        if (array_key_exists($masterId, $submittedByMaster)) {
-            throw new RuntimeException($master['nama'] . ' hanya boleh dipilih satu kali dalam satu transaksi.');
-        }
-
-        $submittedBefore = (float)($submittedByMaster[$masterId] ?? 0);
+        if (array_key_exists($billId, $submittedByBill)) throw new RuntimeException($bill['nama_snapshot'] . ' hanya boleh dipilih satu kali dalam satu transaksi.');
+        $submittedBefore = (float)($submittedByBill[$billId] ?? 0);
         $remaining = max(0, $masterTotal - $paidBefore - $submittedBefore);
         if ($nominalInput > $remaining + 0.001) {
-            throw new RuntimeException('Pembayaran ' . $master['nama'] . ' melebihi sisa tagihan. Sisa: Rp ' . number_format($remaining, 0, ',', '.') . '.');
+            throw new RuntimeException('Pembayaran ' . $bill['nama_snapshot'] . ' melebihi sisa tagihan. Sisa: Rp ' . number_format($remaining, 0, ',', '.') . '.');
         }
-        $submittedByMaster[$masterId] = $submittedBefore + $nominalInput;
+        $submittedByBill[$billId] = $submittedBefore + $nominalInput;
 
         $lines[] = [
-            'master_id' => (int)$master['id'],
-            'nama' => $sameMasterAsOldLine ? $oldLine['nama_biaya_snapshot'] : $master['nama'],
+            'bill_id' => $billId,
+            'master_id' => (int)$bill['master_biaya_lain_id'],
+            'nama' => $sameBillAsOldLine ? $oldLine['nama_biaya_snapshot'] : $bill['nama_snapshot'],
             'nominal' => $nominalInput,
             'keterangan' => $note,
         ];
@@ -534,16 +515,17 @@ function save_biaya_lain(mysqli $koneksi, int $bayarId, array $lines): void {
     if (!$lines) return;
     $stmt = $koneksi->prepare("
         INSERT INTO bayar_biaya_lain
-            (bayar_id, master_biaya_lain_id, nama_biaya_snapshot, nominal_snapshot, keterangan, urutan)
-        VALUES (?, ?, ?, ?, NULLIF(?, ''), ?)
+            (bayar_id, master_biaya_lain_id, tagihan_biaya_lain_id, nama_biaya_snapshot, nominal_snapshot, keterangan, urutan)
+        VALUES (?, ?, ?, ?, ?, NULLIF(?, ''), ?)
     ");
     foreach ($lines as $index => $line) {
         $masterId = $line['master_id'];
+        $billId = $line['bill_id'] ?? null;
         $nama = $line['nama'];
         $nominal = $line['nominal'];
         $keterangan = $line['keterangan'];
         $urutan = $index + 1;
-        $stmt->bind_param('iisdsi', $bayarId, $masterId, $nama, $nominal, $keterangan, $urutan);
+        $stmt->bind_param('iiisdsi', $bayarId, $masterId, $billId, $nama, $nominal, $keterangan, $urutan);
         $stmt->execute();
     }
     $stmt->close();
@@ -690,6 +672,12 @@ if ($aksi === 'input') {
         if ($potongan_spp > $uang_spp) throw new RuntimeException('Potongan SPP tidak boleh melebihi pembayaran SPP.');
         $siswa_data = validate_student_and_komite($koneksi, $no_induk, $bulan_bayar, $tahun_bayar, $uang_komite);
         $kelas_siswa = $siswa_data['KELAS'];
+        $master_kelas_id = (int)($siswa_data['master_kelas_id'] ?? 0);
+        $kelas_rombel_snapshot = class_label([
+            'tingkat' => $siswa_data['tingkat'] ?? $kelas_siswa,
+            'kode_rombel' => $siswa_data['kode_rombel'] ?? 'BELUM',
+            'is_placeholder' => $siswa_data['is_placeholder'] ?? 1,
+        ]);
         $du_bill_id = null;
         $tahun_ajaran_du = du_academic_year_label((int)$bulan_bayar, (int)$tahun_bayar);
         $kelas_du = '';
@@ -791,6 +779,10 @@ if ($aksi === 'input') {
             );
             $stmt->execute();
             $bayar_id = $koneksi->insert_id;
+            $stmtClass = $koneksi->prepare('UPDATE bayar SET master_kelas_id=NULLIF(?,0), kelas_rombel_snapshot=? WHERE id=?');
+            $stmtClass->bind_param('isi', $master_kelas_id, $kelas_rombel_snapshot, $bayar_id);
+            $stmtClass->execute();
+            $stmtClass->close();
             $receipt_ids[] = $bayar_id;
             sync_spp_period_claim($koneksi, $bayar_id, $no_induk, $row_month, $row_year, $row_spp);
             sync_student_initial_fee_paid($koneksi, $no_induk, $row_pangkal, $row_bangunan, $row_seragam, $row_kegiatan);
@@ -936,6 +928,12 @@ if ($aksi === 'update') {
         }
 
         $kelas_siswa = $siswa_data['KELAS'];
+        $master_kelas_id = (int)($siswa_data['master_kelas_id'] ?? 0);
+        $kelas_rombel_snapshot = class_label([
+            'tingkat' => $siswa_data['tingkat'] ?? $kelas_siswa,
+            'kode_rombel' => $siswa_data['kode_rombel'] ?? 'BELUM',
+            'is_placeholder' => $siswa_data['is_placeholder'] ?? 1,
+        ]);
         $biaya_lain = collect_biaya_lain($koneksi, $no_induk, $id);
         $legacy_biaya_lain = legacy_biaya_lain_values($biaya_lain);
         $uang_lain = $legacy_biaya_lain['total'];
@@ -968,6 +966,10 @@ if ($aksi === 'update') {
         );
         $stmt->execute();
         $stmt->close();
+        $stmtClass = $koneksi->prepare('UPDATE bayar SET master_kelas_id=NULLIF(?,0), kelas_rombel_snapshot=? WHERE id=?');
+        $stmtClass->bind_param('isi', $master_kelas_id, $kelas_rombel_snapshot, $id);
+        $stmtClass->execute();
+        $stmtClass->close();
 
         if ((string)$old_bayar['NO_INDUK'] === $no_induk) {
             sync_student_initial_fee_paid(

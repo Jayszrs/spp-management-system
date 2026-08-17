@@ -13,6 +13,37 @@ File ini mencatat perubahan proyek secara reverse chronological. Baca [PROJECT_C
 - Jangan menghapus atau menulis ulang entri lama. Tambahkan entri koreksi bila diperlukan.
 - Perubahan implementasi dan entri changelog wajib masuk commit yang sama.
 
+## 2026-08-18 - Laporan Global Modular dan Master Kelas/Rombel
+
+**AI/Aktor:** Codex berbasis GPT-5, bersama pemilik proyek
+
+**Tujuan:** Mengubah Laporan Global menjadi katalog tujuh template yang konsisten pada web/cetak/PDF/Excel, menambahkan Master Kelas/Rombel dan histori tarif, serta menjadikan Biaya Lain sebagai tagihan nyata yang dapat dicicil.
+
+**Perubahan fitur dan perilaku:**
+
+- Menambahkan Master Kelas/Rombel tingkat 1–6 dengan placeholder migrasi, pemilihan rombel di Data Siswa, snapshot penempatan per tahun ajaran, dan snapshot kelas pada transaksi baru.
+- Master Daftar Ulang membentuk snapshot kelas, SPP, dan Komite saat menerbitkan tahun ajaran; perubahan kelas aktif tidak menulis ulang histori yang sudah mempunyai pembayaran.
+- Master Biaya Lain dapat menerbitkan tagihan secara transaksional/idempoten ke semua siswa, tingkat, rombel, atau siswa terpilih. Input/Edit Pembayaran hanya menerima tagihan milik siswa dan memvalidasi cicilan serta overpay di backend.
+- `laporan/global.php` menjadi katalog tujuh card; implementasi laporan dipisahkan ke registry/query bersama, halaman template, dan renderer export bersama.
+- Menambahkan Status Pembayaran, Penerimaan Harian, matriks SPP Juli–Juni, Pembayaran per Item, dua bentuk laporan tabungan, dan Setoran Kas Harian live yang memisahkan tunai, non-tunai, dan dana tabungan.
+- Mengubah label menu menjadi Laporan Umum, menghapus menu Rekap per Kelas, serta mempertahankan URL lama sebagai redirect ke template Per Item.
+
+**Database dan migrasi:**
+
+- Menambahkan `master_kelas`, relasi/snapshot kelas, snapshot SPP/Komite, `tagihan_biaya_lain`, audit penerbitan, referensi tagihan detail pembayaran, foreign key, unique key, dan indeks laporan.
+- Migrasi `sql/add_modular_global_reports.sql` melakukan preflight, backfill placeholder tanpa mengarang rombel, migrasi pembayaran Biaya Lain lama, dan postcheck data yatim.
+- Migrasi lokal dijalankan dua kali setelah backup dan seluruh pemeriksaan pascamigrasi bernilai nol.
+
+**Kompatibilitas dan konfigurasi:**
+
+- Kolom kelas dan detail transaksi legacy dipertahankan. Histori Biaya Lain tanpa master tetap dapat dibaca sebagai histori.
+- Schema instalasi baru dan `verify_schema.sql` diselaraskan. Composer dikunci ke platform PHP 8.0.30 dan `ext-gd` dicantumkan untuk logo PDF.
+
+**Verifikasi:**
+
+- Seluruh PHP lint, JavaScript syntax check, Composer validate/audit, schema pada database salinan, migrasi idempoten, schema verification, seluruh regression test, dan HTTP terautentikasi ketujuh template dijalankan.
+- Cetak, Excel, dan PDF ketujuh template diuji; response PDF terverifikasi sebagai `application/pdf`.
+
 ## 2026-08-17 - Validasi Urutan SPP dan Filter Tanggal Laporan
 
 **AI/Aktor:** Codex berbasis GPT-5, bersama pemilik proyek

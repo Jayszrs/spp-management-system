@@ -54,17 +54,19 @@ do {
 
 $failure = null;
 $otherFeeMasterIds = [];
+$otherFeeBillIds = [];
 try {
     $name = 'UJI INTEGRASI CICILAN';
     $class = '1';
     $monthlyFee = 250000.0;
-    $stmtStudent = $koneksi->prepare('INSERT INTO siswa (NO_INDUK, NAMA, KELAS, SPP_PERBULAN) VALUES (?, ?, ?, ?)');
-    $stmtStudent->bind_param('sssd', $noInduk, $name, $class, $monthlyFee);
+    $classId=(int)$koneksi->query("SELECT id FROM master_kelas WHERE tingkat=1 AND is_placeholder=1 LIMIT 1")->fetch_assoc()['id'];
+    $stmtStudent = $koneksi->prepare('INSERT INTO siswa (NO_INDUK, NAMA, KELAS, master_kelas_id, SPP_PERBULAN) VALUES (?, ?, ?, ?, ?)');
+    $stmtStudent->bind_param('sssid', $noInduk, $name, $class, $classId, $monthlyFee);
     $stmtStudent->execute();
     $stmtStudent->close();
     $targetName = 'UJI TARGET CICILAN';
-    $stmtTarget = $koneksi->prepare('INSERT INTO siswa (NO_INDUK, NAMA, KELAS, SPP_PERBULAN) VALUES (?, ?, ?, ?)');
-    $stmtTarget->bind_param('sssd', $targetNoInduk, $targetName, $class, $monthlyFee);
+    $stmtTarget = $koneksi->prepare('INSERT INTO siswa (NO_INDUK, NAMA, KELAS, master_kelas_id, SPP_PERBULAN) VALUES (?, ?, ?, ?, ?)');
+    $stmtTarget->bind_param('sssid', $targetNoInduk, $targetName, $class, $classId, $monthlyFee);
     $stmtTarget->execute();
     $stmtTarget->close();
 
@@ -78,7 +80,10 @@ try {
     }
     $stmtOtherFee->close();
 
-    $baseUrl = getenv('SPP_TEST_BASE_URL') ?: 'http://127.0.0.1/Project%20PHP';
+    $stmtBill=$koneksi->prepare("INSERT INTO tagihan_biaya_lain (master_biaya_lain_id,no_induk,master_kelas_id,nama_snapshot,nominal_tagihan,kelas_rombel_snapshot,status) SELECT id,?,?,nama,nominal,'Kelas 1 (Belum Ditentukan)','open' FROM master_biaya_lain WHERE id=?");
+    foreach($otherFeeMasterIds as $masterId){$stmtBill->bind_param('sii',$noInduk,$classId,$masterId);$stmtBill->execute();$otherFeeBillIds[]=(int)$koneksi->insert_id;}$stmtBill->close();
+
+    $baseUrl = getenv('SPP_TEST_BASE_URL') ?: 'http://127.0.0.1/spp-management-system';
     $password = getenv('SPP_TEST_ADMIN_PASSWORD') ?: 'admin123';
     $cookies = [];
     $login = payment_process_request($baseUrl . '/login.php', [
@@ -126,7 +131,7 @@ try {
     $response = payment_process_request($baseUrl . '/pembayaran/proses.php', $common + [
         'uang_spp' => 100000,
         'biaya_lain_detail_id' => [0, 0, 0, 0, 0],
-        'biaya_lain_master_id' => $otherFeeMasterIds,
+        'biaya_lain_tagihan_id' => $otherFeeBillIds,
         'biaya_lain_nominal' => [11000, 12000, 13000, 14000, 15000],
         'biaya_lain_keterangan' => ['', '', '', '', ''],
     ], $cookies);
@@ -248,7 +253,7 @@ try {
         'tanggal_bayar' => date('Y-m-d'),
         'uang_spp' => 50000,
         'biaya_lain_detail_id' => [0, 0],
-        'biaya_lain_master_id' => array_slice($otherFeeMasterIds, 0, 2),
+        'biaya_lain_tagihan_id' => array_slice($otherFeeBillIds, 0, 2),
         'biaya_lain_nominal' => [21000, 22000],
         'biaya_lain_keterangan' => ['', ''],
     ]), $cookies);
@@ -373,6 +378,8 @@ try {
 } catch (Throwable $error) {
     $failure = $error;
 } finally {
+    $stmtPaymentCleanup=$koneksi->prepare('DELETE FROM bayar WHERE NO_INDUK IN (?,?)');$stmtPaymentCleanup->bind_param('ss',$noInduk,$targetNoInduk);$stmtPaymentCleanup->execute();$stmtPaymentCleanup->close();
+    $stmtBillCleanup=$koneksi->prepare('DELETE FROM tagihan_biaya_lain WHERE no_induk IN (?,?)');$stmtBillCleanup->bind_param('ss',$noInduk,$targetNoInduk);$stmtBillCleanup->execute();$stmtBillCleanup->close();
     $stmtCleanup = $koneksi->prepare("
         DELETE FROM siswa
         WHERE (NO_INDUK = ? AND NAMA = 'UJI INTEGRASI CICILAN')
