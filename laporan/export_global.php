@@ -1,18 +1,115 @@
 <?php
 session_start();
-require_once '../koneksi.php'; require_once '../includes/auth.php'; require_once '../includes/reports.php';
+require_once '../koneksi.php';
+require_once '../includes/auth.php';
+require_once '../includes/reports.php';
 requireRole(['admin','bendahara','kasir']);
-$registry=report_registry();$template=(string)($_GET['template']??'');if(!isset($registry[$template])){http_response_code(404);exit('Template tidak ditemukan.');}
-$format=(string)($_GET['format']??'print');if(!in_array($format,['print','pdf','excel'],true))$format='print';
-$filters=report_filters($koneksi,$_GET);if(!isset($_GET['kategori'])&&in_array($template,['penerimaan','setoran'],true))$filters['kategori']='semua';if($template==='tabungan-siswa'&&!isset($_GET['mode']))$filters['mode']='buku';
-$report=report_build($koneksi,$template,$filters);$generated=date('d-m-Y H:i:s');$operator=(string)($_SESSION['admin_nama']??$_SESSION['admin_username']??'Pengguna');
-function export_cell($value,string $type):string{if($type==='money')return report_e(report_money($value));if($type==='html'&&is_array($value))return report_e(($value['text']??'').(($value['sub']??'')!==''?' · '.$value['sub']:''));return report_e($value);}
-$logoPath=realpath(__DIR__.'/../assets/img/school-logo.png');
-// Dompdf membutuhkan GD untuk PNG. Print/Excel tetap memakai logo; PDF memberi
-// fallback teks sampai ekstensi GD XAMPP diaktifkan dan Apache dimulai ulang.
-$canRenderLogo=$format!=='pdf'||extension_loaded('gd');
-$logoData=$logoPath&&$canRenderLogo?'data:image/png;base64,'.base64_encode((string)file_get_contents($logoPath)):'';
-ob_start(); ?>
+
+$registry = report_registry();
+$template = (string)($_GET['template'] ?? '');
+if (!isset($registry[$template])) { http_response_code(404); exit('Template tidak ditemukan.'); }
+$format = (string)($_GET['format'] ?? 'print');
+if (!in_array($format, ['print','pdf','excel'], true)) $format = 'print';
+$filters = report_filters($koneksi, $_GET);
+if (!isset($_GET['kategori']) && in_array($template, ['penerimaan','setoran'], true)) $filters['kategori'] = 'semua';
+if ($template === 'tabungan-siswa' && !isset($_GET['mode'])) $filters['mode'] = 'buku';
+$report = report_build($koneksi, $template, $filters);
+$generated = date('d-m-Y H:i:s');
+$operator = (string)($_SESSION['admin_nama'] ?? $_SESSION['admin_username'] ?? 'Pengguna');
+$safeName = preg_replace('/[^a-z0-9_-]+/i', '-', strtolower($template)) . '-' . date('Ymd-His');
+
+function export_cell($value, string $type): string {
+    if ($type === 'money') return report_e(report_money($value));
+    if ($type === 'html' && is_array($value)) {
+        return report_e(($value['text'] ?? '') . (($value['sub'] ?? '') !== '' ? ' · ' . $value['sub'] : ''));
+    }
+    return report_e($value);
+}
+
+function export_excel_number($value): float {
+    if (is_numeric($value)) return (float)$value;
+    return (float)preg_replace('/[^0-9\-]/', '', (string)$value);
+}
+
+function export_excel_dataset(array $report, string $template): array {
+    $columns = $report['columns'];
+    $rows = $report['rows'];
+    if ($template === 'spp-tahunan') {
+        $monthColumns = array_values(array_filter($columns, static fn($column) => ($column[2] ?? '') === 'html'));
+        $excelColumns = [];
+        foreach ($columns as $column) {
+            $excelColumns[] = ($column[2] ?? '') === 'html' ? [$column[0], $column[1], 'money'] : $column;
+        }
+        $excelColumns[] = ['bulan_belum_lunas', 'Bulan Belum Lunas'];
+        $excelRows = [];
+        foreach ($rows as $row) {
+            $excelRow = $row;
+            $unpaid = [];
+            foreach ($monthColumns as $column) {
+                $key = $column[0];
+                $cell = is_array($row[$key] ?? null) ? $row[$key] : [];
+                $excelRow[$key] = export_excel_number($cell['sub'] ?? 0);
+                if (($cell['status'] ?? '') !== 'lunas') $unpaid[] = $column[1];
+            }
+            $excelRow['bulan_belum_lunas'] = $unpaid ? implode(', ', $unpaid) : '-';
+            $excelRows[] = $excelRow;
+        }
+        return [$excelColumns, $excelRows];
+    }
+    if ($template === 'tabungan-kelas') {
+        $excelColumns = [];
+        $htmlKeys = [];
+        foreach ($columns as $column) {
+            if (($column[2] ?? '') === 'html') {
+                $htmlKeys[] = $column[0];
+                $excelColumns[] = [$column[0] . '_masuk', $column[1] . ' Masuk', 'money'];
+                $excelColumns[] = [$column[0] . '_keluar', $column[1] . ' Keluar', 'money'];
+            } else {
+                $excelColumns[] = $column;
+            }
+        }
+        $excelRows = [];
+        foreach ($rows as $row) {
+            $excelRow = $row;
+            foreach ($htmlKeys as $key) {
+                $cell = is_array($row[$key] ?? null) ? $row[$key] : [];
+                $excelRow[$key . '_masuk'] = export_excel_number($cell['text'] ?? 0);
+                $excelRow[$key . '_keluar'] = export_excel_number($cell['sub'] ?? 0);
+            }
+            $excelRows[] = $excelRow;
+        }
+        return [$excelColumns, $excelRows];
+    }
+    return [$columns, $rows];
+}
+
+function export_excel_response(array $report, string $template, string $safeName, string $generated, string $operator): void {
+    [$columns, $rows] = export_excel_dataset($report, $template);
+    header('Content-Type: application/vnd.ms-excel; charset=UTF-8');
+    header('Content-Disposition: attachment; filename="' . $safeName . '.xls"');
+    echo "\xEF\xBB\xBF";
+    ?><!DOCTYPE html><html lang="id"><head><meta charset="UTF-8"><style>
+    body{font-family:Arial,sans-serif;font-size:10pt;color:#17231d}
+    table{border-collapse:collapse;width:100%}
+    th,td{border:1px solid #9bb9aa;padding:6px;vertical-align:top}
+    th{background:#12503a;color:#fff;font-weight:bold;text-align:center}
+    .money{text-align:right;mso-number-format:"\#\.\#\#0"}
+    .meta td{border:0;padding:2px}.title{font-size:14pt;font-weight:bold}.subtitle{color:#52645a}
+    </style></head><body>
+    <table class="meta"><tr><td class="title" colspan="<?= count($columns)+1 ?>"><?= report_e($report['title']) ?></td></tr><tr><td class="subtitle" colspan="<?= count($columns)+1 ?>"><?= report_e($report['subtitle']) ?></td></tr><tr><td colspan="<?= count($columns)+1 ?>">Dibuat: <?= report_e($generated) ?> | Petugas: <?= report_e($operator) ?></td></tr></table>
+    <table><thead><tr><th>No</th><?php foreach($columns as $column): ?><th><?= report_e($column[1]) ?></th><?php endforeach; ?></tr></thead><tbody>
+    <?php if(!$rows): ?><tr><td colspan="<?= count($columns)+1 ?>">Tidak ada data pada filter terpilih.</td></tr><?php else: foreach($rows as $index=>$row): ?><tr><td><?= $index+1 ?></td><?php foreach($columns as $column): $type=$column[2]??'text'; $value=$row[$column[0]]??''; ?><td class="<?= $type==='money'?'money':'' ?>"><?php if($type==='money'): ?><?= export_excel_number($value) ?><?php else: ?><?= export_cell($value,$type) ?><?php endif; ?></td><?php endforeach; ?></tr><?php endforeach; endif; ?>
+    </tbody></table></body></html><?php
+    exit;
+}
+
+if ($format === 'excel') export_excel_response($report, $template, $safeName, $generated, $operator);
+
+$logoPath = realpath(__DIR__ . '/../assets/img/school-logo.png');
+$canRenderLogo = $format !== 'pdf' || extension_loaded('gd');
+$logoData = $logoPath && $canRenderLogo ? 'data:image/png;base64,' . base64_encode((string)file_get_contents($logoPath)) : '';
+ob_start();
+?>
 <!DOCTYPE html><html lang="id"><head><meta charset="UTF-8"><title><?= report_e($report['title']) ?></title><style>
 @page{margin:12mm;size:<?= $registry[$template]['orientation']==='landscape'?'A4 landscape':'A4 portrait' ?>}*{box-sizing:border-box}body{font-family:Arial,sans-serif;color:#17231d;font-size:9px;margin:0}.toolbar{padding:10px;background:#eef7f2;margin-bottom:12px}.toolbar button{padding:8px 14px;border:0;background:#108952;color:#fff;border-radius:6px;cursor:pointer}.kop{width:100%;border-bottom:3px double #15543c;padding-bottom:8px;margin-bottom:12px}.kop td{border:0}.kop img{width:58px;height:58px;object-fit:contain}.kop h1{font-size:16px;margin:0;text-align:center}.kop p{text-align:center;margin:3px 0}.title{text-align:center;margin:10px 0 12px}.title h2{font-size:14px;margin:0 0 3px}.meta{width:100%;margin-bottom:8px}.meta td{border:0;padding:2px}table.data{border-collapse:collapse;width:100%}.data th,.data td{border:1px solid #9bb9aa;padding:4px;vertical-align:top}.data th{background:#12503a;color:white;text-transform:uppercase;font-size:8px}.data tr:nth-child(even){background:#f4f8f6}.money{text-align:right;white-space:nowrap}.footer{position:fixed;bottom:-7mm;left:0;right:0;border-top:1px solid #aaa;padding-top:3px;color:#666;font-size:7px}.footer:after{content:" · Halaman " counter(page)}.signatures{width:100%;margin-top:24px}.signatures td{border:0;text-align:center;width:50%;height:70px;vertical-align:top}.negative{color:#b42318;font-weight:bold}@media print{.toolbar{display:none}}
 </style></head><body><?php if($format==='print'): ?><div class="toolbar"><button onclick="window.print()">Cetak Laporan</button></div><?php endif; ?>
@@ -21,7 +118,18 @@ ob_start(); ?>
 <table class="data"><thead><tr><th>No</th><?php foreach($report['columns'] as $column): ?><th><?= report_e($column[1]) ?></th><?php endforeach; ?></tr></thead><tbody><?php if(!$report['rows']): ?><tr><td colspan="<?= count($report['columns'])+1 ?>" style="text-align:center">Tidak ada data pada filter terpilih.</td></tr><?php else: foreach($report['rows'] as $index=>$row): ?><tr><td><?= $index+1 ?></td><?php foreach($report['columns'] as $column): $type=$column[2]??'text';$value=$row[$column[0]]??''; ?><td class="<?= $type==='money'?'money':'' ?> <?= is_numeric($value)&&(float)$value<0?'negative':'' ?>"><?= export_cell($value,$type) ?></td><?php endforeach; ?></tr><?php endforeach; endif; ?></tbody></table>
 <?php if($template==='setoran'&&!empty($report['details'])): ?><h3>Rincian Penerimaan Pembayaran</h3><table class="data"><thead><tr><th>Waktu</th><th>No. Transaksi</th><th>Siswa</th><th>Komponen</th><th>Metode</th><th>Nominal</th></tr></thead><tbody><?php foreach($report['details'] as $detail): ?><tr><td><?= report_e($detail['tanggal']) ?></td><td><?= report_e($detail['nomor']) ?></td><td><?= report_e($detail['nis'].' · '.$detail['nama']) ?></td><td><?= report_e($detail['komponen']) ?></td><td><?= report_e($detail['metode']) ?></td><td class="money"><?= report_money($detail['nominal']) ?></td></tr><?php endforeach; ?></tbody></table><?php endif; ?>
 <?php if($template==='setoran'): ?><table class="signatures"><tr><td>Kasir/Petugas,<br><br><br><br>(________________________)</td><td>Bagian Keuangan,<br><br><br><br>(________________________)</td></tr></table><?php endif; ?><div class="footer">SistemSPP · Data laporan bersifat live dan mengikuti koreksi transaksi sampai saat laporan dibuat.</div></body></html>
-<?php $html=ob_get_clean();$safeName=preg_replace('/[^a-z0-9_-]+/i','-',strtolower($template)).'-'.date('Ymd-His');
-if($format==='excel'){header('Content-Type: application/vnd.ms-excel; charset=UTF-8');header('Content-Disposition: attachment; filename="'.$safeName.'.xls"');echo "\xEF\xBB\xBF".$html;exit;}
-if($format==='pdf'){require_once '../vendor/autoload.php';$options=new \Dompdf\Options();$options->set('isRemoteEnabled',false);$options->set('isHtml5ParserEnabled',true);$dompdf=new \Dompdf\Dompdf($options);$dompdf->loadHtml($html,'UTF-8');$dompdf->setPaper('A4',$registry[$template]['orientation']);$dompdf->render();$dompdf->stream($safeName.'.pdf',['Attachment'=>true]);exit;}
+<?php
+$html = ob_get_clean();
+if ($format === 'pdf') {
+    require_once '../vendor/autoload.php';
+    $options = new \Dompdf\Options();
+    $options->set('isRemoteEnabled', false);
+    $options->set('isHtml5ParserEnabled', true);
+    $dompdf = new \Dompdf\Dompdf($options);
+    $dompdf->loadHtml($html, 'UTF-8');
+    $dompdf->setPaper('A4', $registry[$template]['orientation']);
+    $dompdf->render();
+    $dompdf->stream($safeName . '.pdf', ['Attachment' => true]);
+    exit;
+}
 echo $html;

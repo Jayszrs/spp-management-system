@@ -450,7 +450,7 @@ $canEditOpening = !$editStudent || (int)($editStudent['history_count'] ?? 0) ===
   <link rel="icon" type="image/png" href="../assets/img/favicon.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="../assets/css/style.css?v=4.7" />
+  <link rel="stylesheet" href="../assets/css/style.css?v=7.4" />
   <script>(function(){var t=localStorage.getItem('spp_theme')||'dark';document.documentElement.setAttribute('data-theme',t);})();</script>
 </head>
 <body>
@@ -492,7 +492,7 @@ $canEditOpening = !$editStudent || (int)($editStudent['history_count'] ?? 0) ===
             </div>
             <div class="field-row">
               <label class="field-label" for="kelas-baru">Kelas/Rombel</label>
-              <select class="field-input field-select" id="kelas-baru" name="master_kelas_id" required>
+              <select class="field-input field-select" id="kelas-baru" name="master_kelas_id" required data-class-combobox data-placeholder="Ketik kelas/rombel...">
                 <option value="">-- Pilih Kelas/Rombel --</option>
                 <?php $selectedClassId = (int)form_student_value('master_kelas_id', $oldInput, $formStudent, $fieldMap, 0); foreach ($classOptions as $classOption): ?>
                 <option value="<?= (int)$classOption['id'] ?>" <?= $selectedClassId === (int)$classOption['id'] ? 'selected' : '' ?>><?= htmlspecialchars($classOption['label']) ?></option>
@@ -592,7 +592,7 @@ $canEditOpening = !$editStudent || (int)($editStudent['history_count'] ?? 0) ===
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
             <input type="search" name="q" value="<?= htmlspecialchars($query) ?>" placeholder="Cari nama, NIS, atau NIS Diknas..." />
           </div>
-          <select class="field-input field-select filter-sel" name="kelas">
+          <select class="field-input field-select filter-sel" name="kelas" data-class-combobox data-placeholder="Semua kelas atau ketik rombel...">
             <option value="">Semua Kelas</option>
             <?php foreach ($classOptions as $classOption): ?><option value="<?= (int)$classOption['id'] ?>" <?= $filterClass === (int)$classOption['id'] ? 'selected' : '' ?>><?= htmlspecialchars($classOption['label']) ?></option><?php endforeach; ?>
           </select>
@@ -647,7 +647,7 @@ $canEditOpening = !$editStudent || (int)($editStudent['history_count'] ?? 0) ===
     </main>
   </div>
 
-  <script src="../assets/js/app.js?v=3.8"></script>
+  <script src="../assets/js/app.js?v=7.4"></script>
   <script>
     document.addEventListener('DOMContentLoaded', function () {
       const toggle = document.getElementById('advanced-enabled');

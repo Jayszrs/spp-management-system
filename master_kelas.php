@@ -59,11 +59,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt = $koneksi->prepare('UPDATE master_kelas SET is_active = IF(is_active = 1, 0, 1) WHERE id = ?');
             $stmt->bind_param('i', $id); $stmt->execute(); $stmt->close();
             $message = 'Status rombel berhasil diubah.';
+        } elseif ($action === 'promote_year') {
+            $sourceLabel = (string)($_POST['source_tahun_ajaran'] ?? '');
+            $targetLabel = (string)($_POST['target_tahun_ajaran'] ?? '');
+            $koneksi->begin_transaction();
+            $result = class_promote_academic_year($koneksi, $sourceLabel, $targetLabel);
+            $koneksi->commit();
+            $message = 'Naik kelas ' . $result['source'] . ' ke ' . $result['target'] . ' selesai: '
+                . number_format((int)$result['promoted']) . ' siswa naik kelas dan '
+                . number_format((int)$result['graduated']) . ' siswa kelas 6 diluluskan.';
         } else {
             throw new RuntimeException('Aksi Master Kelas tidak dikenali.');
         }
         $_SESSION['flash'] = ['type' => 'success', 'msg' => $message];
     } catch (Throwable $error) {
+        try { $koneksi->rollback(); } catch (Throwable $ignored) {}
         $_SESSION['flash'] = ['type' => 'error', 'msg' => $error->getMessage()];
     }
     class_master_redirect();
@@ -77,6 +87,13 @@ $classes = $koneksi->query("SELECT mk.*,
     (SELECT COUNT(*) FROM siswa s WHERE s.master_kelas_id = mk.id AND s.is_active=1) AS siswa_count,
     (SELECT COUNT(*) FROM siswa_tahun_ajaran sta WHERE sta.master_kelas_id = mk.id) AS history_count
     FROM master_kelas mk ORDER BY mk.tingkat, mk.is_placeholder, mk.kode_rombel")->fetch_all(MYSQLI_ASSOC);
+$academicYears = $koneksi->query("SELECT label,status FROM tahun_ajaran ORDER BY label DESC")->fetch_all(MYSQLI_ASSOC);
+$promotionSource = (string)($_GET['source_tahun_ajaran'] ?? ($academicYears[0]['label'] ?? du_current_academic_year()));
+try { $promotionSource = du_normalize_academic_year($promotionSource); }
+catch (Throwable $ignored) { $promotionSource = du_current_academic_year(); }
+$promotionTarget = class_next_academic_year_label($promotionSource);
+try { $promotionPreview = class_promotion_preview($koneksi, $promotionSource, $promotionTarget); $promotionPreviewError = ''; }
+catch (Throwable $error) { $promotionPreview = ['source'=>$promotionSource,'target'=>$promotionTarget,'total'=>0,'graduated'=>0,'summary'=>[],'missing_classes'=>[]]; $promotionPreviewError = $error->getMessage(); }
 ?>
 <!DOCTYPE html>
 <html lang="id">
@@ -84,7 +101,7 @@ $classes = $koneksi->query("SELECT mk.*,
   <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
   <title>Master Kelas | SistemSPP</title>
   <link rel="icon" type="image/png" href="assets/img/favicon.png">
-  <link rel="stylesheet" href="assets/css/style.css?v=6.5">
+  <link rel="stylesheet" href="assets/css/style.css?v=7.4">
   <script>(function(){var t=localStorage.getItem('spp_theme')||'dark';document.documentElement.setAttribute('data-theme',t);})();</script>
 </head>
 <body>
@@ -120,7 +137,36 @@ $classes = $koneksi->query("SELECT mk.*,
       <?php endforeach; ?>
       </tbody></table></div>
     </div>
+
+    <div class="main-card">
+      <div class="card-title-row">
+        <div><div class="card-title">Naik Kelas Tahun Ajaran</div><p class="payment-auto-note">Siswa kelas 1 sampai 5 naik otomatis dengan huruf rombel yang sama. Kelas 6 diluluskan dan diarsipkan.</p></div>
+      </div>
+      <form method="get" class="report-filter-grid">
+        <div class="field-row"><label class="field-label">Tahun Ajaran Sumber</label><select class="field-input field-select" name="source_tahun_ajaran" onchange="this.form.submit()"><?php foreach($academicYears as $year): ?><option value="<?= htmlspecialchars($year['label']) ?>" <?= $promotionSource===$year['label']?'selected':'' ?>><?= htmlspecialchars($year['label'].' · '.$year['status']) ?></option><?php endforeach; ?></select></div>
+        <div class="field-row"><label class="field-label">Target Berikutnya</label><input class="field-input" value="<?= htmlspecialchars($promotionTarget) ?>" readonly></div>
+      </form>
+      <?php if($promotionPreviewError): ?><div class="alert alert-error"><?= htmlspecialchars($promotionPreviewError) ?></div><?php endif; ?>
+      <div class="report-summary-grid" style="margin-top:16px">
+        <div class="report-summary-card"><span>Total Diproses</span><strong><?= number_format((int)$promotionPreview['total']) ?> siswa</strong></div>
+        <div class="report-summary-card"><span>Kelas 6 Lulus</span><strong><?= number_format((int)$promotionPreview['graduated']) ?> siswa</strong></div>
+        <div class="report-summary-card"><span>Rombel Dibuat</span><strong><?= number_format(count($promotionPreview['missing_classes'])) ?></strong></div>
+      </div>
+      <div class="table-container" style="margin-top:16px"><table class="payment-table responsive-table"><thead><tr><th>No</th><th>Dari</th><th>Menjadi</th><th>Jumlah Siswa</th></tr></thead><tbody>
+        <?php if(empty($promotionPreview['summary'])): ?><tr><td colspan="4"><div class="empty-state"><p>Tidak ada siswa aktif pada tahun ajaran sumber.</p></div></td></tr><?php else: foreach($promotionPreview['summary'] as $index=>$row): ?>
+        <tr><td data-label="No"><?= $index+1 ?></td><td data-label="Dari"><?= htmlspecialchars($row['source']) ?></td><td data-label="Menjadi"><?= htmlspecialchars($row['target']) ?></td><td data-label="Jumlah Siswa"><?= number_format((int)$row['count']) ?></td></tr>
+        <?php endforeach; endif; ?>
+      </tbody></table></div>
+      <?php if(!empty($promotionPreview['missing_classes'])): ?><p class="payment-auto-note" style="margin-top:10px">Rombel target yang belum ada akan dibuat otomatis: <?= htmlspecialchars(implode(', ', array_map(static fn($row) => $row['tingkat'].$row['kode_rombel'], $promotionPreview['missing_classes']))) ?>.</p><?php endif; ?>
+      <form method="post" style="margin-top:16px" onsubmit="return confirm('Proses naik kelas dari <?= htmlspecialchars($promotionSource, ENT_QUOTES) ?> ke <?= htmlspecialchars($promotionTarget, ENT_QUOTES) ?>? Pastikan tagihan tahun target belum diterbitkan.')">
+        <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_master_kelas']) ?>">
+        <input type="hidden" name="aksi" value="promote_year">
+        <input type="hidden" name="source_tahun_ajaran" value="<?= htmlspecialchars($promotionSource) ?>">
+        <input type="hidden" name="target_tahun_ajaran" value="<?= htmlspecialchars($promotionTarget) ?>">
+        <button class="btn btn-primary" type="submit" <?= $promotionPreviewError || (int)$promotionPreview['total'] <= 0 ? 'disabled' : '' ?>>Proses Naik Kelas</button>
+      </form>
+    </div>
   </main>
 </div>
-<script src="assets/js/app.js?v=6.5"></script><script>document.addEventListener('DOMContentLoaded',function(){autoHideFlash();});</script>
+<script src="assets/js/app.js?v=7.4"></script><script>document.addEventListener('DOMContentLoaded',function(){autoHideFlash();});</script>
 </body></html>

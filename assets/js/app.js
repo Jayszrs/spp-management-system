@@ -1560,6 +1560,235 @@ document.addEventListener('DOMContentLoaded', function () {
   });
 });
 
+function normalizeClassComboboxText(value) {
+  return String(value || '').toLowerCase().replace(/\s+/g, ' ').trim();
+}
+
+function compactClassComboboxText(value) {
+  return normalizeClassComboboxText(value).replace(/^kelas\s+/, '').replace(/\s+/g, '');
+}
+
+function classComboboxAliases(option) {
+  const text = option.textContent.trim();
+  const normalized = normalizeClassComboboxText(text);
+  const compact = compactClassComboboxText(text);
+  return Array.from(new Set([
+    normalized,
+    compact,
+    normalized.replace(/^kelas\s+/, ''),
+    compact.replace(/^kelas/, ''),
+  ].filter(Boolean)));
+}
+
+function isClassComboboxClearOption(option) {
+  if (!option) return false;
+  const value = String(option.value || '');
+  const label = normalizeClassComboboxText(option.textContent);
+  return value === '' || (value === '0' && label.includes('semua'));
+}
+
+function setClassComboboxValue(select, option, dispatch = true) {
+  if (!select || !option) return;
+  select.value = option.value;
+  if (dispatch) select.dispatchEvent(new Event('change', { bubbles: true }));
+}
+
+function clearClassComboboxValue(select, dispatch = true) {
+  if (!select) return;
+  const clearOption = Array.from(select.options).find(isClassComboboxClearOption);
+  if (clearOption) {
+    setClassComboboxValue(select, clearOption, dispatch);
+  } else {
+    select.value = '';
+    if (dispatch) select.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+}
+
+function closeClassCombobox(box) {
+  const panel = box?.querySelector('.class-combobox-panel');
+  const input = box?.querySelector('.class-combobox-input');
+  if (!panel || !input) return;
+  box.classList.remove('is-open');
+  panel.hidden = true;
+  input.setAttribute('aria-expanded', 'false');
+}
+
+function syncClassComboboxInput(select, input) {
+  const selected = select.options[select.selectedIndex];
+  input.value = selected && !isClassComboboxClearOption(selected) ? selected.textContent.trim() : '';
+  input.setCustomValidity('');
+}
+
+function findExactClassComboboxOption(select, query) {
+  const normalizedQuery = normalizeClassComboboxText(query);
+  const compactQuery = compactClassComboboxText(query);
+  if (!normalizedQuery) return null;
+  return Array.from(select.options).find(option => {
+    if (isClassComboboxClearOption(option)) return false;
+    return classComboboxAliases(option).includes(normalizedQuery)
+      || classComboboxAliases(option).includes(compactQuery);
+  }) || null;
+}
+
+function renderClassComboboxOptions(box, query) {
+  const select = box.querySelector('select[data-class-combobox]');
+  const input = box.querySelector('.class-combobox-input');
+  const panel = box.querySelector('.class-combobox-panel');
+  if (!select || !input || !panel) return;
+  const normalizedQuery = normalizeClassComboboxText(query);
+  const compactQuery = compactClassComboboxText(query);
+  const options = Array.from(select.options);
+  const matches = options.filter(option => {
+    if (isClassComboboxClearOption(option)) return !normalizedQuery;
+    const aliases = classComboboxAliases(option);
+    return !normalizedQuery || aliases.some(alias => alias.includes(normalizedQuery) || alias.includes(compactQuery));
+  }).slice(0, 30);
+  panel.innerHTML = '';
+  if (matches.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'class-combobox-empty';
+    empty.textContent = 'Rombel tidak ditemukan';
+    panel.appendChild(empty);
+  } else {
+    matches.forEach(option => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'class-combobox-option';
+      button.textContent = option.textContent.trim();
+      button.setAttribute('role', 'option');
+      button.setAttribute('aria-selected', select.value === option.value ? 'true' : 'false');
+      button.classList.toggle('is-active', select.value === option.value);
+      button.addEventListener('mousedown', function (event) {
+        event.preventDefault();
+        setClassComboboxValue(select, option, false);
+        syncClassComboboxInput(select, input);
+        select.dispatchEvent(new Event('change', { bubbles: true }));
+        closeClassCombobox(box);
+      });
+      panel.appendChild(button);
+    });
+  }
+  box.classList.add('is-open');
+  panel.hidden = false;
+  input.setAttribute('aria-expanded', 'true');
+  const active = panel.querySelector('.class-combobox-option.is-active');
+  if (active) requestAnimationFrame(() => active.scrollIntoView({ block: 'nearest' }));
+}
+
+function initClassComboboxes() {
+  document.querySelectorAll('select[data-class-combobox]').forEach(select => {
+    if (select.dataset.classComboboxReady === '1') return;
+    select.dataset.classComboboxReady = '1';
+    const originalParent = select.parentNode;
+    if (!originalParent) return;
+    const box = document.createElement('div');
+    box.className = 'class-combobox';
+    const control = document.createElement('div');
+    control.className = 'class-combobox-control';
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'field-input class-combobox-input';
+    input.placeholder = select.dataset.placeholder || 'Ketik kelas/rombel...';
+    input.autocomplete = 'off';
+    input.spellcheck = false;
+    input.setAttribute('aria-expanded', 'false');
+    input.setAttribute('aria-haspopup', 'listbox');
+    input.setAttribute('role', 'combobox');
+    if (select.required) input.required = true;
+    const toggle = document.createElement('button');
+    toggle.type = 'button';
+    toggle.className = 'class-combobox-toggle';
+    toggle.setAttribute('aria-label', 'Tampilkan pilihan kelas');
+    toggle.innerHTML = '&#9662;';
+    const panel = document.createElement('div');
+    panel.className = 'class-combobox-panel';
+    panel.setAttribute('role', 'listbox');
+    panel.hidden = true;
+    originalParent.insertBefore(box, select);
+    box.appendChild(select);
+    control.appendChild(input);
+    control.appendChild(toggle);
+    box.appendChild(control);
+    box.appendChild(panel);
+    select.classList.add('class-combobox-native');
+    syncClassComboboxInput(select, input);
+
+    input.addEventListener('focus', () => renderClassComboboxOptions(box, input.value));
+    input.addEventListener('click', () => renderClassComboboxOptions(box, input.value));
+    input.addEventListener('input', function () {
+      const exact = findExactClassComboboxOption(select, input.value);
+      if (exact) {
+        setClassComboboxValue(select, exact, false);
+        select.dispatchEvent(new Event('change', { bubbles: true }));
+        input.setCustomValidity('');
+      } else if (normalizeClassComboboxText(input.value) === '') {
+        clearClassComboboxValue(select, true);
+        input.setCustomValidity('');
+      } else {
+        select.value = '';
+        if (select.required) input.setCustomValidity('Pilih kelas/rombel dari daftar.');
+      }
+      renderClassComboboxOptions(box, input.value);
+    });
+    input.addEventListener('keydown', function (event) {
+      if (event.key === 'Escape') {
+        closeClassCombobox(box);
+        return;
+      }
+      if (event.key !== 'Enter') return;
+      const first = panel.querySelector('.class-combobox-option');
+      if (!first || panel.hidden) return;
+      event.preventDefault();
+      first.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+    });
+    input.addEventListener('blur', function () {
+      window.setTimeout(function () {
+        const exact = findExactClassComboboxOption(select, input.value);
+        if (exact) {
+          setClassComboboxValue(select, exact);
+          syncClassComboboxInput(select, input);
+        } else if (normalizeClassComboboxText(input.value) === '') {
+          clearClassComboboxValue(select);
+          input.setCustomValidity('');
+        } else if (select.required) {
+          input.setCustomValidity('Pilih kelas/rombel dari daftar.');
+        }
+      }, 120);
+    });
+    toggle.addEventListener('click', function () {
+      if (panel.hidden) {
+        input.focus();
+        renderClassComboboxOptions(box, input.value);
+      } else {
+        closeClassCombobox(box);
+      }
+    });
+    select.addEventListener('change', () => syncClassComboboxInput(select, input));
+    select.form?.addEventListener('submit', function (event) {
+      const exact = findExactClassComboboxOption(select, input.value);
+      if (exact) {
+        setClassComboboxValue(select, exact);
+        syncClassComboboxInput(select, input);
+      } else if (normalizeClassComboboxText(input.value) === '') {
+        clearClassComboboxValue(select);
+      }
+      if (!select.required || select.value !== '') return;
+      input.setCustomValidity('Pilih kelas/rombel dari daftar.');
+      input.reportValidity();
+      event.preventDefault();
+    });
+  });
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+  initClassComboboxes();
+  document.addEventListener('mousedown', function (event) {
+    document.querySelectorAll('.class-combobox').forEach(box => {
+      if (!box.contains(event.target)) closeClassCombobox(box);
+    });
+  });
+});
+
 function hitungSisa(key) {
   const total  = parseNumber(document.getElementById(key + '-total')?.value  || 0);
   const bayar  = parseNumber(document.getElementById(key + '-bayar')?.value  || 0);

@@ -3,6 +3,7 @@ session_start();
 if (!isset($_SESSION['admin_id'])) { header('Location: ../login.php'); exit; }
 require_once '../koneksi.php';
 require_once '../includes/auth.php';
+require_once '../includes/kelas.php';
 requireRole(['admin', 'kasir']);
 
 function du_e($value): string {
@@ -30,7 +31,7 @@ function du_history_page_url(array $query, int $page): string {
 }
 
 $search = trim((string)($_GET['q'] ?? ''));
-$filterClass = trim((string)($_GET['kelas'] ?? ''));
+$filterClass = (int)($_GET['kelas'] ?? 0);
 $filterYear = trim((string)($_GET['tahun_ajaran'] ?? ''));
 $filterStatus = trim((string)($_GET['status'] ?? ''));
 $allowedPageSizes = [10, 25, 50, 100];
@@ -38,9 +39,9 @@ $requestedPage = (int)($_GET['page'] ?? 1);
 $requestedPageSize = (int)($_GET['per_page'] ?? 10);
 $perPage = in_array($requestedPageSize, $allowedPageSizes, true) ? $requestedPageSize : 10;
 $page = max(1, $requestedPage);
-$allowedClasses = ['1', '2', '3', '4', '5', '6'];
+$classOptions = class_all($koneksi, true, true);
 $allowedStatuses = ['', 'lunas', 'cicilan'];
-if (!in_array($filterClass, array_merge([''], $allowedClasses), true)) $filterClass = '';
+if ($filterClass > 0 && !array_filter($classOptions, static fn($row) => (int)$row['id'] === $filterClass)) $filterClass = 0;
 if (!in_array($filterStatus, $allowedStatuses, true)) $filterStatus = '';
 if ($filterYear !== '' && !preg_match('/^\d{4}\/\d{4}$/', $filterYear)) $filterYear = '';
 
@@ -56,9 +57,9 @@ if ($search !== '') {
     $where[] = '(tdu.no_induk LIKE ? OR s.NAMA LIKE ? OR s.NO_induk_diknas LIKE ?)';
     $params[] = $like; $params[] = $like; $params[] = $like; $types .= 'sss';
 }
-if ($filterClass !== '') {
-    $where[] = 'tdu.kelas_snapshot = ?';
-    $params[] = $filterClass; $types .= 's';
+if ($filterClass > 0) {
+    $where[] = 'sta.master_kelas_id = ?';
+    $params[] = $filterClass; $types .= 'i';
 }
 if ($filterYear !== '') {
     $where[] = 'ta.label = ?';
@@ -68,6 +69,10 @@ if ($filterYear !== '') {
 $aggregateSql = "
     SELECT tdu.id AS tagihan_id, tdu.no_induk, tdu.kelas_snapshot AS kelas,
            ta.label AS th_ajaran, s.NAMA AS nama, s.NO_induk_diknas, s.KELAS AS kelas_siswa,
+           COALESCE(sta.kelas_rombel_snapshot,
+             CASE WHEN mk.is_placeholder = 1 THEN CONCAT('Kelas ', tdu.kelas_snapshot, ' (Belum Ditentukan)')
+                  ELSE CONCAT(mk.tingkat, UPPER(mk.kode_rombel)) END
+           ) AS kelas_label,
            tdu.nominal_tagihan AS master_total,
            COALESCE(SUM(bd.jumlah), 0) AS paid,
            GREATEST(0, tdu.nominal_tagihan - COALESCE(SUM(bd.jumlah), 0)) AS remaining,
@@ -75,11 +80,13 @@ $aggregateSql = "
                 THEN 'lunas' ELSE 'cicilan' END AS payment_status
     FROM tagihan_daftar_ulang tdu
     JOIN tahun_ajaran ta ON ta.id = tdu.tahun_ajaran_id
+    JOIN siswa_tahun_ajaran sta ON sta.id = tdu.penempatan_id
     JOIN siswa s ON s.NO_INDUK = tdu.no_induk
+    LEFT JOIN master_kelas mk ON mk.id = sta.master_kelas_id
     LEFT JOIN bayar_du bd ON bd.tagihan_daftar_ulang_id = tdu.id
     WHERE " . implode(' AND ', $where) . "
     GROUP BY tdu.id, tdu.no_induk, tdu.kelas_snapshot, ta.label, s.NAMA, s.NO_induk_diknas,
-             s.KELAS, tdu.nominal_tagihan
+             s.KELAS, sta.kelas_rombel_snapshot, mk.is_placeholder, mk.tingkat, mk.kode_rombel, tdu.nominal_tagihan
 ";
 $havingSql = '';
 if ($filterStatus === 'lunas') $havingSql = ' HAVING remaining <= 0.001';
@@ -105,7 +112,7 @@ $page = min($page, $totalPages);
 $offset = ($page - 1) * $perPage;
 
 $pageSql = $aggregateSql . $havingSql . "
-    ORDER BY ta.label DESC, CAST(tdu.kelas_snapshot AS UNSIGNED), s.NAMA, tdu.id
+    ORDER BY ta.label DESC, sta.kelas_rombel_snapshot, s.NAMA, tdu.id
     LIMIT ? OFFSET ?";
 $pageParams = $params;
 $pageParams[] = $perPage;
@@ -123,7 +130,7 @@ foreach ($pageRows as $row) {
     $group = [
         'tagihan_id' => (int)$row['tagihan_id'],
         'no_induk' => $row['no_induk'], 'no_induk_diknas' => $row['NO_induk_diknas'], 'nama' => $row['nama'],
-        'kelas' => $row['kelas'], 'kelas_siswa' => $row['kelas_siswa'],
+        'kelas' => $row['kelas'], 'kelas_label' => $row['kelas_label'], 'kelas_siswa' => $row['kelas_siswa'],
         'th_ajaran' => $row['th_ajaran'], 'total' => (float)$row['master_total'],
         'paid' => (float)$row['paid'], 'remaining' => (float)$row['remaining'],
         'status' => $row['payment_status'], 'transactions' => [],
@@ -166,7 +173,7 @@ $pageWindowStart = max(1, $page - 2);
 $pageWindowEnd = min($totalPages, $pageWindowStart + 4);
 $pageWindowStart = max(1, $pageWindowEnd - 4);
 $paginationQuery = array_filter([
-    'q'=>$search, 'kelas'=>$filterClass, 'tahun_ajaran'=>$filterYear,
+    'q'=>$search, 'kelas'=>$filterClass > 0 ? (string)$filterClass : '', 'tahun_ajaran'=>$filterYear,
     'status'=>$filterStatus, 'per_page'=>$perPage,
 ], static fn($value) => $value !== '');
 
@@ -183,7 +190,7 @@ unset($_SESSION['flash']);
   <meta name="description" content="Rekap pembayaran dan cicilan daftar ulang siswa." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="../assets/css/style.css?v=5.7" />
+  <link rel="stylesheet" href="../assets/css/style.css?v=7.4" />
   <script>(function(){var t=localStorage.getItem('spp_theme')||'dark';document.documentElement.setAttribute('data-theme',t);})();</script>
 </head>
 <body>
@@ -207,7 +214,7 @@ unset($_SESSION['flash']);
 
         <form method="GET" class="filter-bar du-history-filter">
           <div class="search-box"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input type="text" name="q" value="<?= du_e($search) ?>" placeholder="Cari nama / NIS / NIS Diknas..." /></div>
-          <select class="field-input field-select filter-sel" name="kelas"><option value="">Kelas 1–6</option><?php foreach ($allowedClasses as $class): ?><option value="<?= $class ?>" <?= $filterClass === $class ? 'selected' : '' ?>>Kelas <?= $class ?></option><?php endforeach; ?></select>
+          <select class="field-input field-select filter-sel" name="kelas" data-class-combobox data-placeholder="Semua rombel atau ketik kelas..."><option value="">Semua Rombel</option><?php foreach ($classOptions as $class): ?><option value="<?= (int)$class['id'] ?>" <?= $filterClass === (int)$class['id'] ? 'selected' : '' ?>><?= du_e(class_label($class)) ?></option><?php endforeach; ?></select>
           <select class="field-input field-select filter-sel" name="tahun_ajaran"><option value="">Semua Tahun Ajaran</option><?php foreach ($academicYears as $year): ?><option value="<?= du_e($year) ?>" <?= $filterYear === $year ? 'selected' : '' ?>><?= du_e($year) ?></option><?php endforeach; ?></select>
           <select class="field-input field-select filter-sel" name="status"><option value="">Semua Status</option><option value="cicilan" <?= $filterStatus === 'cicilan' ? 'selected' : '' ?>>Belum Lunas</option><option value="lunas" <?= $filterStatus === 'lunas' ? 'selected' : '' ?>>Lunas</option></select>
           <select class="field-input field-select filter-sel du-page-size" name="per_page" aria-label="Jumlah data per halaman"><?php foreach ($allowedPageSizes as $pageSize): ?><option value="<?= $pageSize ?>" <?= $perPage === $pageSize ? 'selected' : '' ?>><?= $pageSize ?> / halaman</option><?php endforeach; ?></select>
@@ -230,7 +237,7 @@ unset($_SESSION['flash']);
               <tr>
                 <td data-label="No"><?= $offset + $index + 1 ?></td>
                 <td data-label="Siswa"><strong><?= du_e($group['nama']) ?></strong><small class="du-history-nis">NIS <?= du_e($group['no_induk']) ?><?= !empty($group['no_induk_diknas']) ? ' · Diknas ' . du_e($group['no_induk_diknas']) : '' ?></small></td>
-                <td data-label="Kelas / Tahun"><strong>Kelas <?= du_e($group['kelas']) ?></strong><small class="du-history-nis"><?= du_e($group['th_ajaran']) ?></small></td>
+                <td data-label="Kelas / Tahun"><strong><?= du_e($group['kelas_label'] ?: ('Kelas '.$group['kelas'])) ?></strong><small class="du-history-nis"><?= du_e($group['th_ajaran']) ?></small></td>
                 <td data-label="Tagihan" class="nominal"><?= du_money($group['total']) ?></td>
                 <td data-label="Terbayar" class="nominal"><?= du_money($group['paid']) ?></td>
                 <td data-label="Sisa" class="nominal"><?= du_money($group['remaining']) ?></td>
@@ -293,6 +300,6 @@ unset($_SESSION['flash']);
       </div>
     </main>
   </div>
-  <script src="../assets/js/app.js?v=4.4"></script>
+  <script src="../assets/js/app.js?v=7.4"></script>
 </body>
 </html>

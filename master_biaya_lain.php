@@ -204,7 +204,7 @@ $activeStudents = $koneksi->query("SELECT s.NO_INDUK,s.NAMA,s.KELAS,s.master_kel
   <link rel="icon" type="image/png" href="assets/img/favicon.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="assets/css/style.css?v=4.7" />
+  <link rel="stylesheet" href="assets/css/style.css?v=7.4" />
   <script>(function(){var t=localStorage.getItem('spp_theme')||'dark';document.documentElement.setAttribute('data-theme',t);})();</script>
 </head>
 <body>
@@ -267,7 +267,7 @@ $activeStudents = $koneksi->query("SELECT s.NO_INDUK,s.NAMA,s.KELAS,s.master_kel
             <div class="field-row"><label class="field-label">Item Biaya</label><select class="field-input field-select" name="master_id" id="publish-fee" required><?php foreach($activeMasters as $master): ?><option value="<?= (int)$master['id'] ?>" data-nominal="<?= (float)$master['nominal'] ?>"><?= htmlspecialchars($master['nama']) ?> — Rp <?= number_format((float)$master['nominal'],0,',','.') ?></option><?php endforeach; ?></select></div>
             <div class="field-row"><label class="field-label">Target</label><select class="field-input field-select" name="target" id="publish-target"><option value="all">Semua siswa aktif</option><option value="tingkat">Tingkat kelas</option><option value="rombel">Rombel tertentu</option><option value="siswa">Pilih siswa</option></select></div>
             <div class="field-row publish-target-field" data-target="tingkat" hidden><label class="field-label">Tingkat</label><select class="field-input field-select" name="tingkat" id="publish-level"><?php for($i=1;$i<=6;$i++): ?><option value="<?= $i ?>">Kelas <?= $i ?></option><?php endfor; ?></select></div>
-            <div class="field-row publish-target-field" data-target="rombel" hidden><label class="field-label">Rombel</label><select class="field-input field-select" name="master_kelas_id" id="publish-class"><?php foreach($activeClasses as $class): ?><option value="<?= (int)$class['id'] ?>"><?= htmlspecialchars(class_label($class)) ?></option><?php endforeach; ?></select></div>
+            <div class="field-row publish-target-field" data-target="rombel" hidden><label class="field-label">Rombel</label><select class="field-input field-select" name="master_kelas_id" id="publish-class" data-class-combobox data-placeholder="Ketik rombel tujuan..."><?php foreach($activeClasses as $class): ?><option value="<?= (int)$class['id'] ?>"><?= htmlspecialchars(class_label($class)) ?></option><?php endforeach; ?></select></div>
             <div class="field-row publish-target-field" data-target="siswa" hidden><label class="field-label">Siswa (bisa lebih dari satu)</label><select class="field-input field-select" name="no_induk[]" id="publish-students" multiple size="6"><?php foreach($activeStudents as $student): ?><option value="<?= htmlspecialchars($student['NO_INDUK']) ?>"><?= htmlspecialchars($student['NO_INDUK'].' — '.$student['NAMA'].' — '.class_label($student)) ?></option><?php endforeach; ?></select></div>
           </div>
           <div class="report-summary-grid" style="margin-top:16px"><div class="report-summary-card"><span>Pratinjau Siswa</span><strong id="publish-preview-count">0</strong></div><div class="report-summary-card"><span>Total Nominal</span><strong id="publish-preview-total">Rp 0</strong></div></div>
@@ -313,7 +313,7 @@ $activeStudents = $koneksi->query("SELECT s.NO_INDUK,s.NAMA,s.KELAS,s.master_kel
       </div>
     </main>
   </div>
-  <script src="assets/js/app.js?v=3.1"></script>
+  <script src="assets/js/app.js?v=7.4"></script>
   <script>
     document.addEventListener('DOMContentLoaded', function () {
       var nominal = document.getElementById('nominal-biaya');
