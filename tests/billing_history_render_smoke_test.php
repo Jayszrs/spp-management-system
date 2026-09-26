@@ -44,8 +44,19 @@ try {
     if (!str_contains($html, 'rincian tagihan')) {
         throw new RuntimeException('Jumlah rincian tagihan tidak ditampilkan.');
     }
-    if (!str_contains($html, 'assets/css/style.css?v=10.9')) {
+    if (!str_contains($html, 'assets/css/style.css?v=10.10')) {
         throw new RuntimeException('Versi cache stylesheet laporan belum diperbarui.');
+    }
+    foreach (['report-field-tahun-tagihan', 'report-field-komponen-tagihan', 'report-field-status', 'report-field-siswa-status'] as $filterClass) {
+        if (!str_contains($html, $filterClass)) {
+            throw new RuntimeException('Filter server-side tidak lengkap: ' . $filterClass);
+        }
+    }
+    if (!str_contains($html, 'report-student-field') || !str_contains($html, 'report-per-page-field')) {
+        throw new RuntimeException('Susunan pencarian siswa dan pagination laporan tidak lengkap.');
+    }
+    if (str_contains($html, "addSelect('Tahun Ajaran'")) {
+        throw new RuntimeException('Filter Riwayat Tagihan masih bergantung pada injeksi JavaScript.');
     }
 
     session_write_close();

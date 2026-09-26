@@ -10254,3 +10254,166 @@ a.btn {
 .authorization-modal[hidden]{display:none!important}.authorization-modal{position:fixed;inset:0;z-index:10070;display:grid;place-items:center;padding:20px;background:rgba(15,34,26,.56)}.authorization-modal-card{width:min(520px,100%);padding:24px;border-radius:8px;background:var(--bg-card);box-shadow:0 22px 70px rgba(7,38,25,.3)}.authorization-modal-card h3{margin:0 0 7px}.authorization-modal-card>p{margin:0 0 17px;color:var(--text-muted)}.authorization-modal-actions{display:flex;justify-content:flex-end;gap:9px;margin-top:16px}.modal-open{overflow:hidden}
 @media(max-width:1050px){.authorization-filter-form{grid-template-columns:1fr 1fr}.authorization-filter-form .btn{width:100%}.authorization-decision-actions{align-items:stretch;flex-direction:column}.authorization-decision-actions form{width:100%}.authorization-decision-actions .field-input{width:auto;flex:1}}
 @media(max-width:700px){.report-template-shell .report-global-filter-form.report-filter-tunggakan-siswa{grid-template-columns:1fr;grid-template-areas:"label" "kelas" "status" "perpage" "student" "actions"}.authorization-hero{align-items:stretch;flex-direction:column;margin:14px;padding:20px}.authorization-hero-count{min-width:0}.authorization-filter-form{grid-template-columns:1fr}.authorization-list{margin:0 14px 22px}.authorization-card-head,.authorization-card-footer{align-items:stretch;flex-direction:column}.authorization-comparison{grid-template-columns:1fr}.authorization-comparison svg{transform:rotate(90deg)}.authorization-decision-actions form{align-items:stretch;flex-direction:column}.authorization-decision-actions .field-input{width:100%}.authorization-modal-actions{display:grid;grid-template-columns:1fr 1fr}}
+
+/* Stable layouts for debt, billing-history, and daily cash report filters. */
+.report-template-shell .report-global-filter-form.report-filter-tunggakan-siswa {
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  grid-template-areas:
+    "heading heading heading"
+    "kelas student-status per-page"
+    "student student student"
+    "actions actions actions" !important;
+  gap: 11px 12px !important;
+}
+.report-filter-tunggakan-siswa > .recap-filter-label { grid-area: heading !important; }
+.report-filter-tunggakan-siswa > .report-field-kelas { grid-area: kelas !important; }
+.report-filter-tunggakan-siswa > .report-field-siswa-status { grid-area: student-status !important; }
+.report-filter-tunggakan-siswa > .report-per-page-field { grid-area: per-page !important; }
+.report-filter-tunggakan-siswa > .report-student-field { grid-area: student !important; }
+.report-filter-tunggakan-siswa > .report-filter-actions { grid-area: actions !important; }
+
+.report-template-shell .report-global-filter-form.report-filter-riwayat-tagihan {
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  grid-template-areas:
+    "heading heading heading"
+    "kelas school-year component"
+    "status student-status per-page"
+    "student student student"
+    "actions actions actions" !important;
+  gap: 11px 12px !important;
+}
+.report-filter-riwayat-tagihan > .recap-filter-label { grid-area: heading !important; }
+.report-filter-riwayat-tagihan > .report-field-kelas { grid-area: kelas !important; }
+.report-filter-riwayat-tagihan > .report-field-tahun-tagihan { grid-area: school-year !important; }
+.report-filter-riwayat-tagihan > .report-field-komponen-tagihan { grid-area: component !important; }
+.report-filter-riwayat-tagihan > .report-field-status { grid-area: status !important; }
+.report-filter-riwayat-tagihan > .report-field-siswa-status { grid-area: student-status !important; }
+.report-filter-riwayat-tagihan > .report-per-page-field { grid-area: per-page !important; }
+.report-filter-riwayat-tagihan > .report-student-field { grid-area: student !important; }
+.report-filter-riwayat-tagihan > .report-filter-actions { grid-area: actions !important; }
+
+.report-filter-tunggakan-siswa > :is(.field-row,.report-student-field,.report-per-page-field,.report-filter-actions),
+.report-filter-riwayat-tagihan > :is(.field-row,.report-student-field,.report-per-page-field,.report-filter-actions) {
+  grid-column: auto !important;
+  min-width: 0;
+  width: 100%;
+}
+.report-filter-tunggakan-siswa > .report-filter-actions,
+.report-filter-riwayat-tagihan > .report-filter-actions {
+  grid-column: 1 / -1 !important;
+}
+
+.report-template-shell .report-global-filter-form.report-filter-setoran {
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  grid-template-areas:
+    "heading heading heading"
+    "date operator method"
+    "actions actions actions" !important;
+  gap: 11px 12px !important;
+}
+.report-filter-setoran > .recap-filter-label { grid-area: heading !important; }
+.report-filter-setoran > .report-date-range-field { grid-area: date !important; }
+.report-filter-setoran > .report-field-operator { grid-area: operator !important; }
+.report-filter-setoran > .report-field-metode { grid-area: method !important; }
+.report-filter-setoran > :is(.field-row,.report-filter-actions) {
+  grid-column: auto !important;
+  min-width: 0;
+  width: 100%;
+}
+.report-filter-setoran > .report-filter-actions {
+  grid-area: actions !important;
+  grid-column: 1 / -1 !important;
+  margin-top: 1px !important;
+  padding: 4px !important;
+}
+
+.report-table-report-filter-setoran > .report-settlement-component-card,
+.report-table-report-filter-setoran > .report-settlement-method-summary,
+.report-table-report-filter-setoran > .report-settlement-total-card {
+  box-sizing: border-box;
+  width: auto;
+  margin-right: 26px;
+  margin-left: 26px;
+}
+.report-table-report-filter-setoran > .report-settlement-component-card {
+  margin-top: 20px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-elevated);
+}
+.report-table-report-filter-setoran .report-settlement-section-head {
+  min-height: 80px;
+  padding: 17px 20px;
+}
+.report-table-report-filter-setoran .report-settlement-component-total {
+  min-width: 176px;
+  padding: 12px 16px;
+}
+.report-table-report-filter-setoran .report-settlement-component-table th,
+.report-table-report-filter-setoran .report-settlement-component-table td {
+  padding: 13px 16px;
+}
+.report-table-report-filter-setoran > .report-settlement-method-summary {
+  margin-top: 18px;
+  padding: 0;
+}
+.report-table-report-filter-setoran .report-settlement-method-summary > h3 { margin: 0 0 11px; }
+.report-table-report-filter-setoran .report-settlement-method-grid { gap: 13px; }
+.report-table-report-filter-setoran .report-settlement-method-card {
+  min-height: 92px;
+  padding: 17px 18px;
+}
+.report-table-report-filter-setoran > .report-settlement-total-card {
+  margin-top: 18px;
+  margin-bottom: 26px;
+  padding: 19px 21px;
+}
+
+@media (max-width: 900px) {
+  .report-template-shell .report-global-filter-form.report-filter-tunggakan-siswa {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    grid-template-areas:"heading heading" "kelas student-status" "per-page per-page" "student student" "actions actions" !important;
+  }
+  .report-template-shell .report-global-filter-form.report-filter-riwayat-tagihan {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    grid-template-areas:"heading heading" "kelas school-year" "component status" "student-status per-page" "student student" "actions actions" !important;
+  }
+  .report-template-shell .report-global-filter-form.report-filter-setoran {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    grid-template-areas:"heading heading" "date operator" "method method" "actions actions" !important;
+  }
+}
+
+@media (max-width: 620px) {
+  .report-template-shell .report-global-filter-form.report-filter-tunggakan-siswa,
+  .report-template-shell .report-global-filter-form.report-filter-riwayat-tagihan,
+  .report-template-shell .report-global-filter-form.report-filter-setoran { grid-template-columns: 1fr !important; }
+  .report-template-shell .report-global-filter-form.report-filter-tunggakan-siswa {
+    grid-template-areas:"heading" "kelas" "student-status" "per-page" "student" "actions" !important;
+  }
+  .report-template-shell .report-global-filter-form.report-filter-riwayat-tagihan {
+    grid-template-areas:"heading" "kelas" "school-year" "component" "status" "student-status" "per-page" "student" "actions" !important;
+  }
+  .report-template-shell .report-global-filter-form.report-filter-setoran {
+    grid-template-areas:"heading" "date" "operator" "method" "actions" !important;
+  }
+  .report-filter-tunggakan-siswa > .report-filter-actions,
+  .report-filter-riwayat-tagihan > .report-filter-actions,
+  .report-filter-setoran > .report-filter-actions { grid-template-columns: 1fr !important; }
+  .report-table-report-filter-setoran > .report-settlement-component-card,
+  .report-table-report-filter-setoran > .report-settlement-method-summary,
+  .report-table-report-filter-setoran > .report-settlement-total-card {
+    margin-right: 14px;
+    margin-left: 14px;
+  }
+  .report-table-report-filter-setoran .report-settlement-section-head {
+    align-items: stretch;
+    flex-direction: column;
+    padding: 15px;
+  }
+  .report-table-report-filter-setoran .report-settlement-component-total {
+    min-width: 0;
+    text-align: left;
+  }
+}
