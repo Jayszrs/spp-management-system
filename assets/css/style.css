@@ -10417,3 +10417,279 @@ a.btn {
     text-align: left;
   }
 }
+
+/* Final layout contracts: Setoran, Riwayat Tagihan, dan Rekap Tunggakan. */
+.report-template-shell :is(
+  .report-filter-setoran,
+  .report-filter-riwayat-tagihan,
+  .report-filter-tunggakan-siswa
+) > :is(.field-row,.report-student-field,.report-per-page-field,.report-filter-actions) {
+  box-sizing: border-box;
+  min-width: 0;
+  width: 100%;
+}
+.report-template-shell :is(
+  .report-filter-setoran,
+  .report-filter-riwayat-tagihan,
+  .report-filter-tunggakan-siswa
+) :is(.field-input,.field-select,.search-box,.report-date-range-control,.report-date-range-button) {
+  box-sizing: border-box;
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
+}
+.report-template-shell :is(
+  .report-filter-setoran,
+  .report-filter-riwayat-tagihan,
+  .report-filter-tunggakan-siswa
+) > .report-filter-actions {
+  display: grid !important;
+  grid-template-columns: minmax(0, 2fr) minmax(160px, 1fr) !important;
+  gap: 10px !important;
+  width: 100% !important;
+  margin: 2px 0 0 !important;
+  padding: 0 !important;
+  overflow: visible !important;
+  background: transparent !important;
+}
+.report-template-shell :is(
+  .report-filter-setoran,
+  .report-filter-riwayat-tagihan,
+  .report-filter-tunggakan-siswa
+) > .report-filter-actions > .btn {
+  position: static !important;
+  box-sizing: border-box;
+  width: 100% !important;
+  min-width: 0 !important;
+  height: 44px !important;
+  margin: 0 !important;
+  transform: none !important;
+  white-space: nowrap;
+}
+
+/* Rekap Setoran Kas Harian: filter dan seluruh ringkasan mempunyai ritme yang sama. */
+.report-template-shell .report-global-filter-form.report-filter-setoran {
+  grid-template-columns: minmax(260px, 1.25fr) minmax(210px, 1fr) minmax(190px, .9fr) !important;
+  grid-template-areas:
+    "heading heading heading"
+    "date operator method"
+    "actions actions actions" !important;
+  align-items: end;
+  gap: 12px !important;
+}
+.report-filter-setoran > .report-date-range-field { grid-area: date !important; }
+.report-filter-setoran > .report-field-operator { grid-area: operator !important; }
+.report-filter-setoran > .report-field-metode { grid-area: method !important; }
+.report-filter-setoran > .report-filter-actions { grid-area: actions !important; }
+.report-table-report-filter-setoran > :is(
+  .report-settlement-component-card,
+  .report-settlement-method-summary,
+  .report-settlement-total-card
+) {
+  box-sizing: border-box;
+  width: calc(100% - 48px) !important;
+  margin-right: 24px !important;
+  margin-left: 24px !important;
+}
+.report-table-report-filter-setoran > .report-settlement-component-card {
+  margin-top: 22px !important;
+  border-radius: 8px !important;
+  background: var(--bg-card) !important;
+  box-shadow: 0 7px 20px rgba(20,80,50,.055) !important;
+}
+.report-table-report-filter-setoran .report-settlement-section-head {
+  min-height: 0 !important;
+  padding: 18px 20px !important;
+}
+.report-table-report-filter-setoran .report-settlement-component-total {
+  box-sizing: border-box;
+  min-width: 184px !important;
+  padding: 12px 15px !important;
+}
+.report-table-report-filter-setoran .report-settlement-component-table th,
+.report-table-report-filter-setoran .report-settlement-component-table td {
+  padding: 13px 16px !important;
+}
+.report-table-report-filter-setoran > .report-settlement-method-summary {
+  margin-top: 20px !important;
+  padding: 0 !important;
+}
+.report-table-report-filter-setoran .report-settlement-method-summary > h3 {
+  margin: 0 0 11px !important;
+}
+.report-table-report-filter-setoran .report-settlement-method-grid {
+  grid-template-columns: repeat(3, minmax(0,1fr)) !important;
+  gap: 12px !important;
+}
+.report-table-report-filter-setoran .report-settlement-method-card {
+  box-sizing: border-box;
+  min-width: 0;
+  min-height: 94px !important;
+  padding: 17px 18px !important;
+  border-radius: 8px !important;
+}
+.report-table-report-filter-setoran > .report-settlement-total-card {
+  margin-top: 18px !important;
+  margin-bottom: 25px !important;
+  padding: 19px 21px !important;
+  border-radius: 8px !important;
+}
+
+/* Riwayat Tagihan: kontrol presisi dan tiga kolom identitas tidak bergerak. */
+.report-template-shell .report-global-filter-form.report-filter-riwayat-tagihan,
+.report-template-shell .report-global-filter-form.report-filter-tunggakan-siswa {
+  align-items: end;
+}
+.report-table-report-filter-riwayat-tagihan .report-template-table-wrap {
+  isolation: isolate;
+  contain: none !important;
+  transform: none !important;
+}
+.report-table-report-filter-riwayat-tagihan .report-template-table {
+  width: max-content !important;
+  min-width: 100% !important;
+  border-collapse: separate !important;
+  border-spacing: 0;
+}
+.report-table-report-filter-riwayat-tagihan .report-identity-sticky {
+  position: sticky !important;
+  box-sizing: border-box;
+  background: var(--bg-card) !important;
+  background-clip: padding-box !important;
+}
+.report-table-report-filter-riwayat-tagihan .report-identity-no {
+  left: 0 !important;
+  width: 58px !important;
+  min-width: 58px !important;
+  max-width: 58px !important;
+}
+.report-table-report-filter-riwayat-tagihan .report-identity-nis {
+  left: 58px !important;
+  width: 190px !important;
+  min-width: 190px !important;
+  max-width: 190px !important;
+}
+.report-table-report-filter-riwayat-tagihan .report-identity-name {
+  left: 248px !important;
+  width: 230px !important;
+  min-width: 230px !important;
+  max-width: 230px !important;
+  box-shadow: 11px 0 14px -14px rgba(20,54,39,.7);
+}
+.report-table-report-filter-riwayat-tagihan thead .report-identity-sticky {
+  z-index: 18 !important;
+  background: #11513c !important;
+  color: #fff !important;
+}
+.report-table-report-filter-riwayat-tagihan tbody .report-identity-sticky {
+  z-index: 8 !important;
+}
+.report-table-report-filter-riwayat-tagihan tbody tr:nth-child(even) .report-identity-sticky {
+  background: var(--bg-surface) !important;
+}
+@media (min-width: 701px) {
+  .report-table-report-filter-riwayat-tagihan .report-billing-group-wrap {
+    isolation: isolate;
+    contain: none !important;
+  }
+  .report-table-report-filter-riwayat-tagihan .report-billing-group-table :is(th,td):nth-child(1),
+  .report-table-report-filter-riwayat-tagihan .report-billing-group-table :is(th,td):nth-child(2) {
+    position: sticky !important;
+    box-sizing: border-box;
+    background: var(--bg-card) !important;
+    background-clip: padding-box !important;
+  }
+  .report-table-report-filter-riwayat-tagihan .report-billing-group-table :is(th,td):nth-child(1) {
+    left: 0 !important;
+    width: 58px !important;
+    min-width: 58px !important;
+    max-width: 58px !important;
+  }
+  .report-table-report-filter-riwayat-tagihan .report-billing-group-table :is(th,td):nth-child(2) {
+    left: 58px !important;
+    width: 230px !important;
+    min-width: 230px !important;
+    max-width: 230px !important;
+    box-shadow: 11px 0 14px -14px rgba(20,54,39,.7);
+  }
+  .report-table-report-filter-riwayat-tagihan .report-billing-group-table thead :is(th:nth-child(1),th:nth-child(2)) {
+    z-index: 18 !important;
+    background: #11513c !important;
+    color: #fff !important;
+  }
+  .report-table-report-filter-riwayat-tagihan .report-billing-group-table tbody :is(td:nth-child(1),td:nth-child(2)) {
+    z-index: 8 !important;
+  }
+  .report-table-report-filter-riwayat-tagihan .report-billing-group-table tbody tr:nth-child(even) :is(td:nth-child(1),td:nth-child(2)) {
+    background: var(--bg-surface) !important;
+  }
+}
+
+/* Rekap Tunggakan: tabel selalu mengisi lebar kartu hingga kolom terakhir. */
+.report-table-report-filter-tunggakan-siswa .report-template-table-wrap {
+  box-sizing: border-box;
+  width: 100% !important;
+  max-width: 100% !important;
+  margin-right: 0 !important;
+  padding-right: 0 !important;
+}
+.report-table-report-filter-tunggakan-siswa .report-template-table {
+  width: 100% !important;
+  min-width: 1180px !important;
+  table-layout: fixed;
+}
+.report-table-report-filter-tunggakan-siswa .report-template-table :is(th,td):nth-child(1) { width: 58px; }
+.report-table-report-filter-tunggakan-siswa .report-template-table :is(th,td):nth-child(2) { width: 190px; }
+.report-table-report-filter-tunggakan-siswa .report-template-table :is(th,td):nth-child(3) { width: 175px; }
+.report-table-report-filter-tunggakan-siswa .report-template-table :is(th,td):nth-child(4) { width: 225px; }
+.report-table-report-filter-tunggakan-siswa .report-template-table :is(th,td):nth-child(5) { width: 130px; }
+.report-table-report-filter-tunggakan-siswa .report-template-table :is(th,td):nth-child(6),
+.report-table-report-filter-tunggakan-siswa .report-template-table :is(th,td):nth-child(7) { width: 155px; }
+.report-table-report-filter-tunggakan-siswa .report-template-table :is(th,td):nth-child(8) { width: 180px; }
+.report-table-report-filter-tunggakan-siswa .report-template-table :is(th,td):last-child {
+  border-right: 0 !important;
+}
+
+@media (max-width: 900px) {
+  .report-template-shell .report-global-filter-form.report-filter-setoran {
+    grid-template-columns: repeat(2,minmax(0,1fr)) !important;
+    grid-template-areas:
+      "heading heading"
+      "date operator"
+      "method method"
+      "actions actions" !important;
+  }
+  .report-table-report-filter-setoran .report-settlement-method-grid {
+    grid-template-columns: repeat(2,minmax(0,1fr)) !important;
+  }
+}
+@media (max-width: 620px) {
+  .report-template-shell :is(
+    .report-filter-setoran,
+    .report-filter-riwayat-tagihan,
+    .report-filter-tunggakan-siswa
+  ) > .report-filter-actions {
+    grid-template-columns: 1fr !important;
+  }
+  .report-table-report-filter-setoran > :is(
+    .report-settlement-component-card,
+    .report-settlement-method-summary,
+    .report-settlement-total-card
+  ) {
+    width: calc(100% - 28px) !important;
+    margin-right: 14px !important;
+    margin-left: 14px !important;
+  }
+  .report-table-report-filter-setoran .report-settlement-section-head {
+    align-items: stretch !important;
+    flex-direction: column !important;
+    padding: 15px !important;
+  }
+  .report-table-report-filter-setoran .report-settlement-component-total {
+    min-width: 0 !important;
+    text-align: left !important;
+  }
+  .report-table-report-filter-setoran .report-settlement-method-grid {
+    grid-template-columns: 1fr !important;
+  }
+}

@@ -44,7 +44,7 @@ try {
     if (!str_contains($html, 'rincian tagihan')) {
         throw new RuntimeException('Jumlah rincian tagihan tidak ditampilkan.');
     }
-    if (!str_contains($html, 'assets/css/style.css?v=10.10')) {
+    if (!str_contains($html, 'assets/css/style.css?v=10.11')) {
         throw new RuntimeException('Versi cache stylesheet laporan belum diperbarui.');
     }
     foreach (['report-field-tahun-tagihan', 'report-field-komponen-tagihan', 'report-field-status', 'report-field-siswa-status'] as $filterClass) {
