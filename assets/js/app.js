@@ -1420,7 +1420,6 @@ function showSppWarning(status, sourceElement = null, force = false, onPrimary =
   const title = document.getElementById('spp-warning-title');
   const message = document.getElementById('spp-warning-message');
   const amount = document.getElementById('spp-warning-amount');
-  const kicker = document.getElementById('spp-warning-kicker');
   const secondary = document.getElementById('spp-warning-secondary');
   const close = document.getElementById('spp-warning-close');
   if (!overlay || !title || !message || !amount || !secondary || !close || !status) return;
@@ -1441,9 +1440,6 @@ function showSppWarning(status, sourceElement = null, force = false, onPrimary =
   const severity = status.severity || (['not_published','already_paid','not_payable'].includes(code) ? 'info' : 'error');
   overlay.dataset.severity = severity;
   overlay.setAttribute('role', severity === 'error' ? 'alertdialog' : 'dialog');
-  const icon=overlay.querySelector('.spp-warning-icon');
-  if (icon) icon.textContent=severity === 'info' ? 'i' : (severity === 'warning' ? '?' : '!');
-  if (kicker) kicker.textContent = severity === 'warning' ? 'Periksa lagi' : (severity === 'info' ? 'Informasi' : 'Perlu diperbaiki');
   secondary.hidden = true;
   secondary.textContent = 'Kembali';
   close.textContent = status.action_label || 'Mengerti';
@@ -1640,6 +1636,8 @@ function refreshSppInstallmentAvailability() {
     const mismatch = !blocked && !isDeposit && amount > .001 && Math.abs(amount + deposit - due) > .001;
     input.setCustomValidity(mismatch ? 'SPP bulan ini harus lunas tepat Rp ' + formatRupiah(due) + '.' : '');
     input.classList.toggle('is-input-overlimit', mismatch);
+    if (mismatch) input.setAttribute('aria-invalid', 'true');
+    else input.removeAttribute('aria-invalid');
     input.closest('tr')?.classList.toggle('row-input-overlimit', mismatch);
     refreshPublishedSppUi(opt);
     return;
@@ -1764,6 +1762,7 @@ function refreshPaymentInputOverlimitWarnings() {
       row?.classList.remove('row-input-overlimit');
       inputEl.classList.remove('is-input-overlimit');
       inputEl.setCustomValidity('');
+      inputEl.removeAttribute('aria-invalid');
       return;
     }
 
@@ -1782,10 +1781,12 @@ function refreshPaymentInputOverlimitWarnings() {
         ? 'Uang SPP wajib dibayar penuh sebesar Rp ' + formatRupiah(total) + '.'
         : paymentComponentLabels[key] + ' melebihi sisa tagihan. Sisa Rp ' + formatRupiah(remainingBeforeInput) + ', input Rp ' + formatRupiah(input) + '.';
       inputEl.setCustomValidity(message);
-      inputEl.title = message;
+      inputEl.setAttribute('aria-invalid', 'true');
+      inputEl.removeAttribute('title');
       warnings.push(message);
     } else {
       inputEl.setCustomValidity('');
+      inputEl.removeAttribute('aria-invalid');
       if (!inputEl.readOnly) inputEl.removeAttribute('title');
     }
   });
@@ -2229,6 +2230,9 @@ document.addEventListener('DOMContentLoaded', function () {
   // Clean all formatted numeric inputs right before form submission so the backend gets raw numbers
   const form = document.getElementById('form-bayar');
   if (form) {
+    // Validasi native berjalan sebelum event submit dan menutup kesempatan modal tampil.
+    // Hanya form input dengan handler ini yang memakai modal; edit tetap memakai validasi semula.
+    if (window.sppPublishedBilling && !window.sppEditPaymentId) form.noValidate = true;
     const normalizePaymentInputs = () => {
       document.querySelectorAll('.tbl-input, #potongan-spp, #kewajiban-spp, .biaya-lain-nominal').forEach(input => {
         input.value = input.value.replace(/\./g, '');
@@ -2248,8 +2252,13 @@ document.addEventListener('DOMContentLoaded', function () {
         };
         const studentInput = document.getElementById('disp-nis');
         const methodInput = document.getElementById('sistem-pembayaran');
+        const monthInput = document.getElementById('bulan-bayar');
+        const yearInput = document.getElementById('tahun-bayar');
+        const dateInput = document.getElementById('tgl-bayar');
         if (!studentInput?.value) { showSppWarning({code:'student_missing',title:'Pilih siswa',message:'Pilih siswa dari hasil pencarian sebelum menyimpan.',target:'siswa-search'},studentInput,true);return; }
         if (!methodInput?.value) { showSppWarning({code:'method_missing',title:'Pilih metode pembayaran',message:'Pilih Tunai, VA, atau QRIS sebelum menyimpan.',target:'sistem-pembayaran'},methodInput,true);return; }
+        if (!monthInput?.value || !/^\d{4}$/.test(yearInput?.value || '')) { showSppWarning({code:'period_missing',title:'Periksa bulan tagihan',message:'Pilih bulan dan isi tahun tagihan dengan empat angka sebelum menyimpan.',target:'tahun-bayar'},yearInput,true);return; }
+        if (!dateInput?.value) { showSppWarning({code:'date_missing',title:'Tanggal bayar belum ada',message:'Muat ulang halaman agar tanggal pembayaran hari ini terisi.',target:'tgl-bayar'},dateInput,true);return; }
         const action=document.getElementById('spp-action')?.value || 'bayar';
         const amount=parseNumber(document.getElementById('spp-input')?.value || 0);
         const komiteAmount=parseNumber(document.getElementById('komite-input')?.value || 0);
@@ -2268,7 +2277,7 @@ document.addEventListener('DOMContentLoaded', function () {
           const paid=row ? parseNumber(row.querySelector('.biaya-lain-paid')?.value || 0) : parseNumber(document.getElementById(key+'-bayar')?.value || 0);
           const remaining=Math.max(0,totalDue-paid);
           const label=row ? (row.querySelector('.biaya-lain-select')?.selectedOptions?.[0]?.textContent?.trim() || 'Biaya Lain') : (paymentComponentLabels[key] || 'tagihan');
-          const message='Sisa '+label+' Rp '+formatRupiah(remaining)+', tetapi yang diisi Rp '+formatRupiah(parseNumber(invalidInput.value || 0))+'.';
+          const message='Sisa '+label+' Rp '+formatRupiah(remaining)+', tetapi yang diisi Rp '+formatRupiah(parseNumber(invalidInput.value || 0))+'. Kurangi nominalnya sebelum menyimpan.';
           showSppWarning({code:'over_limit',title:'Melebihi sisa tagihan',message,target:invalidInput.id},invalidInput,true);return;
         }
         if (action === 'titipan') {
@@ -2616,8 +2625,9 @@ function refreshBiayaLainAvailability() {
       message = (selectedOption?.dataset.baseLabel || 'Biaya ini') + ' hanya boleh dipilih satu kali dalam satu transaksi.';
     }
     select.setCustomValidity(message);
-    if (message) select.title = message;
-    else select.removeAttribute('title');
+    if (message) select.setAttribute('aria-invalid', 'true');
+    else select.removeAttribute('aria-invalid');
+    select.removeAttribute('title');
     row.classList.toggle('row-unavailable', !!message);
   });
 
@@ -2655,6 +2665,7 @@ function refreshBiayaLainRow(row, preserveInput) {
     if (sisaEl) sisaEl.value = legacy ? formatRupiahString(Math.max(0, masterTotal - currentInput)) : '0';
     if (!preserveInput) nominal.value = '0';
     nominal.setCustomValidity('');
+    nominal.removeAttribute('aria-invalid');
     nominal.removeAttribute('title');
     row?.classList.remove('row-overpaid');
     return;
@@ -2674,9 +2685,11 @@ function refreshBiayaLainRow(row, preserveInput) {
   if (isTooMuch) {
     const message = 'Input bayar biaya lain melebihi sisa. Sisa hanya Rp ' + formatRupiah(remainingBeforeInput) + '.';
     nominal.setCustomValidity(message);
-    nominal.title = message;
+    nominal.setAttribute('aria-invalid', 'true');
+    nominal.removeAttribute('title');
   } else {
     nominal.setCustomValidity('');
+    nominal.removeAttribute('aria-invalid');
     nominal.removeAttribute('title');
   }
 }

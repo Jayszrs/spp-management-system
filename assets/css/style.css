@@ -2942,26 +2942,6 @@ body.spp-warning-open { overflow: hidden; }
   transition: transform 0.22s cubic-bezier(0.22, 1, 0.36, 1);
 }
 .spp-warning-overlay.show .spp-warning-dialog { transform: translateY(0) scale(1); }
-.spp-warning-icon {
-  display: grid;
-  place-items: center;
-  width: 52px;
-  height: 52px;
-  margin-bottom: 18px;
-  border: 1px solid rgba(245, 158, 11, 0.3);
-  border-radius: 16px;
-  color: #f59e0b;
-  background: rgba(245, 158, 11, 0.12);
-}
-.spp-warning-kicker {
-  display: block;
-  margin-bottom: 6px;
-  color: #f59e0b;
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
-}
 .spp-warning-title {
   margin: 0;
   color: var(--text-primary);
@@ -2994,12 +2974,6 @@ body.spp-warning-open { overflow: hidden; }
   min-width: 120px;
   justify-content: center;
 }
-.spp-warning-overlay[data-status-code="status_unavailable"] .spp-warning-icon {
-  color: #ef4444;
-  border-color: rgba(239, 68, 68, 0.28);
-  background: rgba(239, 68, 68, 0.1);
-}
-
 /* Class payment recap */
 .class-recap-card { overflow: hidden; }
 .recap-kicker {
@@ -3928,20 +3902,17 @@ body.spp-warning-open { overflow: hidden; }
     padding: 22px 18px 18px;
     border-radius: 18px;
   }
-  .spp-warning-icon {
-    width: 46px;
-    height: 46px;
-    margin-bottom: 15px;
-    border-radius: 14px;
-  }
   .spp-warning-actions { flex-direction: column-reverse; }
   .spp-warning-actions .btn { width: 100%; }
 }
 
 /* Satu pola dialog untuk pengaman input pembayaran. */
-.spp-warning-overlay { --payment-notice-rgb: 213, 66, 66; }
-.spp-warning-overlay[data-severity="warning"] { --payment-notice-rgb: 217, 137, 18; }
-.spp-warning-overlay[data-severity="info"] { --payment-notice-rgb: 42, 121, 177; }
+.spp-warning-overlay { --payment-notice-rgb: 213, 66, 66; --payment-notice-title: #b42332; }
+.spp-warning-overlay[data-severity="warning"] { --payment-notice-rgb: 217, 137, 18; --payment-notice-title: #855000; }
+.spp-warning-overlay[data-severity="info"] { --payment-notice-rgb: 42, 121, 177; --payment-notice-title: #126397; }
+[data-theme="dark"] .spp-warning-overlay { --payment-notice-title: #ff9198; }
+[data-theme="dark"] .spp-warning-overlay[data-severity="warning"] { --payment-notice-title: #f6b95f; }
+[data-theme="dark"] .spp-warning-overlay[data-severity="info"] { --payment-notice-title: #83c8fa; }
 .spp-warning-dialog,
 [data-theme="light"] .spp-warning-dialog {
   padding: 0;
@@ -3950,28 +3921,13 @@ body.spp-warning-open { overflow: hidden; }
   border-color: rgba(var(--payment-notice-rgb), .3);
 }
 .spp-warning-head {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 20px 24px;
+  padding: 22px 24px 20px;
   background: rgba(var(--payment-notice-rgb), .13);
   border-bottom: 1px solid rgba(var(--payment-notice-rgb), .22);
 }
-.spp-warning-head .spp-warning-icon {
-  flex: 0 0 38px;
-  width: 38px;
-  height: 38px;
-  margin: 0;
-  border-radius: 12px;
-  border-color: rgba(var(--payment-notice-rgb), .3);
-  background: rgba(var(--payment-notice-rgb), .14);
-  color: rgb(var(--payment-notice-rgb));
-  font: 800 20px/1 Arial, sans-serif;
-}
-.spp-warning-kicker { color: rgb(var(--payment-notice-rgb)); margin-bottom: 3px; }
-.spp-warning-title { font-size: 20px; }
+.spp-warning-title { color: var(--payment-notice-title); font-size: clamp(21px, 2.4vw, 25px); font-weight: 800; }
 .spp-warning-content { padding: 21px 24px 24px; }
-.spp-warning-message { margin: 0; }
+.spp-warning-message { margin: 0; font-size: 14px; line-height: 1.6; }
 .spp-warning-overlay .spp-warning-amount {
   color: var(--text-primary);
   border-color: rgba(var(--payment-notice-rgb), .24);

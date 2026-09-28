@@ -13,6 +13,7 @@ require_once '../includes/tagihan_sekali.php';
 require_once '../includes/spp_payment_status.php';
 require_once '../includes/spp_billing.php';
 require_once '../includes/komite_billing.php';
+require_once '../includes/payment_form_feedback.php';
 require_once '../includes/transaction_authorization.php';
 
 $aksi = $_POST['aksi'] ?? $_GET['aksi'] ?? '';
@@ -114,57 +115,6 @@ function authorization_abort_before_transaction(mysqli $db, ?array $request, int
         header('Location: ' . $fallbackLocation);
     }
     exit;
-}
-
-function payment_failure_flash(Throwable $error, string $fallbackPrefix): array {
-    if ($error instanceof mysqli_sql_exception && in_array((int)$error->getCode(), [1205,1213], true)) {
-        $error = new SppPaymentException(['code'=>'billing_changed','severity'=>'error','title'=>'Tagihan berubah',
-            'message'=>'Tagihan sedang diperbarui oleh kasir lain. Perbarui tagihan, lalu periksa kembali sebelum menyimpan.',
-            'target'=>'spp-input']);
-    }
-    if ($error instanceof SppPaymentException) {
-        return [
-            'type' => 'error',
-            'scope' => 'spp',
-            'msg' => $error->getMessage(),
-            'spp_status' => $error->status(),
-        ];
-    }
-    return ['type' => 'error', 'msg' => $fallbackPrefix . $error->getMessage()];
-}
-
-function payment_capture_draft(array $source): array {
-    $draft=[];
-    foreach (['no_induk','bulan_bayar','tahun_bayar','sistem_pembayaran','spp_action','gunakan_titipan_spp','tagihan_daftar_ulang_id','catatan',
-        'uang_pangkal','uang_psb','uang_spp','uang_komite','uang_du'] as $key) {
-        if (isset($source[$key]) && is_scalar($source[$key])) $draft[$key]=mb_substr((string)$source[$key],0,100);
-    }
-    if (str_contains($error->getMessage(), 'melebihi sisa tagihan')) {
-        $message=$error->getMessage();
-        $target=str_contains($message,'Uang PSB')?'psb-input':(str_contains($message,'Daftar Ulang')?'du-input':(str_contains($message,'SPP')?'spp-input':(str_contains($message,'Komite')?'komite-input':'pangkal-input')));
-        return payment_failure_flash(new SppPaymentException(['code'=>'over_limit','severity'=>'error','title'=>'Melebihi sisa tagihan',
-            'message'=>$message,'target'=>$target]), $fallbackPrefix);
-    }
-    if (str_contains($error->getMessage(), 'Tagihan Biaya Lain tidak tersedia') || str_contains($error->getMessage(), 'sudah lunas dan tidak dapat ditambahkan lagi')) {
-        return payment_failure_flash(new SppPaymentException(['code'=>'billing_changed','severity'=>'error','title'=>'Tagihan berubah',
-            'message'=>'Tagihan berubah sejak halaman dibuka. Perbarui tagihan, lalu periksa kembali sebelum menyimpan.',
-            'target'=>'biaya-lain-list']), $fallbackPrefix);
-    }
-    if (str_contains($error->getMessage(), 'Tagihan Komite') && str_contains($error->getMessage(), 'belum tersedia')) {
-        return payment_failure_flash(new SppPaymentException(['code'=>'billing_changed','severity'=>'error','title'=>'Tagihan berubah',
-            'message'=>'Tagihan Komite bulan ini belum tersedia. Perbarui tagihan sebelum menyimpan.',
-            'target'=>'komite-input']), $fallbackPrefix);
-    }
-    if (str_contains($error->getMessage(), 'tidak boleh menjadi tunggakan')) {
-        return payment_failure_flash(new SppPaymentException(['code'=>'prior_unpaid_edit','severity'=>'error','title'=>'Ada SPP yang lebih lama',
-            'message'=>$error->getMessage().' Periksa urutan bulan sebelum mengubah transaksi.',
-            'target'=>'bulan-bayar']), $fallbackPrefix);
-    }
-    foreach (['biaya_lain_tagihan_id','biaya_lain_nominal','biaya_lain_keterangan'] as $key) {
-        if (isset($source[$key]) && is_array($source[$key])) $draft[$key]=array_map(
-            static fn($value)=>is_scalar($value)?mb_substr((string)$value,0,255):'', array_slice($source[$key],0,12));
-    }
-    return $draft;
 }
 
 function validate_payment_amounts(array $amounts): void {
@@ -420,7 +370,7 @@ function validate_component_remaining(
         if ($limit['input'] > $remaining + 0.001) {
             $label=$limit['label'];
             throw new SppPaymentException(['code'=>'over_limit','severity'=>'error','title'=>'Melebihi sisa tagihan',
-                'message'=>'Sisa '.$label.' Rp '.number_format($remaining,0,',','.').', tetapi yang diisi Rp '.number_format($limit['input'],0,',','.').'.',
+                'message'=>'Sisa '.$label.' Rp '.number_format($remaining,0,',','.').', tetapi yang diisi Rp '.number_format($limit['input'],0,',','.').'. Kurangi nominalnya sebelum menyimpan.',
                 'target'=>in_array($component,['pangkal','psb','komite','spp','du'],true)?$component.'-input':'du-input']);
         }
     }
@@ -513,7 +463,7 @@ function collect_biaya_lain(mysqli $koneksi, string $noInduk, int $bayarId = 0):
         $remaining = max(0, $masterTotal - $paidBefore - $submittedBefore);
         if ($nominalInput > $remaining + 0.001) {
             throw new SppPaymentException(['code'=>'over_limit','severity'=>'error','title'=>'Melebihi sisa tagihan',
-                'message'=>'Sisa '.$bill['nama_snapshot'].' Rp '.number_format($remaining,0,',','.').', tetapi yang diisi Rp '.number_format($nominalInput,0,',','.').'.',
+                'message'=>'Sisa '.$bill['nama_snapshot'].' Rp '.number_format($remaining,0,',','.').', tetapi yang diisi Rp '.number_format($nominalInput,0,',','.').'. Kurangi nominalnya sebelum menyimpan.',
                 'target'=>'biaya-lain-list']);
         }
         $submittedByBill[$billId] = $submittedBefore + $nominalInput;

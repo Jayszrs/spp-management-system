@@ -2,9 +2,7 @@
      aria-labelledby="spp-warning-title" aria-describedby="spp-warning-message" aria-hidden="true">
   <div class="spp-warning-dialog" role="document">
     <div class="spp-warning-head">
-      <span class="spp-warning-icon" aria-hidden="true">!</span>
-      <div><span class="spp-warning-kicker" id="spp-warning-kicker">Perlu diperbaiki</span>
-      <h3 class="spp-warning-title" id="spp-warning-title">Pembayaran perlu diperiksa</h3></div>
+      <h3 class="spp-warning-title" id="spp-warning-title">Pembayaran perlu diperiksa</h3>
     </div>
     <div class="spp-warning-content">
       <p class="spp-warning-message" id="spp-warning-message"></p>
