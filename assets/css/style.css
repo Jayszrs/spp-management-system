@@ -3938,6 +3938,53 @@ body.spp-warning-open { overflow: hidden; }
   .spp-warning-actions .btn { width: 100%; }
 }
 
+/* Satu pola dialog untuk pengaman input pembayaran. */
+.spp-warning-overlay { --payment-notice-rgb: 213, 66, 66; }
+.spp-warning-overlay[data-severity="warning"] { --payment-notice-rgb: 217, 137, 18; }
+.spp-warning-overlay[data-severity="info"] { --payment-notice-rgb: 42, 121, 177; }
+.spp-warning-dialog,
+[data-theme="light"] .spp-warning-dialog {
+  padding: 0;
+  overflow: hidden;
+  background: var(--bg-elevated);
+  border-color: rgba(var(--payment-notice-rgb), .3);
+}
+.spp-warning-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 20px 24px;
+  background: rgba(var(--payment-notice-rgb), .13);
+  border-bottom: 1px solid rgba(var(--payment-notice-rgb), .22);
+}
+.spp-warning-head .spp-warning-icon {
+  flex: 0 0 38px;
+  width: 38px;
+  height: 38px;
+  margin: 0;
+  border-radius: 12px;
+  border-color: rgba(var(--payment-notice-rgb), .3);
+  background: rgba(var(--payment-notice-rgb), .14);
+  color: rgb(var(--payment-notice-rgb));
+  font: 800 20px/1 Arial, sans-serif;
+}
+.spp-warning-kicker { color: rgb(var(--payment-notice-rgb)); margin-bottom: 3px; }
+.spp-warning-title { font-size: 20px; }
+.spp-warning-content { padding: 21px 24px 24px; }
+.spp-warning-message { margin: 0; }
+.spp-warning-overlay .spp-warning-amount {
+  color: var(--text-primary);
+  border-color: rgba(var(--payment-notice-rgb), .24);
+  background: rgba(var(--payment-notice-rgb), .08);
+}
+.spp-warning-actions { margin-top: 20px; }
+.spp-warning-actions [hidden] { display: none !important; }
+@media (max-width: 520px) {
+  .spp-warning-head { padding: 17px 18px; }
+  .spp-warning-content { padding: 18px; }
+  .spp-warning-actions { flex-direction: column-reverse; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .spp-warning-overlay,
   .spp-warning-dialog {

@@ -117,6 +117,11 @@ function authorization_abort_before_transaction(mysqli $db, ?array $request, int
 }
 
 function payment_failure_flash(Throwable $error, string $fallbackPrefix): array {
+    if ($error instanceof mysqli_sql_exception && in_array((int)$error->getCode(), [1205,1213], true)) {
+        $error = new SppPaymentException(['code'=>'billing_changed','severity'=>'error','title'=>'Tagihan berubah',
+            'message'=>'Tagihan sedang diperbarui oleh kasir lain. Perbarui tagihan, lalu periksa kembali sebelum menyimpan.',
+            'target'=>'spp-input']);
+    }
     if ($error instanceof SppPaymentException) {
         return [
             'type' => 'error',
@@ -126,6 +131,40 @@ function payment_failure_flash(Throwable $error, string $fallbackPrefix): array 
         ];
     }
     return ['type' => 'error', 'msg' => $fallbackPrefix . $error->getMessage()];
+}
+
+function payment_capture_draft(array $source): array {
+    $draft=[];
+    foreach (['no_induk','bulan_bayar','tahun_bayar','sistem_pembayaran','spp_action','gunakan_titipan_spp','tagihan_daftar_ulang_id','catatan',
+        'uang_pangkal','uang_psb','uang_spp','uang_komite','uang_du'] as $key) {
+        if (isset($source[$key]) && is_scalar($source[$key])) $draft[$key]=mb_substr((string)$source[$key],0,100);
+    }
+    if (str_contains($error->getMessage(), 'melebihi sisa tagihan')) {
+        $message=$error->getMessage();
+        $target=str_contains($message,'Uang PSB')?'psb-input':(str_contains($message,'Daftar Ulang')?'du-input':(str_contains($message,'SPP')?'spp-input':(str_contains($message,'Komite')?'komite-input':'pangkal-input')));
+        return payment_failure_flash(new SppPaymentException(['code'=>'over_limit','severity'=>'error','title'=>'Melebihi sisa tagihan',
+            'message'=>$message,'target'=>$target]), $fallbackPrefix);
+    }
+    if (str_contains($error->getMessage(), 'Tagihan Biaya Lain tidak tersedia') || str_contains($error->getMessage(), 'sudah lunas dan tidak dapat ditambahkan lagi')) {
+        return payment_failure_flash(new SppPaymentException(['code'=>'billing_changed','severity'=>'error','title'=>'Tagihan berubah',
+            'message'=>'Tagihan berubah sejak halaman dibuka. Perbarui tagihan, lalu periksa kembali sebelum menyimpan.',
+            'target'=>'biaya-lain-list']), $fallbackPrefix);
+    }
+    if (str_contains($error->getMessage(), 'Tagihan Komite') && str_contains($error->getMessage(), 'belum tersedia')) {
+        return payment_failure_flash(new SppPaymentException(['code'=>'billing_changed','severity'=>'error','title'=>'Tagihan berubah',
+            'message'=>'Tagihan Komite bulan ini belum tersedia. Perbarui tagihan sebelum menyimpan.',
+            'target'=>'komite-input']), $fallbackPrefix);
+    }
+    if (str_contains($error->getMessage(), 'tidak boleh menjadi tunggakan')) {
+        return payment_failure_flash(new SppPaymentException(['code'=>'prior_unpaid_edit','severity'=>'error','title'=>'Ada SPP yang lebih lama',
+            'message'=>$error->getMessage().' Periksa urutan bulan sebelum mengubah transaksi.',
+            'target'=>'bulan-bayar']), $fallbackPrefix);
+    }
+    foreach (['biaya_lain_tagihan_id','biaya_lain_nominal','biaya_lain_keterangan'] as $key) {
+        if (isset($source[$key]) && is_array($source[$key])) $draft[$key]=array_map(
+            static fn($value)=>is_scalar($value)?mb_substr((string)$value,0,255):'', array_slice($source[$key],0,12));
+    }
+    return $draft;
 }
 
 function validate_payment_amounts(array $amounts): void {
@@ -218,7 +257,8 @@ function normalize_payment_method($value): string {
     $method = trim((string)$value);
     $allowed = ['Tunai', 'VA', 'Qris'];
     if (!in_array($method, $allowed, true)) {
-        throw new RuntimeException('Sistem pembayaran tidak valid.');
+        throw new SppPaymentException(['code'=>'method_missing','severity'=>'error','title'=>'Pilih metode pembayaran',
+            'message'=>'Pilih Tunai, VA, atau QRIS sebelum menyimpan.','target'=>'sistem-pembayaran']);
     }
     return $method;
 }
@@ -307,7 +347,9 @@ function validate_component_remaining(
     $paid['du'] = 0.0;
     if ($uangDu > 0) {
         if (!$duBill || (string)$duBill['no_induk'] !== $noInduk) {
-            throw new RuntimeException('Pilih ulang tagihan Daftar Ulang yang akan dibayar.');
+            throw new SppPaymentException(['code'=>'du_reselect','severity'=>'error','title'=>'Pilih ulang Daftar Ulang',
+                'message'=>'Tagihan yang dipilih sudah tidak tersedia. Pilih tagihan yang masih memiliki sisa.',
+                'target'=>'du-selector-trigger']);
         }
         $duTotal = (float)$duBill['nominal_tagihan'];
         $paid['du'] = (float)$duBill['terbayar'];
@@ -366,7 +408,7 @@ function validate_component_remaining(
         ];
     }
 
-    foreach ($limits as $limit) {
+    foreach ($limits as $component => $limit) {
         if ($limit['input'] <= 0) continue;
         if ($limit['total'] <= 0) {
             throw new RuntimeException($limit['label'] . ' belum memiliki total tagihan. Lengkapi master atau data tagihan terlebih dahulu.');
@@ -376,7 +418,10 @@ function validate_component_remaining(
             throw new RuntimeException($limit['label'] . ' sudah melebihi total tagihan. Total: Rp ' . number_format($limit['total'], 0, ',', '.') . ', sudah terbayar: Rp ' . number_format($limit['paid'], 0, ',', '.') . '. Cek ulang transaksi sebelumnya.');
         }
         if ($limit['input'] > $remaining + 0.001) {
-            throw new RuntimeException('Pembayaran ' . $limit['label'] . ' melebihi sisa tagihan. Sisa: Rp ' . number_format($remaining, 0, ',', '.') . '.');
+            $label=$limit['label'];
+            throw new SppPaymentException(['code'=>'over_limit','severity'=>'error','title'=>'Melebihi sisa tagihan',
+                'message'=>'Sisa '.$label.' Rp '.number_format($remaining,0,',','.').', tetapi yang diisi Rp '.number_format($limit['input'],0,',','.').'.',
+                'target'=>in_array($component,['pangkal','psb','komite','spp','du'],true)?$component.'-input':'du-input']);
         }
     }
 }
@@ -449,7 +494,9 @@ function collect_biaya_lain(mysqli $koneksi, string $noInduk, int $bayarId = 0):
         $sameBillAsOldLine = $oldLine && (int)$oldLine['tagihan_biaya_lain_id'] === $billId;
         $bill = other_fee_bill_find($koneksi, $billId, $noInduk, true);
         if (!$bill || ($bill['status'] !== 'open' && !$sameBillAsOldLine)) {
-            throw new RuntimeException('Tagihan Biaya Lain tidak tersedia untuk siswa ini.');
+            throw new SppPaymentException(['code'=>'billing_changed','severity'=>'error','title'=>'Tagihan berubah',
+                'message'=>'Tagihan Biaya Lain berubah sejak halaman dibuka. Perbarui tagihan sebelum menyimpan.',
+                'target'=>'biaya-lain-list']);
         }
         $masterTotal = (float)$bill['nominal_tagihan'];
         $stmtPaid = $koneksi->prepare('SELECT COALESCE(SUM(d.nominal_snapshot),0) paid FROM bayar_biaya_lain d WHERE d.tagihan_biaya_lain_id=? AND d.bayar_id<>?');
@@ -465,7 +512,9 @@ function collect_biaya_lain(mysqli $koneksi, string $noInduk, int $bayarId = 0):
         $submittedBefore = (float)($submittedByBill[$billId] ?? 0);
         $remaining = max(0, $masterTotal - $paidBefore - $submittedBefore);
         if ($nominalInput > $remaining + 0.001) {
-            throw new RuntimeException('Pembayaran ' . $bill['nama_snapshot'] . ' melebihi sisa tagihan. Sisa: Rp ' . number_format($remaining, 0, ',', '.') . '.');
+            throw new SppPaymentException(['code'=>'over_limit','severity'=>'error','title'=>'Melebihi sisa tagihan',
+                'message'=>'Sisa '.$bill['nama_snapshot'].' Rp '.number_format($remaining,0,',','.').', tetapi yang diisi Rp '.number_format($nominalInput,0,',','.').'.',
+                'target'=>'biaya-lain-list']);
         }
         $submittedByBill[$billId] = $submittedBefore + $nominalInput;
 
@@ -545,12 +594,13 @@ function find_linked_payment(mysqli $db, int $bayarId): array {
 
 // ── INSERT ──────────────────────────────────
 if ($aksi === 'input') {
+    $_SESSION['payment_draft']=payment_capture_draft($_POST);
     $no_induk        = trim($_POST['no_induk'] ?? '');
     // Transaksi baru selalu memakai waktu server Asia/Jakarta.
     $tanggal_bayar   = date('Y-m-d H:i:s');
     $bulan_bayar     = normalize_month_code($_POST['bulan_bayar'] ?? '');
     $tahun_bayar     = $_POST['tahun_bayar'] ?? date('Y');
-    $sistem_pembayaran = $_POST['sistem_pembayaran'] ?? 'VA';
+    $sistem_pembayaran = $_POST['sistem_pembayaran'] ?? '';
     
     $uang_pangkal    = parse_amount($_POST['uang_pangkal'] ?? 0);
     $uang_psb        = parse_amount($_POST['uang_psb'] ?? 0);
@@ -578,7 +628,8 @@ if ($aksi === 'input') {
     $payment_plan    = $_POST['payment_plan'] ?? 'monthly';
 
     if (empty($no_induk)) {
-        $_SESSION['flash'] = ['type' => 'error', 'msg' => 'Pilih siswa terlebih dahulu!'];
+        $_SESSION['flash'] = payment_failure_flash(new SppPaymentException(['code'=>'student_missing','severity'=>'error',
+            'title'=>'Pilih siswa','message'=>'Pilih siswa dari hasil pencarian sebelum menyimpan.','target'=>'siswa-search']), '');
         header('Location: form.php');
         exit;
     }
@@ -614,7 +665,10 @@ if ($aksi === 'input') {
         $tahun_ajaran_du = '';
         $kelas_du = '';
         if ($uang_du > 0) {
-            $du_bill = du_require_selectable_bill($koneksi, $tagihan_daftar_ulang_id, $no_induk, 0, true);
+            try { $du_bill = du_require_selectable_bill($koneksi, $tagihan_daftar_ulang_id, $no_induk, 0, true); }
+            catch (RuntimeException $e) { throw new SppPaymentException(['code'=>'du_reselect','severity'=>'error',
+                'title'=>'Pilih ulang Daftar Ulang','message'=>'Tagihan yang dipilih sudah tidak tersedia. Pilih tagihan yang masih memiliki sisa.',
+                'target'=>'du-selector-trigger']); }
             $du_bill_id = (int)$du_bill['id'];
             $kelas_du = (string)$du_bill['kelas'];
             $tahun_ajaran_du = (string)$du_bill['tahun_ajaran'];
@@ -656,6 +710,7 @@ if ($aksi === 'input') {
         }
 
         $komiteBill = komite_validate_amount($koneksi, $no_induk, $bulan_bayar, (string)$tahun_bayar, $uang_komite, $spp_action === 'bayar' && ($uang_spp > .001 || $gunakan_titipan_spp));
+        if ($usePublishedSpp) komite_validate_spp_pair($koneksi,$no_induk,$bulan_bayar,(string)$tahun_bayar,$uang_komite,$spp_action === 'bayar' && ($uang_spp > .001 || $gunakan_titipan_spp));
 
         $biaya_lain = collect_biaya_lain($koneksi, $no_induk);
         validate_graduate_payment($siswa_data, [
@@ -692,6 +747,9 @@ if ($aksi === 'input') {
             $row_total = calculate_payment_total([
                 $row_pangkal, $row_psb, $row_spp, $row_komite
             ], $row_du, $row_discount, $row_other);
+            if ($row_total <= .001 && !$gunakan_titipan_spp) throw new SppPaymentException(['code'=>'empty_payment','severity'=>'error',
+                'title'=>'Belum ada pembayaran','message'=>'Isi setidaknya satu nominal pembayaran sebelum menyimpan.',
+                'target'=>'spp-input']);
             $row_month = $period['bulan'];
             $row_year = $period['tahun'];
             $batch_sequence = $index + 1;
@@ -719,7 +777,13 @@ if ($aksi === 'input') {
                 $stmtDeposit = $koneksi->prepare('UPDATE bayar SET U_SPP=0,U_TITIPAN_SPP=? WHERE id=?');
                 $stmtDeposit->bind_param('di',$row_spp,$bayar_id);$stmtDeposit->execute();$stmtDeposit->close();
             } elseif ($usePublishedSpp && ($row_spp > 0.001 || $gunakan_titipan_spp)) {
-                $sppAllocation = spp_allocate_payment($koneksi, $no_induk, $bayar_id, $row_month, $row_year, $row_spp, $gunakan_titipan_spp, $tanggal_bayar, $sistem_pembayaran, $user_id);
+                try { $sppAllocation = spp_allocate_payment($koneksi, $no_induk, $bayar_id, $row_month, $row_year, $row_spp, $gunakan_titipan_spp, $tanggal_bayar, $sistem_pembayaran, $user_id); }
+                catch (RuntimeException $e) {
+                    if ($e instanceof mysqli_sql_exception) throw $e;
+                    throw new SppPaymentException(['code'=>'billing_changed','severity'=>'error','title'=>'Tagihan berubah',
+                        'message'=>'Nominal atau status tagihan berubah sejak halaman dibuka. Periksa kembali sebelum menyimpan.',
+                        'target'=>'spp-input']);
+                }
             } elseif (!$usePublishedSpp) {
                 sync_spp_period_claim($koneksi, $bayar_id, $no_induk, $row_month, $row_year, $row_spp);
             }
@@ -737,6 +801,7 @@ if ($aksi === 'input') {
         $stmt->close();
 
         $koneksi->commit();
+        unset($_SESSION['payment_draft']);
         $_SESSION['flash'] = [
             'type' => 'success',
                 'msg' => $payment_plan === 'annual'
@@ -811,6 +876,10 @@ if ($aksi === 'update') {
             $authorizationRequest = $lockedRequest;
         }
         $old_bayar = find_linked_payment($koneksi, $id);
+        $oldPairKey=(string)$old_bayar['NO_INDUK'].'|'.normalize_month_code((string)$old_bayar['BULAN']).'|'.(string)$old_bayar['TAHUN'];
+        $newPairKey=$no_induk.'|'.$bulan_bayar.'|'.(string)$tahun_bayar;
+        $pairContexts=[$oldPairKey=>[(string)$old_bayar['NO_INDUK'],normalize_month_code((string)$old_bayar['BULAN']),(string)$old_bayar['TAHUN']],$newPairKey=>[$no_induk,$bulan_bayar,(string)$tahun_bayar]];
+        $pairBefore=[];foreach($pairContexts as $key=>$parts)$pairBefore[$key]=komite_pair_gap($koneksi,...$parts);
         $usePublishedSpp = spp_billing_schema_ready($koneksi);
         if ($usePublishedSpp) spp_reverse_payment_allocation($koneksi, $id);
         $stmtOldKomite=$koneksi->prepare('DELETE FROM bayar_komite WHERE bayar_id=?');
@@ -847,6 +916,7 @@ if ($aksi === 'update') {
             'komite' => $uang_komite,
         ], $uang_du, $du_bill, $id, $usePublishedSpp);
         $komiteBill = komite_validate_amount($koneksi, $no_induk, $bulan_bayar, (string)$tahun_bayar, $uang_komite, $spp_action==='bayar' && ($uang_spp > .001 || $gunakan_titipan_spp));
+        if ($usePublishedSpp) komite_validate_spp_pair($koneksi,$no_induk,$bulan_bayar,(string)$tahun_bayar,$uang_komite,$spp_action==='bayar' && ($uang_spp > .001 || $gunakan_titipan_spp));
 
         $oldSppMonth = normalize_month_code((string)$old_bayar['BULAN']);
         $oldSppYear = (string)$old_bayar['TAHUN'];
@@ -895,6 +965,7 @@ if ($aksi === 'update') {
         $total_jumlah = calculate_payment_total([
             $uang_pangkal, $uang_psb, $uang_spp, $uang_komite
         ], $uang_du, $potongan_spp, $biaya_lain);
+        if ($total_jumlah <= .001 && !$gunakan_titipan_spp) throw new RuntimeException('Isi setidaknya satu nominal pembayaran sebelum menyimpan.');
 
         // 1. Update data utama ke tabel bayar
         $sql = "UPDATE bayar SET
@@ -940,8 +1011,7 @@ if ($aksi === 'update') {
             spp_assert_paid_order($koneksi,(string)$old_bayar['NO_INDUK']);
             if ($no_induk !== (string)$old_bayar['NO_INDUK']) spp_assert_paid_order($koneksi,$no_induk);
         }
-        komite_assert_spp_pairs($koneksi,(string)$old_bayar['NO_INDUK']);
-        if ($no_induk !== (string)$old_bayar['NO_INDUK']) komite_assert_spp_pairs($koneksi,$no_induk);
+        foreach($pairContexts as $key=>$parts){$after=komite_pair_gap($koneksi,...$parts);if($after!=='' && $after!==$pairBefore[$key])throw new SppPaymentException(['code'=>'pair_would_break','severity'=>'error','title'=>'SPP dan Komite harus bersama','message'=>'Perubahan ini membuat salah satu tagihan bulan yang sama tertinggal. Periksa kembali SPP dan Komite.','target'=>'komite-input']);}
 
         save_biaya_lain($koneksi, $id, $biaya_lain);
 
@@ -997,12 +1067,15 @@ if ($aksi === 'hapus') {
             $authorizationRequest = $lockedRequest;
         }
         $old_bayar = find_linked_payment($koneksi, $id);
+        $pairParts=[(string)$old_bayar['NO_INDUK'],normalize_month_code((string)$old_bayar['BULAN']),(string)$old_bayar['TAHUN']];
+        $pairBefore=komite_pair_gap($koneksi,...$pairParts);
         $usePublishedSpp = spp_billing_schema_ready($koneksi);
         if ($usePublishedSpp) spp_reverse_payment_allocation($koneksi, $id);
         $stmtOldKomite=$koneksi->prepare('DELETE FROM bayar_komite WHERE bayar_id=?');
         $stmtOldKomite->bind_param('i',$id);$stmtOldKomite->execute();$stmtOldKomite->close();
         if ($usePublishedSpp) spp_assert_paid_order($koneksi,(string)$old_bayar['NO_INDUK']);
-        komite_assert_spp_pairs($koneksi,(string)$old_bayar['NO_INDUK']);
+        $pairAfter=komite_pair_gap($koneksi,...$pairParts);
+        if($pairAfter!=='' && $pairAfter!==$pairBefore)throw new SppPaymentException(['code'=>'pair_would_break','severity'=>'error','title'=>'SPP dan Komite harus bersama','message'=>'Transaksi ini tidak dapat dihapus karena akan meninggalkan salah satu tagihan bulan yang sama.','target'=>'komite-input']);
 
         if (!$usePublishedSpp && (float)$old_bayar['U_SPP'] > 0) {
             $oldSppMonth = normalize_month_code((string)$old_bayar['BULAN']);

@@ -236,7 +236,7 @@ function spp_published_period_status(mysqli $db, string $noInduk, string $month,
     if ($paid+.001>=$total) return array_merge($status,['status'=>'already_paid','code'=>'already_paid','lock_spp'=>true,'title'=>'SPP sudah lunas','message'=>'SPP '.$label.' sudah lunas.']);
     if ($older) {
         $oldLabel=spp_month_label((string)$older['bulan']).' '.$older['tahun'];
-        return array_merge($status,['status'=>'prior_unpaid','code'=>'prior_unpaid','lock_spp'=>true,'title'=>'Ada tunggakan SPP','message'=>'Lunasi dahulu SPP '.$oldLabel.'.','amount_label'=>'Sisa Rp '.number_format((float)$older['nominal_tagihan']-(float)$older['paid'],0,',','.'),'blocking_period'=>['bulan'=>$older['bulan'],'tahun'=>$older['tahun'],'label'=>$oldLabel]]);
+        return array_merge($status,['status'=>'prior_unpaid','code'=>'prior_unpaid','lock_spp'=>true,'title'=>'Ada SPP yang lebih lama','message'=>'SPP '.$oldLabel.' masih tersisa Rp '.number_format((float)$older['nominal_tagihan']-(float)$older['paid'],0,',','.').'. Lunasi bulan itu lebih dulu.','amount_label'=>'Sisa Rp '.number_format((float)$older['nominal_tagihan']-(float)$older['paid'],0,',','.'),'blocking_period'=>['bulan'=>$older['bulan'],'tahun'=>$older['tahun'],'label'=>$oldLabel]]);
     }
     return $status;
 }

@@ -127,6 +127,8 @@ function total_after_discount($total, $discount, $fallbackTotal = 0) {
 // Flash message
 $flash = $_SESSION['flash'] ?? null;
 unset($_SESSION['flash']);
+$paymentDraft = $_SESSION['payment_draft'] ?? null;
+unset($_SESSION['payment_draft']);
 ?>
 <!DOCTYPE html>
 <html lang="id">
@@ -138,7 +140,7 @@ unset($_SESSION['flash']);
   <meta name="description" content="Form input transaksi pembayaran siswa." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="../assets/css/style.css?v=10.2" />
+  <link rel="stylesheet" href="../assets/css/style.css?v=11.0" />
   <!-- Prevent theme flash -->
   <script>(function(){var t=localStorage.getItem('spp_theme')||'light';document.documentElement.setAttribute('data-theme',t);})();</script>
 </head>
@@ -246,8 +248,9 @@ unset($_SESSION['flash']);
                     Sistem Pembayaran
                   </label>
                   <select class="field-input field-select" id="sistem-pembayaran" name="sistem_pembayaran" required>
+                    <option value="" selected disabled>Pilih metode</option>
                     <option value="Tunai">Tunai</option>
-                    <option value="VA" selected>VA</option>
+                    <option value="VA">VA</option>
                     <option value="Qris">Qris</option>
                   </select>
                 </div>
@@ -486,8 +489,9 @@ unset($_SESSION['flash']);
       ($flash['scope'] ?? '') === 'spp' ? ($flash['spp_status'] ?? null) : null,
       JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT
     ) ?>;
+    window.paymentDraft = <?= json_encode($paymentDraft, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT) ?>;
   </script>
-  <script src="../assets/js/app.js?v=10.4"></script>
+  <script src="../assets/js/app.js?v=11.0"></script>
 </body>
 </html>
 

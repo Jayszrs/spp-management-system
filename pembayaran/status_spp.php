@@ -13,6 +13,7 @@ require_once '../koneksi.php';
 require_once '../includes/auth.php';
 require_once '../includes/spp_payment_status.php';
 require_once '../includes/spp_billing.php';
+require_once '../includes/komite_billing.php';
 requireRole(['admin', 'kasir']);
 
 $noInduk = trim((string)($_GET['no_induk'] ?? ''));
@@ -48,6 +49,17 @@ try {
     $status = spp_billing_schema_ready($koneksi)
         ? spp_published_period_status($koneksi,$noInduk,$bulan,$tahun,$editId)
         : spp_payment_status($koneksi, $noInduk, $bulan, $tahun, $editId, false, $allowInactive);
+    if (spp_billing_schema_ready($koneksi)) {
+        if ($editId === 0) $status['saldo_titipan'] = spp_deposit_balance($koneksi,$noInduk);
+        $komite = komite_bill($koneksi,$noInduk,$bulan,$tahun);
+        $komitePaid = (float)($komite['paid'] ?? 0);
+        if ($komite && $editId > 0) {
+            $stmt = $koneksi->prepare('SELECT COALESCE(SUM(nominal),0) nominal FROM bayar_komite WHERE bayar_id=? AND tagihan_komite_id=?');
+            $komiteId=(int)$komite['id'];$stmt->bind_param('ii',$editId,$komiteId);$stmt->execute();
+            $komitePaid -= (float)($stmt->get_result()->fetch_assoc()['nominal'] ?? 0);$stmt->close();
+        }
+        $status['komite'] = ['exists'=>(bool)$komite,'total'=>(float)($komite['nominal_tagihan'] ?? 0),'paid'=>max(0,$komitePaid)];
+    }
     $status['edit_dependency'] = spp_billing_schema_ready($koneksi) ? null : ($editId > 0 ? spp_edit_dependency($koneksi, $editId, false) : null);
     $koneksi->commit();
     $transactionStarted = false;

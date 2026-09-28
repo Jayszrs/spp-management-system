@@ -22,15 +22,29 @@ try {
     $count=(int)$koneksi->query("SELECT COUNT(*) total FROM tagihan_komite WHERE no_induk='$nis'")->fetch_assoc()['total'];
     komite_test_assert($count===9,'Pindahan Oktober harus mendapat sembilan tagihan, bukan dua belas.');
     komite_test_assert(komite_bill($koneksi,$nis,'09','2195')===null,'Komite sebelum bulan masuk terbit.');
+    komite_validate_spp_pair($koneksi,$nis,'10','2195',15000,false); // SPP belum terbit: hanya Komite terutang.
+    $sppMasterId=(int)$year['id'];
+    $stmt=$koneksi->prepare("INSERT INTO tagihan_spp(master_spp_tahun_id,tahun_ajaran_id,penempatan_id,no_induk,tingkat_snapshot,master_kelas_id,kelas_rombel_snapshot,bulan,tahun,tarif_dasar_snapshot,nominal_tagihan,status) VALUES(?,?,?,?,1,?,?,'10','2195',25000,25000,'open')");
+    $stmt->bind_param('iiisis',$sppMasterId,$yearId,$placementId,$nis,$classId,$classLabel);$stmt->execute();$stmt->close();
+    try { komite_validate_spp_pair($koneksi,$nis,'10','2195',15000,false); throw new RuntimeException('Komite tanpa SPP diterima saat keduanya terutang.'); }
+    catch(SppPaymentException $e) { komite_test_assert($e->status()['code']==='spp_required','Kode popup SPP belum dibayar tidak sesuai.'); }
+    komite_test_assert(komite_pair_gap($koneksi,$nis,'10','2195')==='','Belum bayar keduanya tidak boleh dihitung sebagai pasangan timpang.');
+    spp_allocate_payment($koneksi,$nis,null,'10','2195',25000,false,'2195-10-01 07:00:00','Tunai','test');
+    komite_test_assert(komite_pair_gap($koneksi,$nis,'10','2195')==='spp_only','Pembayaran SPP lama satu sisi tidak terdeteksi.');
+    komite_validate_spp_pair($koneksi,$nis,'10','2195',15000,false); // Melengkapi pembayaran lama.
     komite_test_reject(fn()=>komite_validate_amount($koneksi,$nis,'10','2195',7500,false),'Komite parsial diterima.');
     $bill=komite_validate_amount($koneksi,$nis,'10','2195',15000,true);
     $stmt=$koneksi->prepare("INSERT INTO bayar(NO_INDUK,KELAS,BULAN,TAHUN,TGL_BYR,U_KOMITE,total_jumlah,payment_link_version) VALUES(?,?,'10','2195','2195-10-01 08:00:00',15000,15000,1)");
     $stmt->bind_param('ss',$nis,$level);$stmt->execute();$paymentId=(int)$koneksi->insert_id;$stmt->close();
     komite_save_payment($koneksi,$paymentId,$bill,15000);
+    komite_test_assert(komite_pair_gap($koneksi,$nis,'10','2195')==='','Komite pelengkap tidak menutup pasangan SPP.');
     $rate=komite_sync_student_rate($koneksi,$nis,20000);
     komite_test_assert($rate['updated']===8,'Perubahan tarif tidak hanya memperbarui tagihan belum dibayar.');
     komite_test_assert((float)komite_bill($koneksi,$nis,'10','2195')['nominal_tagihan']===15000.0,'Tagihan yang sudah dibayar berubah.');
     komite_test_assert((float)komite_bill($koneksi,$nis,'11','2195')['nominal_tagihan']===20000.0,'Tarif baru tidak diterapkan.');
+    $stmt=$koneksi->prepare("INSERT INTO tagihan_spp(master_spp_tahun_id,tahun_ajaran_id,penempatan_id,no_induk,tingkat_snapshot,master_kelas_id,kelas_rombel_snapshot,bulan,tahun,tarif_dasar_snapshot,nominal_tagihan,status) VALUES(?,?,?,?,1,?,?,'11','2195',0,0,'open')");
+    $stmt->bind_param('iiisis',$sppMasterId,$yearId,$placementId,$nis,$classId,$classLabel);$stmt->execute();$stmt->close();
+    komite_validate_spp_pair($koneksi,$nis,'11','2195',20000,false); // SPP Rp0 tidak menahan Komite.
     komite_validate_amount($koneksi,$nis,'10','2195',0,true);
     komite_test_reject(fn()=>komite_validate_amount($koneksi,$nis,'11','2195',0,true),'SPP diterima tanpa Komite bulan yang sama.');
     $koneksi->query("UPDATE siswa_tahun_ajaran SET status='lulus' WHERE id=$placementId");
@@ -41,5 +55,5 @@ try {
     komite_sync_student_rate($koneksi,$nis,0);
     komite_validate_amount($koneksi,$nis,'11','2195',0,true);
     $koneksi->rollback();
-    echo "OK: Komite bulanan, pindahan, lulusan, lunas penuh, tarif snapshot, dan kewajiban bersama SPP.\n";
+    echo "OK: Komite bulanan, pindahan, lulusan, tarif snapshot, dan pelengkapan pasangan SPP lama.\n";
 } catch(Throwable $e) {$koneksi->rollback();throw $e;}

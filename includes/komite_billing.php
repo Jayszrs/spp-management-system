@@ -1,6 +1,7 @@
 <?php
 
 require_once __DIR__ . '/spp_billing.php';
+require_once __DIR__ . '/spp_payment_status.php';
 
 function komite_academic_year(string $month, string $year): string {
     $number = (int)$month;
@@ -83,12 +84,47 @@ function komite_validate_amount(mysqli $db, string $noInduk, string $month, stri
     if (($amount > .001 || $sppPayment) && !$bill) $bill=komite_require_bill($db,$noInduk,$month,$year,true);
     $due=$bill ? (float)$bill['remaining'] : 0.0;
     if ($amount > .001 && ($due <= .001 || abs($amount-$due)>.001)) {
-        throw new RuntimeException('Komite '.spp_month_label($month).' '.$year.' harus dibayar tepat Rp '.number_format($due,0,',','.').'.');
+        $label=spp_month_label($month).' '.$year;
+        throw new SppPaymentException(['code'=>'komite_amount','severity'=>'error','title'=>'Nominal belum sesuai',
+            'message'=>'Komite '.$label.' harus lunas Rp '.number_format($due,0,',','.').'. Periksa angka yang diisi.',
+            'amount_label'=>'Sisa Komite Rp '.number_format($due,0,',','.'),'target'=>'komite-input']);
     }
     if ($sppPayment && $due > .001 && abs($amount-$due)>.001) {
-        throw new RuntimeException('SPP dan Komite bulan ini dibayar bersama. Komite '.spp_month_label($month).' '.$year.' masih Rp '.number_format($due,0,',','.').'.');
+        $label = spp_month_label($month).' '.$year;
+        throw new SppPaymentException(['code'=>'komite_required','severity'=>'error','title'=>'Komite belum dibayar',
+            'message'=>'SPP '.$label.' harus dibayar bersama Komite bulan yang sama. Sisa Komite Rp '.number_format($due,0,',','.').'.',
+            'amount_label'=>'Sisa Komite Rp '.number_format($due,0,',','.'),'target'=>'komite-input']);
     }
     return $bill;
+}
+
+/** Komite dan SPP wajib bersama hanya bila keduanya masih terutang pada bulan yang sama. */
+function komite_validate_spp_pair(mysqli $db, string $noInduk, string $month, string $year, float $komiteAmount, bool $sppPayment): void {
+    if ($komiteAmount <= .001 || $sppPayment) return;
+    $stmt=$db->prepare('SELECT id,nominal_tagihan,status FROM tagihan_spp WHERE no_induk=? AND bulan=? AND tahun=? LIMIT 1 FOR UPDATE');
+    $stmt->bind_param('sss',$noInduk,$month,$year);$stmt->execute();$bill=$stmt->get_result()->fetch_assoc();$stmt->close();
+    $label=spp_month_label($month).' '.$year;
+    if (!$bill) return; // Hanya Komite terutang; penerbitan SPP tetap terpisah.
+    if ((float)$bill['nominal_tagihan'] <= .001) return;
+    if ($bill['status'] !== 'open') return;
+    $status=spp_published_period_status($db,$noInduk,$month,$year);
+    if (($status['status'] ?? '') === 'already_paid') return;
+    if (($status['status'] ?? '') === 'prior_unpaid') throw new SppPaymentException($status);
+    $due=(float)($status['selected']['remaining'] ?? 0);
+    throw new SppPaymentException(['code'=>'spp_required','severity'=>'error','title'=>'SPP belum dibayar',
+        'message'=>'Komite '.$label.' harus dibayar bersama SPP bulan yang sama. Sisa SPP Rp '.number_format($due,0,',','.').'.',
+        'amount_label'=>'Sisa SPP Rp '.number_format($due,0,',','.'),'target'=>'spp-input']);
+}
+
+/** Mendeteksi pembayaran satu sisi agar edit/hapus tidak menciptakan ketimpangan baru. */
+function komite_pair_gap(mysqli $db, string $noInduk, string $month, string $year): string {
+    $stmt=$db->prepare("SELECT ts.nominal_tagihan,ts.status,COALESCE(SUM(CASE WHEN ab.status='active' THEN a.nominal_dari_bayar+a.nominal_dari_titipan ELSE 0 END),0) paid FROM tagihan_spp ts LEFT JOIN spp_alokasi a ON a.tagihan_spp_id=ts.id LEFT JOIN spp_alokasi_batch ab ON ab.id=a.batch_id WHERE ts.no_induk=? AND ts.bulan=? AND ts.tahun=? GROUP BY ts.id LIMIT 1");
+    $stmt->bind_param('sss',$noInduk,$month,$year);$stmt->execute();$spp=$stmt->get_result()->fetch_assoc();$stmt->close();
+    $komite=komite_bill($db,$noInduk,$month,$year);
+    if (!$spp || !$komite || $spp['status']!=='open' || (float)$spp['nominal_tagihan']<=.001 || (float)$komite['nominal_tagihan']<=.001) return '';
+    $sppPaid=(float)$spp['paid']+.001>=(float)$spp['nominal_tagihan'];
+    $komitePaid=(float)$komite['paid']+.001>=(float)$komite['nominal_tagihan'];
+    return $sppPaid===$komitePaid ? '' : ($sppPaid?'spp_only':'komite_only');
 }
 
 function komite_save_payment(mysqli $db, int $paymentId, ?array $bill, float $amount): void {
