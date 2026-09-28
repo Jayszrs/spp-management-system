@@ -378,7 +378,10 @@ $selectedPaymentMethod = $d['sistem_pembayaran'] ?? 'VA';
 
           <!-- Rincian Pembayaran -->
           <div class="section-divider"><span>Rincian Pembayaran</span></div>
-          <p class="payment-auto-note">SPP dan Komite bulan ini dibayar bersama.</p>
+          <div class="payment-rule-note" role="note">
+            <span>SPP + Komite</span>
+            <p>Dibayar bersama untuk bulan yang dipilih.</p>
+          </div>
           <section class="spp-deposit-banner" id="spp-deposit-banner" hidden aria-live="polite"><div><span>Saldo Titipan SPP</span><strong id="spp-deposit-balance">Rp 0</strong><small id="spp-deposit-capacity"></small></div><button type="button" class="btn btn-ghost" id="spp-use-deposit-button">Gunakan Titipan</button></section>
           <div class="spp-deposit-action"><button type="button" class="btn btn-ghost" id="spp-record-deposit-button"><?= !empty($currentSppAllocation['titipan_baru']) ? 'Kembali ke Bayar SPP' : 'Catat Titipan SPP' ?></button><span id="spp-action-context" aria-live="polite"><?= !empty($currentSppAllocation['titipan_baru']) ? 'Nominal SPP dicatat sebagai titipan.' : '' ?></span></div>
           <div class="alert alert-warning payment-overpaid-alert" id="payment-overpaid-alert" hidden></div>
