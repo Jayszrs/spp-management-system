@@ -321,10 +321,6 @@ unset($_SESSION['payment_draft']);
 
           <!-- Rincian Pembayaran -->
           <div class="section-divider"><span>Rincian Pembayaran</span></div>
-          <div class="payment-rule-note" role="note">
-            <span>SPP + Komite</span>
-            <p>Dibayar bersama untuk bulan yang dipilih.</p>
-          </div>
           <section class="spp-deposit-banner" id="spp-deposit-banner" hidden aria-live="polite">
             <div><span>Saldo Titipan SPP</span><strong id="spp-deposit-balance">Rp 0</strong><small id="spp-deposit-capacity">Pilih siswa untuk melihat saldo.</small></div>
             <button type="button" class="btn btn-ghost" id="spp-use-deposit-button">Gunakan Titipan</button>

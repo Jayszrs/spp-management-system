@@ -2547,33 +2547,6 @@ input[list]::-webkit-calendar-picker-indicator { display: none !important; }
   margin: 0 0 14px;
   line-height: 1.5;
 }
-.payment-rule-note {
-  display: flex;
-  align-items: baseline;
-  gap: 9px;
-  margin: -2px 0 14px;
-  color: var(--text-muted);
-  font-size: 12.5px;
-  line-height: 1.45;
-}
-.payment-rule-note span {
-  flex: 0 0 auto;
-  color: var(--green);
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: .045em;
-  text-transform: uppercase;
-}
-.payment-rule-note p {
-  margin: 0;
-}
-@media (max-width: 520px) {
-  .payment-rule-note {
-    align-items: flex-start;
-    flex-direction: column;
-    gap: 2px;
-  }
-}
 .payment-overpaid-alert[hidden],
 .payment-input-overlimit-alert[hidden],
 .biaya-lain-overpaid-alert[hidden] {
