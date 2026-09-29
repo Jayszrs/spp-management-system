@@ -11991,7 +11991,8 @@ html[data-palette]:not([data-palette="sd"]) .report-detail-header {
   border-color: var(--border); background: rgba(var(--unit-rgb), .045);
 }
 html[data-palette]:not([data-palette="sd"]) .report-billing-matrix-wrap {
-  --billing-matrix-hover: rgba(var(--unit-rgb), .09);
+  /* Sticky identity cells must stay opaque while other columns scroll behind them. */
+  --billing-matrix-hover: color-mix(in srgb, var(--bg-elevated) 91%, rgb(var(--unit-rgb)) 9%);
 }
 html[data-palette]:not([data-palette="sd"]) .report-billing-matrix-table tbody td.billing-matrix-total {
   background: rgba(var(--unit-rgb), .055);
