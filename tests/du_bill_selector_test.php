@@ -73,18 +73,44 @@ try {
 
     $selected = du_require_selectable_bill($koneksi, $billIds[$previous], $nis, 0, true);
     du_selector_assert($selected['tahun_ajaran'] === $previous && abs($selected['sisa'] - 900000) < .001, 'Tagihan lama tidak dapat dipilih berdasarkan ID.');
+    du_assert_payment_amount($selected, 100000);
+    du_assert_payment_amount($selected, 900000);
+    $tooMuch = false;
+    try { du_assert_payment_amount($selected, 900001); }
+    catch (DaftarUlangSelectionException $error) { $tooMuch = $error->reason === 'over_limit'; }
+    du_selector_assert($tooMuch, 'Pembayaran melebihi sisa tagihan tidak ditolak.');
+    du_assert_bill_snapshot($selected, 900000, 0);
+    $changed = false;
+    try { du_assert_bill_snapshot($selected, 900000, 100000); }
+    catch (DaftarUlangSelectionException $error) { $changed = $error->reason === 'changed'; }
+    du_selector_assert($changed, 'Saldo tagihan yang berubah tidak terdeteksi.');
+
+    $settled = false;
+    try { du_require_selectable_bill($koneksi, $billIds[$current], $nis); }
+    catch (DaftarUlangSelectionException $error) { $settled = $error->reason === 'settled'; }
+    du_selector_assert($settled, 'Tagihan yang sudah lunas masih dapat dibayar.');
     $editable = du_require_selectable_bill($koneksi, $billIds[$current], $nis, $paymentId, true);
     du_selector_assert(abs($editable['sisa'] - 1000000) < .001, 'Saldo edit tidak mengembalikan pembayaran lama sebelum validasi.');
 
+    $missingBillId = (int)$koneksi->query('SELECT COALESCE(MAX(id),0)+1000000 FROM tagihan_daftar_ulang')->fetch_row()[0];
     foreach ([
-        fn() => du_require_selectable_bill($koneksi, 0, $nis),
-        fn() => du_require_selectable_bill($koneksi, $billIds[$previous], '0000000000'),
-        fn() => du_require_selectable_bill($koneksi, $billIds[$future], $nis),
-    ] as $invalidCall) {
+        'missing' => fn() => du_require_selectable_bill($koneksi, 0, $nis),
+        'not_found' => fn() => du_require_selectable_bill($koneksi, $missingBillId, $nis),
+        'wrong_student' => fn() => du_require_selectable_bill($koneksi, $billIds[$previous], '0000000000'),
+        'future' => fn() => du_require_selectable_bill($koneksi, $billIds[$future], $nis),
+    ] as $reason => $invalidCall) {
         $rejected = false;
-        try { $invalidCall(); } catch (RuntimeException $error) { $rejected = true; }
-        du_selector_assert($rejected, 'Tagihan tanpa ID, milik siswa lain, atau masa depan tidak ditolak.');
+        try { $invalidCall(); }
+        catch (DaftarUlangSelectionException $error) { $rejected = $error->reason === $reason; }
+        du_selector_assert($rejected, 'Alasan penolakan Daftar Ulang tidak sesuai: ' . $reason);
     }
+    $previousBillId = $billIds[$previous];
+    $stmt = $koneksi->prepare("UPDATE tagihan_daftar_ulang SET status='cancelled' WHERE id=?");
+    $stmt->bind_param('i', $previousBillId); $stmt->execute(); $stmt->close();
+    $cancelled = false;
+    try { du_require_selectable_bill($koneksi, $previousBillId, $nis); }
+    catch (DaftarUlangSelectionException $error) { $cancelled = $error->reason === 'cancelled'; }
+    du_selector_assert($cancelled, 'Tagihan yang dibatalkan masih dapat dibayar.');
 } catch (Throwable $error) {
     $failure = $error;
 } finally {

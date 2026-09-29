@@ -40,4 +40,11 @@ feedback_assert($generic['msg'] === 'Gagal menyimpan: Kesalahan lain.' && !isset
 $concurrent = payment_failure_flash(new mysqli_sql_exception('Deadlock', 1213), 'Gagal: ');
 feedback_assert(($concurrent['spp_status']['code'] ?? null) === 'billing_changed', 'Konflik kasir tidak ditangani.');
 
+foreach (['missing', 'not_found', 'wrong_student', 'cancelled', 'future', 'settled', 'changed', 'over_limit', 'overpaid'] as $reason) {
+    $du = payment_failure_flash(new DaftarUlangSelectionException($reason, 'Pesan Daftar Ulang'), 'Gagal: ');
+    feedback_assert(($du['spp_status']['code'] ?? null) === 'du_' . $reason, 'Alasan Daftar Ulang hilang: ' . $reason);
+    feedback_assert(($du['spp_status']['target'] ?? null) === 'du-input', 'Fokus Daftar Ulang keliru: ' . $reason);
+    feedback_assert($du['msg'] === 'Pesan Daftar Ulang', 'Pesan Daftar Ulang berubah: ' . $reason);
+}
+
 echo "OK: draft pembayaran dan pesan popup gagal simpan.\n";

@@ -1,6 +1,28 @@
 <?php
 
 require_once __DIR__ . '/spp_payment_status.php';
+require_once __DIR__ . '/daftar_ulang.php';
+
+function payment_du_selection_status(DaftarUlangSelectionException $error): array {
+    $titles = [
+        'missing' => 'Pilih tagihan Daftar Ulang',
+        'not_found' => 'Tagihan tidak ditemukan',
+        'wrong_student' => 'Tagihan tidak cocok',
+        'cancelled' => 'Tagihan dibatalkan',
+        'future' => 'Tagihan belum bisa dibayar',
+        'settled' => 'Daftar Ulang sudah lunas',
+        'changed' => 'Tagihan berubah',
+        'over_limit' => 'Melebihi sisa tagihan',
+        'overpaid' => 'Riwayat pembayaran perlu diperiksa',
+    ];
+    return [
+        'code' => 'du_' . $error->reason,
+        'severity' => 'error',
+        'title' => $titles[$error->reason] ?? 'Periksa Daftar Ulang',
+        'message' => $error->getMessage(),
+        'target' => 'du-input',
+    ];
+}
 
 /** Mengubah kegagalan penyimpanan menjadi pesan popup yang dapat ditindaklanjuti. */
 function payment_failure_flash(Throwable $error, string $fallbackPrefix): array {
@@ -10,6 +32,10 @@ function payment_failure_flash(Throwable $error, string $fallbackPrefix): array 
             'message' => 'Tagihan sedang diperbarui oleh kasir lain. Perbarui tagihan, lalu periksa kembali sebelum menyimpan.',
             'target' => 'spp-input',
         ]);
+    }
+
+    if ($error instanceof DaftarUlangSelectionException) {
+        $error = new SppPaymentException(payment_du_selection_status($error));
     }
 
     if (!$error instanceof SppPaymentException) {

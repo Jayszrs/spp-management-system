@@ -911,9 +911,10 @@ function ensureDefaultDaftarUlangSelection(opt) {
   const records = daftarUlangRecords(opt);
   let selected = records.find(record => String(record.id) === hidden.value);
   if (!selected) {
-    selected = records.find(record => record.is_current)
-      || records.filter(record => record.is_arrear && parseNumber(record.sisa) > .001)
+    selected = records.find(record => record.is_current && record.status === 'open' && parseNumber(record.sisa) > .001)
+      || records.filter(record => record.is_arrear && record.status === 'open' && parseNumber(record.sisa) > .001)
         .sort((a, b) => String(a.tahun_ajaran).localeCompare(String(b.tahun_ajaran)))[0]
+      || records.find(record => record.is_current)
       || null;
     hidden.value = selected ? String(selected.id) : '';
   }
@@ -1065,17 +1066,22 @@ function refreshDaftarUlangMasterWarning(opt) {
   const total = parseNumber(bill?.total || 0);
   const paid = parseNumber(bill?.terbayar ?? bill?.paid ?? 0);
   const remaining = parseNumber(bill?.sisa ?? Math.max(0, total - paid));
-  const isSettled = !!bill && total > 0 && remaining <= 0.001;
+  const isSettled = !!bill && remaining <= 0.001;
   const isUnavailable = !!opt && !bill;
+  const expectedTotal = document.getElementById('du-expected-total');
+  const expectedPaid = document.getElementById('du-expected-paid');
+  if (expectedTotal) expectedTotal.value = bill ? String(total) : '';
+  if (expectedPaid) expectedPaid.value = bill ? String(paid) : '';
   const contextLabel = document.getElementById('du-context-label');
   if (contextLabel) {
     let status = 'Belum Bayar';
-    if (isSettled) status = 'Lunas';
+    if (isSettled) status = total <= .001 ? 'Tidak perlu dibayar' : 'Lunas';
     else if (paid > 0) status = 'Cicilan';
     if (!opt || !periodKey) {
       contextLabel.textContent = opt ? 'Belum ada tagihan Daftar Ulang yang dapat dipilih.' : 'Pilih siswa untuk melihat tagihan.';
     } else if (bill) {
-      contextLabel.textContent = 'TA ' + periodKey + ' · Kelas ' + bill.kelas + ' · ' + status;
+      contextLabel.textContent = 'TA ' + periodKey + ' · Kelas ' + bill.kelas + ' · ' + status
+        + (remaining > .001 ? ' · Sisa Rp ' + formatRupiah(remaining) : '');
     }
   }
 
@@ -1247,6 +1253,7 @@ function setPaymentComponent(key, total, paid) {
 
 function applyStudentPaymentDetails(opt) {
   if (!opt) return;
+  ensureDefaultDaftarUlangSelection(opt);
   ['pangkal','psb','spp','komite','du'].forEach(key => {
     if (window.sppPublishedBilling && (key === 'spp' || key === 'komite')) return;
     const total = key === 'du'
@@ -2398,7 +2405,7 @@ async function restorePaymentDraft() {
   }
   if (draft.tagihan_daftar_ulang_id) {
     setValue('tagihan-daftar-ulang-id', draft.tagihan_daftar_ulang_id);
-    refreshDaftarUlangSelector(selectedStudentOption());
+    if (opt) applyStudentPaymentDetails(opt);
   }
   if (draft.spp_action === 'titipan') document.getElementById('spp-record-deposit-button')?.click();
   for (const [key,id] of Object.entries({uang_pangkal:'pangkal-input',uang_psb:'psb-input',uang_komite:'komite-input',uang_du:'du-input'})) {

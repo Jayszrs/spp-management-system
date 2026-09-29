@@ -2079,6 +2079,7 @@ h1, h2, h3, h4, h5, h6, .card-title, .topbar-title h2, .sidebar-brand-name {
   grid-column: span 3;
   justify-content: flex-end;
 }
+.report-export-label { color: var(--text-secondary); font-weight: 700; padding: 0 4px; }
 .report-stats-grid {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
@@ -10689,4 +10690,84 @@ a.btn {
   .report-table-report-filter-setoran .report-settlement-method-grid {
     grid-template-columns: 1fr !important;
   }
+}
+
+/* Surat laporan: one catalog entry and a compact, readable student list. */
+.letter-catalog { max-width: 1220px; }
+.letter-catalog-section { margin-top: 26px; }
+.letter-catalog .report-catalog-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.letter-catalog .report-template-card { min-height: 220px; }
+.letter-catalog .report-template-link:focus-visible,
+.letter-back-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 4px; }
+.letter-list-shell { box-sizing: border-box; width: 100%; max-width: 1320px; margin: 0 auto; padding: 22px 28px 42px; }
+.letter-back-link { display: inline-flex; align-items: center; min-height: 32px; margin: 0 0 12px; color: var(--accent); font-size: 13px; font-weight: 750; text-decoration: none; }
+.letter-back-link:hover { text-decoration: underline; }
+.letter-principal-back { margin: 18px 28px 0; }
+.letter-list-card { min-width: 0; margin: 0; padding: 0; overflow: hidden; border-radius: 16px; }
+.letter-list-head { display: flex; justify-content: space-between; align-items: center; gap: 24px; padding: 25px 28px 22px; }
+.letter-list-heading { min-width: 0; }
+.letter-list-head h1 { margin: 7px 0 6px; color: var(--text-primary); font-size: clamp(20px, 2vw, 27px); line-height: 1.2; }
+.letter-list-head p { max-width: 700px; margin: 0; color: var(--text-secondary); font-size: 14px; line-height: 1.5; }
+.letter-total { display: grid; gap: 2px; flex: 0 0 auto; min-width: 174px; padding: 12px 17px; border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: 9px; background: var(--bg-surface); color: var(--text-secondary); font-size: 12px; }
+.letter-total strong { color: var(--accent); font-size: 27px; line-height: 1.1; }
+.letter-filters { display: grid; grid-template-columns: minmax(150px,1fr) minmax(150px,.8fr) minmax(220px,1.45fr) auto; gap: 12px; align-items: end; padding: 18px 28px 22px; border-top: 1px solid var(--border); }
+.letter-filters .field-row { min-width: 0; margin: 0; }
+.letter-filters .field-label { display: block; margin-bottom: 7px; color: var(--text-secondary); font-size: 11px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
+.letter-filters .field-input { box-sizing: border-box; width: 100%; min-width: 0; height: 44px; }
+.letter-filters .btn { min-height: 44px; white-space: nowrap; }
+.letter-actions { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; padding: 16px 28px; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); background: var(--bg-surface); }
+.letter-action-copy { display: grid; gap: 3px; min-width: 230px; color: var(--text-primary); }
+.letter-action-copy span { max-width: 480px; color: var(--text-muted); font-size: 12px; line-height: 1.4; }
+.letter-action-buttons { display: flex; flex-wrap: wrap; gap: 8px; }
+.letter-action-buttons .btn { min-height: 40px; white-space: nowrap; }
+.letter-action-buttons .is-disabled { opacity: .48; pointer-events: none; }
+.letter-table-hint { display: none; }
+.letter-table-wrap { margin: 0; border: 0; border-radius: 0; box-shadow: none; }
+.letter-table-wrap:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.letter-student-table { width: 100%; min-width: 730px; border-collapse: collapse; table-layout: fixed; color: var(--text-primary); }
+.letter-student-table th { padding: 12px 14px; background: var(--bg-surface); color: var(--text-secondary); font-size: 11px; font-weight: 800; letter-spacing: .04em; text-align: left; text-transform: uppercase; }
+.letter-student-table td { padding: 11px 14px; border-top: 1px solid var(--border); font-size: 13px; }
+.letter-student-table td, .letter-student-table th { vertical-align: middle; }
+.letter-student-table th:nth-child(1) { width: 100px; }
+.letter-student-table th:nth-child(2) { width: 31%; }
+.letter-student-table th:nth-child(3) { width: 10%; }
+.letter-student-table th:nth-child(4) { width: 13%; }
+.letter-student-table th:nth-child(5) { width: 18%; }
+.letter-student-table th:nth-child(6) { width: 140px; }
+.letter-student-table tbody tr:hover,
+.letter-student-table tbody tr:has(.letter-select:checked) { background: rgba(52, 211, 153, .07); }
+.letter-select-all { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; }
+.letter-student-name strong,
+.letter-student-name small { display: block; }
+.letter-student-name strong { line-height: 1.35; }
+.letter-student-name small { margin-top: 3px; color: var(--text-muted); font-size: 11px; line-height: 1.4; }
+.letter-student-table .money { white-space: nowrap; font-weight: 750; }
+.letter-student-table input[type=checkbox] { width: 17px; height: 17px; margin: 0; accent-color: var(--accent); cursor: pointer; vertical-align: middle; }
+.letter-student-table input[type=checkbox]:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.letter-student-table .btn { white-space: nowrap; }
+.letter-student-row[hidden] { display: none !important; }
+.letter-empty { padding: 30px !important; color: var(--text-muted); text-align: center; }
+.letter-pages { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 15px 28px; border-top: 1px solid var(--border); color: var(--text-secondary); font-size: 12px; }
+.letter-pages>div { display: flex; gap: 8px; }
+@media(max-width: 1100px) {
+  .letter-filters { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .letter-filters .letter-search { grid-column: 1 / -1; }
+  .letter-filters .btn { justify-self: start; }
+}
+@media(max-width: 700px) {
+  .letter-catalog .report-catalog-grid { grid-template-columns: 1fr; }
+  .letter-catalog .report-template-card { min-height: 0; }
+  .letter-list-shell { padding: 14px 14px 88px; }
+  .letter-principal-back { margin: 14px 16px 0; }
+  .letter-list-head { align-items: stretch; flex-direction: column; gap: 14px; padding: 20px 18px; }
+  .letter-total { min-width: 0; }
+  .letter-filters { grid-template-columns: 1fr; padding: 17px 18px 20px; }
+  .letter-filters .letter-search { grid-column: auto; }
+  .letter-filters .btn { width: 100%; }
+  .letter-actions { align-items: stretch; flex-direction: column; padding: 16px 18px; }
+  .letter-action-copy { min-width: 0; }
+  .letter-action-buttons { display: grid; grid-template-columns: 1fr; }
+  .letter-action-buttons .btn { width: 100%; justify-content: center; }
+  .letter-table-hint { display: block; margin: 0; padding: 11px 18px; color: var(--text-secondary); font-size: 12px; }
+  .letter-pages { flex-wrap: wrap; padding: 15px 18px; }
 }

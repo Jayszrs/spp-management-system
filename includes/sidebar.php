@@ -78,6 +78,10 @@ $allNavItems = [
    '<path d="M3 3v18h18"/><path d="M7 15l3-3 3 2 5-6"/><path d="M7 19h12"/>',
    ['admin', 'bendahara', 'kasir'], 'Laporan'],
 
+  ['laporan/surat_laporan.php', 'Surat Laporan',
+   '<path d="M4 21h16V7l-5-5H4z"/><path d="M14 2v6h6M8 13h8M8 17h6"/>',
+   ['admin', 'bendahara', 'kasir'], 'Laporan'],
+
   ['role_management.php', 'Role Management',
    '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/>',
    ['admin'], 'Pengaturan'],
@@ -105,6 +109,7 @@ $shortLabels = [
   'Riwayat Tabungan'  => 'Riwayat',
   'Laporan Umum'      => 'Umum',
   'Laporan Global'    => 'Global',
+  'Surat Laporan' => 'Surat',
 ];
 
 // Role label
@@ -131,13 +136,15 @@ $roleAvatar = $roleAvatars[$role] ?? 'US';
   <nav class="sidebar-nav">
     <?php $lastSection = null; ?>
     <?php foreach ($navItems as [$href, $label, $icon, $roles, $section]):
-      $isGlobalDetail = $href === 'laporan/global.php' && in_array($current, ['template.php','export_global.php'], true);
-      $isActive = (strpos($_SERVER['PHP_SELF'], str_replace('../', '', $href)) !== false || $isGlobalDetail) ? 'active' : '';
+      $isPrincipal = $current === 'template.php' && ($_GET['template'] ?? '') === 'tunggakan-siswa';
+      $isGlobalDetail = $href === 'laporan/global.php' && $current === 'template.php' && !$isPrincipal;
+      $isLetterDetail = $href === 'laporan/surat_laporan.php' && ($current === 'surat_orang_tua.php' || $isPrincipal);
+      $isActive = (strpos($_SERVER['PHP_SELF'], str_replace('../', '', $href)) !== false || $isGlobalDetail || $isLetterDetail) ? 'active' : '';
     ?>
     <?php if ($section !== $lastSection): $lastSection = $section; ?>
     <div class="nav-section-label"><?= htmlspecialchars($section) ?></div>
     <?php endif; ?>
-    <a href="<?= $root . $href ?>" class="nav-item <?= $isActive ?>">
+    <a href="<?= $root . $href ?>" class="nav-item <?= $isActive ?>" <?= $isActive ? 'aria-current="page"' : '' ?>>
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><?= $icon ?></svg>
       <?= $label ?>
     </a>
@@ -175,11 +182,13 @@ $roleAvatar = $roleAvatars[$role] ?? 'US';
 <!-- Material 3 Bottom Navigation for Mobile -->
 <nav class="bottom-nav">
   <?php foreach ($navItems as [$href, $label, $icon, $roles, $section]):
-    $isGlobalDetail = $href === 'laporan/global.php' && in_array($current, ['template.php','export_global.php'], true);
-    $isActive   = (strpos($_SERVER['PHP_SELF'], str_replace('../', '', $href)) !== false || $isGlobalDetail) ? 'active' : '';
+    $isPrincipal = $current === 'template.php' && ($_GET['template'] ?? '') === 'tunggakan-siswa';
+    $isGlobalDetail = $href === 'laporan/global.php' && $current === 'template.php' && !$isPrincipal;
+    $isLetterDetail = $href === 'laporan/surat_laporan.php' && ($current === 'surat_orang_tua.php' || $isPrincipal);
+    $isActive   = (strpos($_SERVER['PHP_SELF'], str_replace('../', '', $href)) !== false || $isGlobalDetail || $isLetterDetail) ? 'active' : '';
     $shortLabel = $shortLabels[$label] ?? $label;
   ?>
-  <a href="<?= $root . $href ?>" class="bottom-nav-item <?= $isActive ?>">
+  <a href="<?= $root . $href ?>" class="bottom-nav-item <?= $isActive ?>" <?= $isActive ? 'aria-current="page"' : '' ?>>
     <div class="bottom-nav-icon-wrap">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><?= $icon ?></svg>
     </div>

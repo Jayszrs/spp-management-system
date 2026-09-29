@@ -26,6 +26,12 @@ function du_current_academic_year(): string {
     return du_academic_year_label((int)date('n'), (int)date('Y'));
 }
 
+class DaftarUlangSelectionException extends RuntimeException {
+    public function __construct(public string $reason, string $message) {
+        parent::__construct($message);
+    }
+}
+
 /**
  * Mengambil satu tagihan berdasarkan identitas permanennya. Pembayaran tertentu
  * dapat dikecualikan agar saldo saat edit dihitung seolah pembayaran lama sudah
@@ -50,10 +56,19 @@ function du_find_bill_by_id(mysqli $db, int $billId, int $excludePaymentId = 0, 
     $stmt->close();
     if (!$bill) return null;
 
-    $stmt = $db->prepare('SELECT COALESCE(SUM(jumlah),0) AS terbayar FROM bayar_du WHERE tagihan_daftar_ulang_id=? AND (bayar_id IS NULL OR bayar_id<>?)');
-    $stmt->bind_param('ii', $billId, $excludePaymentId);
-    $stmt->execute();
-    $bill['terbayar'] = (float)$stmt->get_result()->fetch_assoc()['terbayar'];
+    if ($forUpdate) {
+        // Current read mencegah dua kasir memakai snapshot saldo yang sama.
+        $stmt = $db->prepare('SELECT jumlah FROM bayar_du WHERE tagihan_daftar_ulang_id=? AND (bayar_id IS NULL OR bayar_id<>?) FOR UPDATE');
+        $stmt->bind_param('ii', $billId, $excludePaymentId);
+        $stmt->execute();
+        $bill['terbayar'] = 0.0;
+        foreach ($stmt->get_result()->fetch_all(MYSQLI_ASSOC) as $payment) $bill['terbayar'] += (float)$payment['jumlah'];
+    } else {
+        $stmt = $db->prepare('SELECT COALESCE(SUM(jumlah),0) AS terbayar FROM bayar_du WHERE tagihan_daftar_ulang_id=? AND (bayar_id IS NULL OR bayar_id<>?)');
+        $stmt->bind_param('ii', $billId, $excludePaymentId);
+        $stmt->execute();
+        $bill['terbayar'] = (float)$stmt->get_result()->fetch_assoc()['terbayar'];
+    }
     $stmt->close();
     $bill['nominal_awal'] = (float)$bill['nominal_awal'];
     $bill['nominal_tagihan'] = (float)$bill['nominal_tagihan'];
@@ -69,19 +84,50 @@ function du_require_selectable_bill(
     bool $forUpdate = false
 ): array {
     if ($billId <= 0) {
-        throw new RuntimeException('Pilih ulang tagihan Daftar Ulang yang akan dibayar.');
+        throw new DaftarUlangSelectionException('missing', 'Pilih tagihan Daftar Ulang yang akan dibayar.');
     }
     $bill = du_find_bill_by_id($db, $billId, $excludePaymentId, $forUpdate);
-    if (!$bill || (string)$bill['no_induk'] !== $noInduk) {
-        throw new RuntimeException('Tagihan Daftar Ulang tidak ditemukan untuk siswa yang dipilih.');
+    if (!$bill) {
+        throw new DaftarUlangSelectionException('not_found', 'Tagihan Daftar Ulang tidak ditemukan. Muat ulang halaman dan pilih tagihan lagi.');
+    }
+    if ((string)$bill['no_induk'] !== $noInduk) {
+        throw new DaftarUlangSelectionException('wrong_student', 'Tagihan Daftar Ulang tidak cocok dengan siswa yang dipilih. Pilih tagihan siswa ini.');
     }
     if ($bill['status'] !== 'open') {
-        throw new RuntimeException('Tagihan Daftar Ulang tahun ajaran ' . $bill['tahun_ajaran'] . ' sudah dibatalkan.');
+        throw new DaftarUlangSelectionException('cancelled', 'Tagihan Daftar Ulang TA ' . $bill['tahun_ajaran'] . ' sudah dibatalkan. Pilih tagihan lain yang masih terbuka.');
     }
     if (strcmp((string)$bill['tahun_ajaran'], du_current_academic_year()) > 0) {
-        throw new RuntimeException('Tagihan Daftar Ulang masa depan belum dapat dibayar.');
+        throw new DaftarUlangSelectionException('future', 'Tagihan Daftar Ulang TA ' . $bill['tahun_ajaran'] . ' belum dapat dibayar. Pilih tahun ajaran yang sudah berjalan.');
+    }
+    if ($bill['sisa'] <= .001) {
+        throw new DaftarUlangSelectionException('settled', 'Daftar Ulang TA ' . $bill['tahun_ajaran'] . ' sudah lunas. Pilih tagihan lain yang masih bersisa.');
     }
     return $bill;
+}
+
+/** Snapshot browser hanya mendeteksi halaman usang; batas pembayaran tetap dari database. */
+function du_assert_bill_snapshot(array $bill, $expectedTotal, $expectedPaid): void {
+    if ($expectedTotal === null && $expectedPaid === null) return;
+    if (!is_scalar($expectedTotal) || !is_scalar($expectedPaid)
+        || !is_numeric((string)$expectedTotal) || !is_numeric((string)$expectedPaid)
+        || abs((float)$expectedTotal - (float)$bill['nominal_tagihan']) > .001
+        || abs((float)$expectedPaid - (float)$bill['terbayar']) > .001) {
+        throw new DaftarUlangSelectionException('changed', 'Saldo Daftar Ulang berubah sejak halaman dibuka. Periksa sisa yang sekarang tampil, lalu sesuaikan nominal pembayaran.');
+    }
+}
+
+function du_assert_payment_amount(array $bill, float $amount): void {
+    if ($amount <= .001) return;
+    $total = (float)$bill['nominal_tagihan'];
+    $paid = (float)$bill['terbayar'];
+    if ($paid > $total + .001) {
+        throw new DaftarUlangSelectionException('overpaid', 'Pembayaran Daftar Ulang sebelumnya sudah melebihi tagihan. Minta admin memeriksa riwayat transaksi siswa ini.');
+    }
+    $remaining = max(0, $total - $paid);
+    if ($amount > $remaining + .001) {
+        throw new DaftarUlangSelectionException('over_limit', 'Sisa Daftar Ulang Rp ' . number_format($remaining, 0, ',', '.')
+            . ', tetapi yang diisi Rp ' . number_format($amount, 0, ',', '.') . '. Kurangi nominalnya sebelum menyimpan.');
+    }
 }
 
 /** @return array<string,array<int,array<string,mixed>>> */
@@ -89,7 +135,7 @@ function du_selectable_bills_payload(mysqli $db, int $excludePaymentId = 0, int 
     $current = du_current_academic_year();
     $stmt = $db->prepare("SELECT tdu.id,tdu.no_induk,tdu.kelas_snapshot,tdu.tahun_ajaran_snapshot,
             tdu.nominal_tagihan,tdu.status,ta.status AS tahun_status,
-            COALESCE(SUM(CASE WHEN bd.bayar_id<>? THEN bd.jumlah ELSE 0 END),0) AS terbayar
+            COALESCE(SUM(CASE WHEN bd.bayar_id IS NULL OR bd.bayar_id<>? THEN bd.jumlah ELSE 0 END),0) AS terbayar
         FROM tagihan_daftar_ulang tdu
         JOIN tahun_ajaran ta ON ta.id=tdu.tahun_ajaran_id
         LEFT JOIN bayar_du bd ON bd.tagihan_daftar_ulang_id=tdu.id

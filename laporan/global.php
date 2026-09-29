@@ -5,6 +5,7 @@ require_once '../includes/auth.php';
 require_once '../includes/reports.php';
 requireRole(['admin','bendahara','kasir']);
 $registry=report_registry();
+unset($registry['tunggakan-siswa']);
 ?>
 <!DOCTYPE html><html lang="id"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>Laporan Global | SistemSPP</title><link rel="icon" href="../assets/img/favicon.png?v=2"><link rel="stylesheet" href="../assets/css/style.css?v=9.9"><script>(function(){document.documentElement.setAttribute('data-theme',localStorage.getItem('spp_theme')||'light')})();</script></head><body>
 <div class="bg-orbs"><div class="orb orb-1"></div><div class="orb orb-2"></div><div class="orb orb-3"></div></div><div class="layout"><?php include '../includes/sidebar.php'; ?><main class="main-content"><div class="topbar"><button class="sidebar-toggle" onclick="toggleSidebar()" aria-label="Buka navigasi"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button><div class="topbar-title"><h2>Laporan Global</h2><span class="breadcrumb">SistemSPP / Pusat Template Laporan</span></div><div class="clock-badge" id="liveClock">--:--:--</div></div>
@@ -12,7 +13,7 @@ $registry=report_registry();
 <div class="report-catalog-grid"><?php foreach($registry as $id=>$report): ?><article class="report-template-card"><div class="report-template-icon"><?= report_e($report['icon']) ?></div><div><h3><?= report_e($report['label']) ?></h3><p><?= report_e($report['description']) ?></p></div><a class="btn btn-primary" href="template.php?template=<?= urlencode($id) ?>">Buka Laporan <span aria-hidden="true">→</span></a></article><?php endforeach; ?></div>
 <?php
 $catalogGroups=[
-  'pembayaran'=>['label'=>'Pembayaran Siswa','description'=>'Pantau tagihan, pembayaran yang diterima, dan tunggakan siswa.','items'=>['status','penerimaan','spp-tahunan','per-item','riwayat-tagihan','tunggakan-siswa']],
+  'pembayaran'=>['label'=>'Pembayaran Siswa','description'=>'Pantau tagihan dan pembayaran siswa.','items'=>['status','penerimaan','spp-tahunan','per-item','riwayat-tagihan']],
   'tabungan'=>['label'=>'Tabungan Siswa','description'=>'Lihat mutasi dan saldo tabungan siswa secara terpisah.','items'=>['tabungan-siswa','saldo-tabungan']],
   'kas'=>['label'=>'Rekap Kas','description'=>'Ringkasan pembayaran, tabungan siswa, dan Titipan SPP untuk kebutuhan rekonsiliasi kas.','items'=>['setoran','kas-tabungan','titipan-spp']],
 ];

@@ -293,16 +293,12 @@ function validate_component_remaining(
     $paid = $stmtPaid->get_result()->fetch_assoc() ?: [];
     $stmtPaid->close();
 
-    $duTotal = 0.0;
-    $paid['du'] = 0.0;
     if ($uangDu > 0) {
         if (!$duBill || (string)$duBill['no_induk'] !== $noInduk) {
-            throw new SppPaymentException(['code'=>'du_reselect','severity'=>'error','title'=>'Pilih ulang Daftar Ulang',
-                'message'=>'Tagihan yang dipilih sudah tidak tersedia. Pilih tagihan yang masih memiliki sisa.',
-                'target'=>'du-selector-trigger']);
+            throw new DaftarUlangSelectionException('wrong_student',
+                'Tagihan Daftar Ulang tidak cocok dengan siswa yang dipilih. Pilih tagihan siswa ini.');
         }
-        $duTotal = (float)$duBill['nominal_tagihan'];
-        $paid['du'] = (float)$duBill['terbayar'];
+        du_assert_payment_amount($duBill, $uangDu);
     }
 
     $sppInput = (float)($components['spp'] ?? 0);
@@ -342,9 +338,7 @@ function validate_component_remaining(
         validate_spp_full_payment($db, $noInduk, $bulan, $tahun, $sppTariff, $sppInput, $excludePaymentId);
     }
 
-    $limits = [
-        'du' => ['label' => 'Daftar Ulang', 'total' => $duTotal, 'paid' => (float)($paid['du'] ?? 0), 'input' => $uangDu],
-    ];
+    $limits = [];
     if (!$usePublishedSpp) $limits['spp'] = ['label' => 'Uang SPP', 'total' => $sppTariff, 'paid' => (float)($paid['spp'] ?? 0), 'input' => $sppInput];
     foreach (annual_fee_components() as $component => $cfg) {
         $input = (float)($components[$component] ?? 0);
@@ -615,10 +609,8 @@ if ($aksi === 'input') {
         $tahun_ajaran_du = '';
         $kelas_du = '';
         if ($uang_du > 0) {
-            try { $du_bill = du_require_selectable_bill($koneksi, $tagihan_daftar_ulang_id, $no_induk, 0, true); }
-            catch (RuntimeException $e) { throw new SppPaymentException(['code'=>'du_reselect','severity'=>'error',
-                'title'=>'Pilih ulang Daftar Ulang','message'=>'Tagihan yang dipilih sudah tidak tersedia. Pilih tagihan yang masih memiliki sisa.',
-                'target'=>'du-selector-trigger']); }
+            $du_bill = du_require_selectable_bill($koneksi, $tagihan_daftar_ulang_id, $no_induk, 0, true);
+            du_assert_bill_snapshot($du_bill, $_POST['du_expected_total'] ?? null, $_POST['du_expected_paid'] ?? null);
             $du_bill_id = (int)$du_bill['id'];
             $kelas_du = (string)$du_bill['kelas'];
             $tahun_ajaran_du = (string)$du_bill['tahun_ajaran'];
@@ -855,6 +847,7 @@ if ($aksi === 'update') {
         $kelas_du = '';
         if ($uang_du > 0) {
             $du_bill = du_require_selectable_bill($koneksi, $tagihan_daftar_ulang_id, $no_induk, $id, true);
+            du_assert_bill_snapshot($du_bill, $_POST['du_expected_total'] ?? null, $_POST['du_expected_paid'] ?? null);
             $du_bill_id = (int)$du_bill['id'];
             $kelas_du = (string)$du_bill['kelas'];
             $tahun_ajaran_du = (string)$du_bill['tahun_ajaran'];

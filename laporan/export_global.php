@@ -6,8 +6,23 @@ $registry=report_registry();$template=(string)($_GET['template']??'');if(!isset(
 $format=(string)($_GET['format']??'preview');if(!in_array($format,['preview','print','pdf','excel'],true))$format='preview';
 $excelDownload=$format==='excel'&&($_GET['download']??'')==='1';
 if($format==='pdf'){require_once __DIR__.'/../includes/pdf.php';require_pdf_library();}
-$filters=report_filters($koneksi,$_GET);if(in_array($template,['riwayat-tagihan','tunggakan-siswa'],true)&&!isset($_GET['siswa_status']))$filters['siswa_status']='all';if(!isset($_GET['kategori'])&&$template==='penerimaan')$filters['kategori']='semua';
+$filters=report_filters($koneksi,$_GET);if($template==='riwayat-tagihan'&&!isset($_GET['siswa_status']))$filters['siswa_status']='all';if(!isset($_GET['kategori'])&&$template==='penerimaan')$filters['kategori']='semua';
 $report=report_build($koneksi,$template,$filters);$generated=date('d-m-Y H:i:s');$operator=(string)($_SESSION['admin_nama']??$_SESSION['admin_username']??'Pengguna');
+if($template==='tunggakan-siswa'&&$format==='pdf'){
+    require_once __DIR__.'/../includes/report_letters.php';
+    $today=$report['as_of_date']??report_letter_today();
+    $options=new \Dompdf\Options();
+    $options->set('isRemoteEnabled',false);
+    $options->set('isHtml5ParserEnabled',true);
+    $options->setChroot(realpath(__DIR__.'/..'));
+    $pdf=new \Dompdf\Dompdf($options);
+    $pdf->loadHtml(report_principal_letter_html($report['rows'],$today),'UTF-8');
+    $pdf->setPaper('A4','portrait');
+    $pdf->render();
+    header('Cache-Control: no-store, private');
+    $pdf->stream('surat-tunggakan-kepala-sekolah-'.str_replace('-','',$today).'.pdf',['Attachment'=>false]);
+    exit;
+}
 $isCashRecap=in_array($template,['setoran','kas-tabungan','titipan-spp'],true);$isSavingsCashRecap=$template==='kas-tabungan';
 $billingGroupedView=$template==='riwayat-tagihan'&&report_billing_history_uses_grouped_view($filters,$report['rows']);
 $billingPdfView=$template==='riwayat-tagihan'&&in_array($format,['preview','print','pdf'],true);

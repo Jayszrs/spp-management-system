@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="id" data-theme="light">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>pending</title><script>localStorage.setItem('spp_theme','light')</script><link rel="stylesheet" href="../assets/css/style.css"><style>body{padding:70px;background:#f7fbf8}.du-smoke-shell{max-width:1120px;margin:auto}.du-smoke-utility{display:none}@media(max-width:720px){body{padding:16px}}</style></head>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>pending</title><script>var smokeTheme=new URLSearchParams(location.search).get('theme')==='dark'?'dark':'light';document.documentElement.dataset.theme=smokeTheme;localStorage.setItem('spp_theme',smokeTheme)</script><link rel="stylesheet" href="../assets/css/style.css"><style>body{padding:70px;background:var(--bg,#f7fbf8)}.du-smoke-shell{max-width:1120px;margin:auto}.du-smoke-utility{display:none}@media(max-width:720px){body{padding:16px}}</style></head>
 <body>
   <input class="du-smoke-utility" id="siswa-search" list="siswa-list" value="UJI">
   <datalist id="siswa-list"><option value="UJI" data-nis="1" data-nama="UJI" data-kelas="1A" data-is-graduate="0" data-du-bills='[{"id":1,"tahun_ajaran":"2026/2027","kelas":"1","total":1000000,"terbayar":1000000,"sisa":0,"status":"open","is_current":true,"is_arrear":false},{"id":2,"tahun_ajaran":"2025/2026","kelas":"1","total":900000,"terbayar":100000,"sisa":800000,"status":"open","is_current":false,"is_arrear":true}]'></option></datalist>
@@ -33,17 +33,31 @@
         var opt = document.querySelector('#siswa-list option');
         applyDefaultDaftarUlangClass(opt);
         applyStudentPaymentDetails(opt);
-        if (document.getElementById('tagihan-daftar-ulang-id').value !== '1') throw new Error('default');
+        if (document.getElementById('tagihan-daftar-ulang-id').value !== '2') throw new Error('arrear-default');
+        if (document.getElementById('du-input').readOnly) throw new Error('arrear-locked');
+        if (document.getElementById('du-total').value !== '900.000') throw new Error('arrear-total');
         if (document.getElementById('du-selector-trigger').hidden) throw new Error('trigger');
         if (getComputedStyle(document.getElementById('du-static-label')).display !== 'none') throw new Error('duplicate-label');
         if (document.querySelectorAll('.du-selector-option').length !== 2) throw new Error('options');
-        if (location.search === '?visual') {
+        if (new URLSearchParams(location.search).has('visual')) {
           document.getElementById('du-selector-trigger').click();
           document.title = 'DU_SELECTOR_VISUAL';
           return;
         }
-        document.querySelector('[data-bill-id="2"]').click();
-        if (document.getElementById('tagihan-daftar-ulang-id').value !== '2') throw new Error('selection');
+        document.querySelector('[data-bill-id="1"]').click();
+        if (document.getElementById('tagihan-daftar-ulang-id').value !== '1' || !document.getElementById('du-input').readOnly) throw new Error('settled-selection');
+        var records = JSON.parse(opt.dataset.duBills);
+        records[0].terbayar = 0; records[0].sisa = 1000000;
+        opt.dataset.duBills = JSON.stringify(records);
+        document.getElementById('tagihan-daftar-ulang-id').value = '';
+        applyStudentPaymentDetails(opt);
+        if (document.getElementById('tagihan-daftar-ulang-id').value !== '1' || document.getElementById('du-input').readOnly) throw new Error('current-default');
+        records[0].terbayar = 1000000; records[0].sisa = 0;
+        records[1].terbayar = 900000; records[1].sisa = 0; records[1].is_arrear = false;
+        opt.dataset.duBills = JSON.stringify(records);
+        document.getElementById('tagihan-daftar-ulang-id').value = '';
+        applyStudentPaymentDetails(opt);
+        if (!document.getElementById('du-input').readOnly || !document.getElementById('du-context-label').textContent.includes('Lunas')) throw new Error('all-settled');
         document.title = 'DU_SELECTOR_OK';
       } catch (error) {
         document.title = 'DU_SELECTOR_FAILED_' + error.message;

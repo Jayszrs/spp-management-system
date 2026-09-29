@@ -16,6 +16,7 @@ function report_month_code($value): string {
     return $month >= 1 && $month <= 12 ? str_pad((string)$month, 2, '0', STR_PAD_LEFT) : date('m');
 }
 function report_date_label(string $date):string{$time=strtotime($date);if(!$time)return $date;return date('d',$time).' '.(report_months()[date('m',$time)]??date('m',$time)).' '.date('Y',$time);}
+function report_letter_today():string{return (new DateTimeImmutable('now',new DateTimeZone('Asia/Jakarta')))->format('Y-m-d');}
 function report_date_range_label(string $start,string $end):string{return $start===$end?report_date_label($start):report_date_label($start).' – '.report_date_label($end);}
 function report_sql_month_expr(string $column): string {
     return "CASE LOWER($column) WHEN 'januari' THEN 1 WHEN 'februari' THEN 2 WHEN 'maret' THEN 3 WHEN 'april' THEN 4 WHEN 'mei' THEN 5 WHEN 'juni' THEN 6 WHEN 'juli' THEN 7 WHEN 'agustus' THEN 8 WHEN 'september' THEN 9 WHEN 'oktober' THEN 10 WHEN 'november' THEN 11 WHEN 'desember' THEN 12 ELSE CAST($column AS UNSIGNED) END";
@@ -35,7 +36,7 @@ function report_registry(): array {
         'tabungan-siswa' => ['label'=>'Rekap Transaksi Tabungan Siswa','description'=>'Daftar transaksi tabungan masuk dan keluar sesuai tanggal, siswa, rombel, dan kasir yang dipilih.','icon'=>'TAB','orientation'=>'portrait'],
         'saldo-tabungan' => ['label'=>'Rekap Saldo Tabungan','description'=>'Menampilkan saldo tabungan terkini setiap siswa agar admin dapat mengecek saldo tanpa membuka riwayat transaksi.','icon'=>'SAL','orientation'=>'portrait'],
         'riwayat-tagihan' => ['label'=>'Riwayat Tagihan Siswa','description'=>'Menampilkan tagihan SPP dan Komite bulanan, Daftar Ulang tahunan, serta biaya lain beserta status pembayarannya.','icon'=>'TAG','orientation'=>'landscape'],
-        'tunggakan-siswa' => ['label'=>'Rekap Tunggakan Siswa','description'=>'Ringkasan total kewajiban yang belum lunas per siswa untuk membantu kepala sekolah memantau tunggakan tanpa rincian komponen.','icon'=>'UTG','orientation'=>'landscape'],
+        'tunggakan-siswa' => ['label'=>'Cetak Surat ke Kepala Sekolah','description'=>'Surat resmi dan rekap tunggakan siswa untuk kepala sekolah.','icon'=>'UTG','orientation'=>'portrait'],
         'setoran' => ['label'=>'Rekap Setoran Kas Harian','description'=>'Ringkasan penerimaan pembayaran sekolah berdasarkan komponen dan metode pembayaran untuk penutupan kas harian.','icon'=>'KAS','orientation'=>'portrait'],
         'kas-tabungan' => ['label'=>'Rekap Kas Tabungan Harian','description'=>'Ringkasan tabungan masuk, tabungan keluar, dan mutasi bersih untuk pengecekan kas tabungan harian.','icon'=>'KT','orientation'=>'portrait'],
         'titipan-spp' => ['label'=>'Riwayat Titipan SPP','description'=>'Buku besar penerimaan, penggunaan, dan pengembalian Titipan SPP beserta saldo berjalan setiap siswa.','icon'=>'TS','orientation'=>'landscape'],
@@ -653,11 +654,21 @@ function report_billing_history_data(mysqli $db,array $f):array{
 function report_academic_year_start(string $label):?int{
     return preg_match('/^(\d{4})\/\d{4}$/',trim($label),$match)?(int)$match[1]:null;
 }
-function report_student_debt_groups(mysqli $db,array $filters,string $beforeAcademicYear='',array $targetNis=[]):array{
+function report_student_debt_groups(mysqli $db,array $filters,string $beforeAcademicYear='',array $targetNis=[],string $asOfDate=''):array{
     $sourceFilters=$filters;
     $sourceFilters['tahun_tagihan']='';
     $sourceFilters['komponen_tagihan']='';
     $sourceFilters['status']='';
+    $currentStudents=[];
+    if($asOfDate!==''){
+        $sourceFilters['kelas']='';
+        $result=$db->query('SELECT s.NO_INDUK,s.NAMA,s.NO_induk_diknas,s.KELAS,s.master_kelas_id,s.is_active,mk.tingkat,mk.kode_rombel,mk.is_placeholder FROM siswa s LEFT JOIN master_kelas mk ON mk.id=s.master_kelas_id');
+        while($student=$result->fetch_assoc()){
+            $student['tingkat']=(int)($student['tingkat']??$student['KELAS']);
+            $student['kelas']=$student['master_kelas_id']?class_label($student):(string)$student['KELAS'];
+            $currentStudents[$student['NO_INDUK']]=$student;
+        }
+    }
     $targetMap=[];
     foreach($targetNis as $nis){$nis=trim((string)$nis);if($nis!=='')$targetMap[$nis]=true;}
     if($targetMap){
@@ -671,6 +682,9 @@ function report_student_debt_groups(mysqli $db,array $filters,string $beforeAcad
     foreach(report_billing_history_data($db,$sourceFilters)['rows'] as $row){
         $nis=(string)($row['nis']??'');
         if($targetMap&&!isset($targetMap[$nis]))continue;
+        if($asOfDate!==''&&in_array((string)($row['komponen_key']??''),['spp','komite'],true)
+            &&(string)($row['periode_code']??'')>substr($asOfDate,0,7))continue;
+        if($asOfDate!==''&&(!isset($currentStudents[$nis])||!report_class_matches_row($filters,$currentStudents[$nis])))continue;
         $remaining=max(0,(float)($row['sisa']??0));
         if($remaining<=.001||in_array((string)($row['status']??''),$excludedStatuses,true))continue;
         if($targetStart!==null&&!($row['legacy_without_academic_year']??false)){
@@ -681,18 +695,20 @@ function report_student_debt_groups(mysqli $db,array $filters,string $beforeAcad
             $groups[$nis]=[
                 'nis'=>$nis,
                 'nis_diknas'=>(string)($row['nis_diknas']??''),
-                'nama'=>(string)($row['nama']??''),
-                'kelas'=>(string)($row['kelas']??'Belum diatur'),
-                'master_kelas_id'=>(int)($row['master_kelas_id']??0),
-                'tingkat'=>(int)($row['tingkat']??0),
+                'nama'=>(string)($currentStudents[$nis]['NAMA']??$row['nama']??''),
+                'kelas'=>(string)($currentStudents[$nis]['kelas']??$row['kelas']??'Belum diatur'),
+                'master_kelas_id'=>(int)($currentStudents[$nis]['master_kelas_id']??$row['master_kelas_id']??0),
+                'tingkat'=>(int)($currentStudents[$nis]['tingkat']??$row['tingkat']??0),
                 'total_tagihan'=>0.0,
                 'sudah_dibayar'=>0.0,
                 'total_tunggakan'=>0.0,
+                'items'=>[],
             ];
         }
         $groups[$nis]['total_tagihan']+=(float)($row['tagihan']??0);
         $groups[$nis]['sudah_dibayar']+=(float)($row['terbayar']??0);
         $groups[$nis]['total_tunggakan']+=$remaining;
+        $groups[$nis]['items'][]=$row;
     }
     $rows=array_values($groups);
     usort($rows,static fn($a,$b)=>[
@@ -703,14 +719,16 @@ function report_student_debt_groups(mysqli $db,array $filters,string $beforeAcad
     return $rows;
 }
 function report_student_debt_data(mysqli $db,array $filters):array{
+    $today=report_letter_today();
     return [
-        'title'=>'Rekap Tunggakan Siswa',
-        'subtitle'=>'Siswa yang masih memiliki tagihan belum lunas',
+        'title'=>'Surat Laporan Tunggakan ke Kepala Sekolah',
+        'subtitle'=>'Tunggakan sampai '.report_date_label($today),
+        'as_of_date'=>$today,
         'columns'=>[
             ['nis','NIS','nis'],['nis_diknas','NIS Diknas'],['nama','Nama Siswa'],['kelas','Kelas/Rombel','kelas'],
             ['total_tagihan','Total Tagihan','money'],['sudah_dibayar','Sudah Dibayar','money'],['total_tunggakan','Total Tunggakan','money'],
         ],
-        'rows'=>report_student_debt_groups($db,$filters),
+        'rows'=>report_student_debt_groups($db,$filters,'',[],$today),
     ];
 }
 function report_prior_debt_summary(mysqli $db,string $targetAcademicYear,array $studentNis):array{

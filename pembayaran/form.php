@@ -367,6 +367,8 @@ unset($_SESSION['payment_draft']);
           <input type="hidden" id="kelas-du" name="kelas_du" value="" />
           <input type="hidden" id="tahun-ajaran-du" name="tahun_ajaran_du" value="<?= htmlspecialchars($activeAcademicYear) ?>" />
           <input type="hidden" id="tagihan-daftar-ulang-id" name="tagihan_daftar_ulang_id" value="" />
+          <input type="hidden" id="du-expected-total" name="du_expected_total" value="" />
+          <input type="hidden" id="du-expected-paid" name="du_expected_paid" value="" />
 
           <!-- Lain-lain -->
           <div class="section-divider"><span>Lain-lain</span></div>
@@ -490,7 +492,7 @@ unset($_SESSION['payment_draft']);
     ) ?>;
     window.paymentDraft = <?= json_encode($paymentDraft, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT) ?>;
   </script>
-  <script src="../assets/js/app.js?v=11.1"></script>
+  <script src="../assets/js/app.js?v=11.2"></script>
 </body>
 </html>
 
