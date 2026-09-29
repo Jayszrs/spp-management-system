@@ -64,8 +64,9 @@ function komite_sync_student_rate(mysqli $db, string $noInduk, float $rate): arr
     return ['updated'=>$changed];
 }
 
-function komite_bill(mysqli $db, string $noInduk, string $month, string $year, bool $forUpdate=false): ?array {
-    $sql = "SELECT tk.*,COALESCE((SELECT SUM(bk.nominal) FROM bayar_komite bk WHERE bk.tagihan_komite_id=tk.id),0) paid FROM tagihan_komite tk WHERE tk.no_induk=? AND tk.bulan=? AND tk.tahun=? AND tk.status='open' LIMIT 1";
+function komite_bill(mysqli $db, string $noInduk, string $month, string $year, bool $forUpdate=false, int $excludePaymentId=0): ?array {
+    $exclude = $excludePaymentId > 0 ? ' AND (bk.bayar_id IS NULL OR bk.bayar_id<>' . $excludePaymentId . ')' : '';
+    $sql = "SELECT tk.*,COALESCE((SELECT SUM(bk.nominal) FROM bayar_komite bk WHERE bk.tagihan_komite_id=tk.id" . $exclude . "),0) paid FROM tagihan_komite tk WHERE tk.no_induk=? AND tk.bulan=? AND tk.tahun=? AND tk.status='open' LIMIT 1";
     if ($forUpdate) $sql .= ' FOR UPDATE';
     $stmt=$db->prepare($sql); $stmt->bind_param('sss',$noInduk,$month,$year);$stmt->execute();
     $bill=$stmt->get_result()->fetch_assoc();$stmt->close();
@@ -73,15 +74,15 @@ function komite_bill(mysqli $db, string $noInduk, string $month, string $year, b
     return $bill ?: null;
 }
 
-function komite_require_bill(mysqli $db, string $noInduk, string $month, string $year, bool $forUpdate=false): array {
-    $bill=komite_bill($db,$noInduk,$month,$year,$forUpdate);
+function komite_require_bill(mysqli $db, string $noInduk, string $month, string $year, bool $forUpdate=false, int $excludePaymentId=0): array {
+    $bill=komite_bill($db,$noInduk,$month,$year,$forUpdate,$excludePaymentId);
     if (!$bill) throw new RuntimeException('Tagihan Komite '.spp_month_label($month).' '.$year.' belum tersedia untuk siswa ini. Periksa penempatan kelas.');
     return $bill;
 }
 
-function komite_validate_amount(mysqli $db, string $noInduk, string $month, string $year, float $amount, bool $sppPayment): ?array {
-    $bill=komite_bill($db,$noInduk,$month,$year,true);
-    if (($amount > .001 || $sppPayment) && !$bill) $bill=komite_require_bill($db,$noInduk,$month,$year,true);
+function komite_validate_amount(mysqli $db, string $noInduk, string $month, string $year, float $amount, bool $sppPayment, int $excludePaymentId=0): ?array {
+    $bill=komite_bill($db,$noInduk,$month,$year,true,$excludePaymentId);
+    if (($amount > .001 || $sppPayment) && !$bill) $bill=komite_require_bill($db,$noInduk,$month,$year,true,$excludePaymentId);
     $due=$bill ? (float)$bill['remaining'] : 0.0;
     if ($amount > .001 && ($due <= .001 || abs($amount-$due)>.001)) {
         $label=spp_month_label($month).' '.$year;

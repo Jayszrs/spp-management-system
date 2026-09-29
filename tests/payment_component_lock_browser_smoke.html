@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="id">
+<head><meta charset="utf-8"><title>PAYMENT_COMPONENT_LOCK_PENDING</title></head>
+<body>
+  <form id="form-bayar" action="javascript:void(0)">
+    <input id="siswa-search" value="Siswa Demo 044">
+    <datalist id="siswa-list"><option value="Siswa Demo 044" data-nis="20270044" data-nama="Siswa Demo 044" data-kelas="2D"
+      data-total-pangkal="0" data-paid-pangkal="0" data-total-psb="0" data-paid-psb="0"
+      data-spp-billing='{"saldo":0,"tagihan":[{"bulan":"09","tahun":"2026","total":260000,"paid":0,"remaining":260000}]}'
+      data-komite-billing='{"09-2026":{"total":110000,"paid":0}}'></option></datalist>
+    <input id="disp-nis" value="20270044"><input id="disp-nama"><input id="disp-kelas">
+    <select id="bulan-bayar"><option value="09">September</option><option value="10">Oktober</option></select><input id="tahun-bayar" value="2026">
+    <input id="spp-action" value="bayar"><input id="gunakan-titipan-spp" value="0">
+    <input id="hidden-total" value="370000"><span id="totalJumlah"></span>
+    <input id="tagihan-daftar-ulang-id" value="">
+    <small id="pangkal-context-label"></small><small id="psb-context-label"></small>
+    <small id="spp-context-label"></small><small id="komite-context-label"></small><small id="du-context-label"></small>
+    <table><tbody>
+      <tr><td><input id="pangkal-total" value="0"><input id="pangkal-bayar" value="0"><input id="pangkal-sisa" value="0"><input id="pangkal-input" class="tbl-pay" value="0" readonly></td></tr>
+      <tr><td><input id="psb-total" value="0"><input id="psb-bayar" value="0"><input id="psb-sisa" value="0"><input id="psb-input" class="tbl-pay" value="0" readonly></td></tr>
+      <tr><td><input id="spp-total" value="260000"><input id="spp-bayar" value="0"><input id="spp-sisa" value="0"><input id="spp-input" class="tbl-pay" value="260000" readonly></td></tr>
+      <tr><td><input id="komite-total" value="110000"><input id="komite-bayar" value="0"><input id="komite-sisa" value="0"><input id="komite-input" class="tbl-pay" value="110000" readonly></td></tr>
+      <tr><td><input id="du-total" value="1100000"><input id="du-bayar" value="1100000"><input id="du-sisa" value="0"><input id="du-input" class="tbl-pay" value="0" readonly></td></tr>
+    </tbody></table>
+  </form>
+  <script>window.sppPublishedBilling=true;window.sppEditPaymentId=959;</script>
+  <script src="../assets/js/app.js"></script>
+  <script>
+    window.addEventListener('load', () => setTimeout(async () => {
+      try {
+        const get = id => document.getElementById(id);
+        const assert = (condition, message) => { if (!condition) throw Error(message); };
+        get('pangkal-input').value = '1000';
+        get('psb-input').value = '1000';
+        refreshOptionalOneTimeFeeAvailability();
+        assert(get('pangkal-input').readOnly && get('pangkal-input').value === '0', 'pangkal_tanpa_tagihan');
+        assert(get('psb-input').readOnly && get('psb-input').value === '0', 'psb_tanpa_tagihan');
+        assert(get('pangkal-context-label').textContent.includes('belum diatur'), 'alasan_kunci');
+
+        get('pangkal-total').value = '1200000';
+        get('pangkal-bayar').value = '1000000';
+        get('pangkal-input').value = '200000';
+        refreshOptionalOneTimeFeeAvailability();
+        assert(!get('pangkal-input').readOnly && get('pangkal-input').value === '200000', 'tagihan_terbuka');
+        get('pangkal-bayar').value = '1200000';
+        refreshOptionalOneTimeFeeAvailability();
+        assert(get('pangkal-input').readOnly && get('pangkal-input').value === '0', 'lunas_oleh_transaksi_lain');
+
+        get('pangkal-total').value = '0';
+        get('pangkal-bayar').value = '0';
+        refreshOptionalOneTimeFeeAvailability();
+        refreshDaftarUlangMasterWarning(null);
+        assert(get('du-input').readOnly && get('du-input').value === '0', 'du_tanpa_tagihan_terbuka');
+        const student = document.querySelector('#siswa-list option');
+        student.dataset.duBills = JSON.stringify([{
+          id: 55, tahun_ajaran: '2026/2027', kelas: '2D', status: 'open',
+          total: 1100000, terbayar: 1100000, sisa: 0, is_current: true
+        }]);
+        get('tagihan-daftar-ulang-id').value = '55';
+        refreshDaftarUlangMasterWarning(student);
+        assert(get('du-input').readOnly && get('du-input').value === '0', 'du_lunas_oleh_pembayaran_lain');
+
+        sppStatusState.contextKey = currentSppStatusContext().key;
+        sppStatusState.pending = false;
+        sppStatusState.payload = {
+          ok: true, status: 'payable', lock_spp: false,
+          selected: { tariff: 260000, remaining: 260000, paid: 0 },
+          komite: { exists: true, total: 110000, paid: 0 }
+        };
+        refreshSppInstallmentAvailability();
+        refreshOptionalOneTimeFeeAvailability();
+        assert(!get('spp-input').readOnly && get('spp-input').value === '260000', 'spp_asli');
+        assert(!get('komite-input').readOnly && get('komite-input').value === '110000', 'komite_asli');
+
+        get('bulan-bayar').value = '10';
+        sppStatusState.contextKey = currentSppStatusContext().key;
+        sppStatusState.payload = { ok: true, status: 'not_published', lock_spp: true };
+        refreshPublishedSppUi(student);
+        refreshOptionalOneTimeFeeAvailability();
+        refreshSppInstallmentAvailability();
+        assert(get('spp-input').readOnly && get('spp-input').value === '0', 'periode_tanpa_spp');
+        assert(get('komite-input').readOnly && get('komite-input').value === '0', 'periode_tanpa_komite');
+
+        window.paymentDraft = { source_path: location.pathname, edit_id: 959, uang_pangkal: '999000' };
+        await restorePaymentDraft();
+        assert(get('pangkal-input').readOnly && get('pangkal-input').value === '0', 'draft_membuka_kunci');
+        document.title = 'PAYMENT_COMPONENT_LOCK_OK';
+      } catch (error) {
+        document.title = 'PAYMENT_COMPONENT_LOCK_FAILED_' + error.message;
+      }
+    }, 350));
+  </script>
+</body>
+</html>

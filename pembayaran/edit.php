@@ -12,7 +12,8 @@ require_once '../includes/tagihan_tahunan.php';
 require_once '../includes/tagihan_sekali.php';
 require_once '../includes/spp_billing.php';
 require_once '../includes/komite_billing.php';
-requireRole(['admin']);
+require_once '../includes/transaction_authorization.php';
+requireRole(['admin', 'kasir']);
 if (empty($_SESSION['csrf_payment'])) $_SESSION['csrf_payment'] = bin2hex(random_bytes(32));
 $activeAcademicYear = du_current_academic_year();
 $activeAcademicYearSql = $koneksi->real_escape_string($activeAcademicYear);
@@ -32,6 +33,11 @@ $stmt->close();
 if (!$d) { $_SESSION['flash'] = ['type'=>'error','msg'=>'Data tidak ditemukan!']; header('Location: lihat.php'); exit; }
 if ((int)($d['payment_link_version'] ?? 0) !== 1) {
     $_SESSION['flash'] = ['type'=>'error','msg'=>'Pembayaran legacy tidak dapat diedit. Rekonsiliasi manual diperlukan terlebih dahulu.'];
+    header('Location: lihat.php');
+    exit;
+}
+if (transaction_authorization_pending_for_payments($koneksi, [$id])) {
+    $_SESSION['flash'] = ['type'=>'error','msg'=>'Transaksi ini masih menunggu keputusan otorisasi.'];
     header('Location: lihat.php');
     exit;
 }
@@ -151,6 +157,41 @@ function active_academic_year_from_payment_period($bulan, $tahun): string {
 
 $selectedAcademicYear = active_academic_year_from_payment_period($d['BULAN'], $d['TAHUN']);
 $annual_fee_payload = annual_fee_payload_for_options($koneksi, $id);
+$oneTimeAvailability = one_time_fee_status($koneksi, (string)$d['NO_INDUK'], $id);
+$initialFeeLocks = [];
+foreach (['pangkal', 'psb'] as $feeKey) {
+    $fee = $oneTimeAvailability[$feeKey];
+    $initialFeeLocks[$feeKey] = $fee['total'] <= .001 || $fee['remaining'] <= .001;
+}
+$initialFeeLocks['spp'] = true; // Dibuka setelah status tagihan periode ini diperiksa.
+$initialFeeLocks['komite'] = true;
+$initialFeeLocks['du'] = true;
+$initialInputZero = ['pangkal' => $initialFeeLocks['pangkal'], 'psb' => $initialFeeLocks['psb']];
+$initialLockReasons = [];
+$sppBill = null;
+foreach ($published_spp_payload[$d['NO_INDUK']]['tagihan'] ?? [] as $bill) {
+    if ((string)$bill['bulan'] . '-' . (string)$bill['tahun'] === $currentPeriodKey) {
+        $sppBill = $bill;
+        break;
+    }
+}
+$isSppDeposit = !empty($currentSppAllocation['titipan_baru']);
+$initialInputZero['spp'] = !$isSppDeposit && (!$sppBill || (float)$sppBill['remaining'] <= .001);
+if ($initialInputZero['spp']) $initialLockReasons['spp'] = 'Tidak ada tagihan SPP terbuka pada bulan ini.';
+$komiteBill = $komite_payload[$d['NO_INDUK']][$currentPeriodKey] ?? null;
+$initialInputZero['komite'] = !$komiteBill || (float)$komiteBill['total'] <= .001
+    || (float)$komiteBill['paid'] + .001 >= (float)$komiteBill['total'];
+if ($initialInputZero['komite']) $initialLockReasons['komite'] = $komiteBill ? 'Tagihan Komite sudah lunas.' : 'Belum ada tagihan Komite bulan ini.';
+$linkedDuBill = null;
+foreach ($du_bills[$d['NO_INDUK']] ?? [] as $bill) {
+    if ((int)$bill['id'] === $linkedDuBillId) {
+        $linkedDuBill = $bill;
+        break;
+    }
+}
+$initialInputZero['du'] = !$linkedDuBill || (float)$linkedDuBill['total'] <= .001
+    || (float)$linkedDuBill['sisa'] <= .001;
+if ($initialInputZero['du']) $initialLockReasons['du'] = $linkedDuBill ? 'Tagihan Daftar Ulang sudah lunas.' : 'Belum ada tagihan Daftar Ulang yang dipilih.';
 
 $biaya_lain_bills = [];
 $stmtBills = $koneksi->prepare("SELECT t.id,t.no_induk,t.master_biaya_lain_id,t.nama_snapshot nama,
@@ -218,7 +259,7 @@ $selectedPaymentMethod = $d['sistem_pembayaran'] ?? 'VA';
   <meta name="description" content="Edit data transaksi pembayaran siswa." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="../assets/css/style.css?v=11.1" />
+  <link rel="stylesheet" href="../assets/css/style.css?v=11.2" />
   <!-- Prevent theme flash -->
   <script>(function(){var t=localStorage.getItem('spp_theme')||'light';document.documentElement.setAttribute('data-theme',t);})();</script>
 </head>
@@ -405,13 +446,15 @@ $selectedPaymentMethod = $d['sistem_pembayaran'] ?? 'VA';
                 foreach ($komp as $i => [$key,$label,$col,$inputName]):
                 ?>
                 <tr class="<?= $i%2===0?'row-highlight':'' ?>">
-                  <td><?php if($key==='du'): ?><div class="du-bill-selector"><span class="comp-label du-static-label" id="du-static-label"><?=$label?></span><button type="button" class="du-selector-trigger" id="du-selector-trigger" aria-haspopup="listbox" aria-controls="du-selector-menu" aria-expanded="false" hidden><span class="du-trigger-label"><?=$label?></span><span class="du-arrear-warning" id="du-arrear-warning" role="img"></span><span class="du-chevron" aria-hidden="true">⌄</span></button><div class="du-selector-menu" id="du-selector-menu" role="listbox" aria-label="Pilih tagihan Daftar Ulang" tabindex="-1" hidden></div></div><?php else: ?><span class="comp-label"<?= $key === 'spp' ? ' id="spp-component-label"' : '' ?>><?=$label?></span><?php endif; ?><?php if($key==='spp'): ?><small class="du-inline-context du-context-label" id="spp-context-label">Pilih bulan tagihan.</small><?php endif; ?><?php if($key==='komite'): ?><small class="du-inline-context du-context-label" id="komite-context-label">Lunas penuh per bulan.</small><?php endif; ?><?php if(in_array($key,['pangkal','psb'],true)): ?><small class="du-inline-context du-context-label">Tagihan satu kali, dapat dicicil</small><?php endif; ?><?php if($key==='du'): ?><small class="du-inline-context du-context-label" id="du-context-label">Pilih tagihan yang akan dibayar.</small><small class="du-inline-context du-master-warning" id="du-master-warning" hidden></small><?php endif; ?></td>
+                  <td><?php if($key==='du'): ?><div class="du-bill-selector"><span class="comp-label du-static-label" id="du-static-label"><?=$label?></span><button type="button" class="du-selector-trigger" id="du-selector-trigger" aria-haspopup="listbox" aria-controls="du-selector-menu" aria-expanded="false" hidden><span class="du-trigger-label"><?=$label?></span><span class="du-arrear-warning" id="du-arrear-warning" role="img"></span><span class="du-chevron" aria-hidden="true">⌄</span></button><div class="du-selector-menu" id="du-selector-menu" role="listbox" aria-label="Pilih tagihan Daftar Ulang" tabindex="-1" hidden></div></div><?php else: ?><span class="comp-label"<?= $key === 'spp' ? ' id="spp-component-label"' : '' ?>><?=$label?></span><?php endif; ?><?php if($key==='spp'): ?><small class="du-inline-context du-context-label" id="spp-context-label"><?= htmlspecialchars($initialLockReasons['spp'] ?? 'Memeriksa tagihan bulan ini.') ?></small><?php endif; ?><?php if($key==='komite'): ?><small class="du-inline-context du-context-label" id="komite-context-label"><?= htmlspecialchars($initialLockReasons['komite'] ?? 'Memeriksa tagihan bulan ini.') ?></small><?php endif; ?><?php if(in_array($key,['pangkal','psb'],true)): ?><small class="du-inline-context du-context-label" id="<?=$key?>-context-label"><?= $initialFeeLocks[$key] ? (($oneTimeAvailability[$key]['total'] <= .001) ? 'Belum ada tagihan di Data Siswa.' : 'Tagihan sudah lunas.') : 'Tagihan satu kali, dapat dicicil' ?></small><?php endif; ?><?php if($key==='du'): ?><small class="du-inline-context du-context-label" id="du-context-label"><?= htmlspecialchars($initialLockReasons['du'] ?? 'Memeriksa tagihan Daftar Ulang.') ?></small><small class="du-inline-context du-master-warning" id="du-master-warning" hidden></small><?php endif; ?></td>
                   <td data-label="Total Tagihan"><input class="tbl-input tbl-system" type="text" value="0" id="<?=$key?>-total" readonly tabindex="-1" aria-readonly="true" /></td>
                   <td data-label="Sudah Terbayar"><input class="tbl-input tbl-system" type="text" value="0" id="<?=$key?>-bayar" readonly tabindex="-1" aria-readonly="true" /></td>
                   <td data-label="Sisa"><input class="tbl-input tbl-system tbl-system-sisa" type="text" value="0" id="<?=$key?>-sisa" readonly tabindex="-1" aria-readonly="true" /></td>
-                  <td data-label="Input Bayar"><input class="tbl-input tbl-pay" type="text"
+                  <td data-label="Input Bayar"><input class="tbl-input tbl-pay <?= $initialFeeLocks[$key] ? 'tbl-readonly' : '' ?>" type="text"
                         id="<?=$key?>-input" name="<?=$inputName?>"
-                        value="<?= number_format((float)$d[$col], 0, ',', '.') ?>" /></td>
+                        value="<?= number_format($initialInputZero[$key] ? 0 : (float)$d[$col], 0, ',', '.') ?>"
+                        <?= $initialFeeLocks[$key] ? 'readonly' : '' ?> aria-readonly="<?= $initialFeeLocks[$key] ? 'true' : 'false' ?>"
+                        aria-describedby="<?=$key?>-context-label" /></td>
                 </tr>
                 <?php endforeach; ?>
               </tbody>
@@ -525,22 +568,24 @@ $selectedPaymentMethod = $d['sistem_pembayaran'] ?? 'VA';
             </div>
           </div>
 
+          <?php if (isRole('kasir')): ?>
           <div class="authorization-request-panel">
             <div>
               <h3>Ajukan perubahan transaksi</h3>
-              <p>Perubahan baru diterapkan setelah disetujui bendahara atau administrator lain.</p>
+              <p>Perubahan diterapkan setelah disetujui administrator.</p>
             </div>
             <label class="field-row authorization-reason-field">
               <span class="field-label">Alasan perubahan</span>
               <textarea class="field-input" name="authorization_reason" rows="3" minlength="5" maxlength="500" required placeholder="Jelaskan alasan dan bagian transaksi yang perlu diperbaiki."></textarea>
             </label>
           </div>
+          <?php endif; ?>
 
           <!-- Action Buttons -->
           <div class="action-bar">
             <button type="submit" class="btn btn-warning" id="btn-update">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v14a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
-              Ajukan Perubahan
+              <?= isRole('kasir') ? 'Ajukan Perubahan' : 'Simpan Perubahan' ?>
             </button>
             <a href="lihat.php" class="btn btn-ghost" id="btn-batal">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -574,7 +619,7 @@ $selectedPaymentMethod = $d['sistem_pembayaran'] ?? 'VA';
       JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT
     ) ?>;
   </script>
-  <script src="../assets/js/app.js?v=11.1"></script>
+  <script src="../assets/js/app.js?v=11.3"></script>
 </body>
 </html>
 

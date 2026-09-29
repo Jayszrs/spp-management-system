@@ -34,9 +34,9 @@ $allNavItems = [
    '<path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>',
    ['admin', 'bendahara', 'kasir'], 'Pembayaran'],
 
-  ['otorisasi_transaksi.php', 'Otorisasi Transaksi',
+  ['otorisasi_transaksi.php', $role === 'kasir' ? 'Pengajuan Saya' : ($role === 'bendahara' ? 'Riwayat Otorisasi' : 'Otorisasi Transaksi'),
    '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/>',
-   ['admin', 'bendahara'], 'Pembayaran'],
+   ['admin', 'bendahara', 'kasir'], 'Pembayaran'],
 
   ['siswa/daftar.php', 'Data Siswa',
    '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
@@ -70,6 +70,10 @@ $allNavItems = [
    '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/>',
    ['admin', 'kasir', 'bendahara'], 'Tabungan'],
 
+  ['tabungan/cetak.php', 'Cetak Tabungan',
+   '<path d="M6 9V3h12v6M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v7H6z"/>',
+   ['admin', 'kasir', 'bendahara'], 'Tabungan'],
+
   ['laporan/index.php', 'Laporan Umum',
    '<path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>',
    ['admin', 'bendahara'], 'Laporan'],
@@ -94,6 +98,8 @@ $shortLabels = [
   'Riwayat Daftar Ulang' => 'Riwayat DU',
   'Titipan SPP' => 'Titipan',
   'Otorisasi Transaksi' => 'Otorisasi',
+  'Pengajuan Saya' => 'Pengajuan',
+  'Riwayat Otorisasi' => 'Riwayat',
   'Data Siswa'        => 'Siswa',
   'Master Kelas/Rombel' => 'Kelas',
   'Master Penerbitan SPP' => 'SPP',
@@ -103,6 +109,7 @@ $shortLabels = [
   'Tabungan Masuk'    => 'Masuk',
   'Tabungan Keluar'   => 'Keluar',
   'Riwayat Tabungan'  => 'Riwayat',
+  'Cetak Tabungan'    => 'Cetak',
   'Laporan Umum'      => 'Umum',
   'Laporan Global'    => 'Global',
 ];

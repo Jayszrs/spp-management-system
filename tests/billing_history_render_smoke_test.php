@@ -35,46 +35,62 @@ try {
     include 'template.php';
     $html = ob_get_clean();
 
-    if (!str_contains($html, 'report-billing-group-table')) {
-        throw new RuntimeException('Tabel kelompok siswa tidak dirender.');
+    if (!str_contains($html, 'report-billing-matrix-table')) {
+        throw new RuntimeException('Matriks tagihan per siswa tidak dirender.');
     }
     if (!str_contains($html, 'Siswa/Halaman')) {
         throw new RuntimeException('Pagination belum memakai satuan siswa.');
     }
-    if (!str_contains($html, 'rincian tagihan')) {
-        throw new RuntimeException('Jumlah rincian tagihan tidak ditampilkan.');
+    if (!preg_match('~<table class="payment-table report-billing-matrix-table".*?</table>~s', $html, $matrixMatch)
+        || !str_contains($matrixMatch[0], 'billing-matrix-amount')
+        || str_contains($matrixMatch[0], 'Terbayar')
+        || str_contains($matrixMatch[0], '>Sisa<')) {
+        throw new RuntimeException('Matriks harus hanya menampilkan nominal tagihan per komponen.');
     }
-    if (!str_contains($html, 'assets/css/style.css?v=10.11')) {
+    if (!str_contains($html, 'assets/css/style.css?v=10.28')) {
         throw new RuntimeException('Versi cache stylesheet laporan belum diperbarui.');
     }
-    foreach (['report-field-tahun-tagihan', 'report-field-komponen-tagihan', 'report-field-status', 'report-field-siswa-status'] as $filterClass) {
+    foreach (['report-date-range-field', 'report-field-komponen-tagihan', 'report-field-status', 'report-field-siswa-status'] as $filterClass) {
         if (!str_contains($html, $filterClass)) {
             throw new RuntimeException('Filter server-side tidak lengkap: ' . $filterClass);
         }
     }
+    if (!str_contains($html, 'Tanggal Tagihan Dibuat') || str_contains($html, 'name="tahun_tagihan"')) {
+        throw new RuntimeException('Filter Tahun Ajaran belum diganti dengan rentang tanggal.');
+    }
+    if (!str_contains($html, 'Tanggal Uang Pangkal dan Uang PSB mengikuti tanggal data siswa dibuat.')) {
+        throw new RuntimeException('Penjelasan tanggal perkiraan belum tampil.');
+    }
     if (!str_contains($html, 'report-student-field') || !str_contains($html, 'report-per-page-field')) {
         throw new RuntimeException('Susunan pencarian siswa dan pagination laporan tidak lengkap.');
     }
-    if (str_contains($html, "addSelect('Tahun Ajaran'")) {
-        throw new RuntimeException('Filter Riwayat Tagihan masih bergantung pada injeksi JavaScript.');
+    $stylesheet = file_get_contents(__DIR__ . '/../assets/css/style.css');
+    foreach ([
+        '.report-global-filter-form.report-filter-riwayat-tagihan',
+        '"kelas date component"',
+        '"status student-status per-page"',
+        '"student student student"',
+        '.report-billing-matrix-table',
+        '--billing-matrix-hover',
+        'grid-template-columns: repeat(3, minmax(0, 1fr)) !important',
+    ] as $cssContract) {
+        if (!str_contains($stylesheet, $cssContract)) {
+            throw new RuntimeException('Kontrak layout Riwayat Tagihan tidak lengkap: ' . $cssContract);
+        }
     }
 
     session_write_close();
     $_GET['format'] = 'print';
+    register_shutdown_function(static function(): void {
+        $exportHtml=ob_get_clean();
+        if (!is_string($exportHtml) || !str_contains($exportHtml,'billing-export-table') || !str_contains($exportHtml,'billing-export-note') || !str_contains($exportHtml,'billing-export-amount') || str_contains($exportHtml,'billing-export-cell-row')) {
+            fwrite(STDERR,"FAILED: cetak tidak memakai matriks komponen yang sama.\n");
+            exit(1);
+        }
+        echo "OK: matriks komponen, filter tanggal, dan cetak berhasil dirender.\n";
+    });
     ob_start();
     include 'export_global.php';
-    $exportHtml = ob_get_clean();
-    if (!str_contains($exportHtml, 'billing-group-table')) {
-        throw new RuntimeException('Cetak laporan tidak memakai tabel kelompok siswa.');
-    }
-    if (!str_contains($exportHtml, '<th>Ringkasan</th><th>Rincian Tagihan</th>')) {
-        throw new RuntimeException('Kolom ringkasan ekspor tidak lengkap.');
-    }
-
-    if (session_status() === PHP_SESSION_ACTIVE) {
-        session_destroy();
-    }
-    echo "OK: kontrak HTML web dan cetak mode kelompok berhasil dirender.\n";
 } catch (Throwable $error) {
     if (session_status() === PHP_SESSION_ACTIVE) {
         session_destroy();
