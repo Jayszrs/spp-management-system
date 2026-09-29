@@ -12709,3 +12709,177 @@ html body .report-template-shell .report-global-filter-form.report-template-filt
   .principal-list-shell .principal-filter-buttons .btn { width: 100%; }
   .principal-list-shell .principal-table-toolbar { padding: 11px 18px; flex-wrap: wrap; }
 }
+
+/* Ringkasan uang memakai kartu komponen yang seimbang dan satu total utama. */
+html body .report-template-shell .report-total-section .report-total-grid {
+  display: grid;
+  grid-template-columns: repeat(var(--report-total-columns, 3), minmax(0, 1fr));
+  gap: 12px;
+  margin: 14px 0 18px;
+}
+html body .report-template-shell .report-total-grid .report-summary-card {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+  min-height: 98px;
+  padding: 16px 18px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--bg-card) 94%, rgb(var(--unit-rgb, 31, 157, 85)) 6%);
+}
+html body .report-template-shell .report-total-grid .report-summary-card span {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: .72rem;
+  font-weight: 750;
+  line-height: 1.4;
+  letter-spacing: .035em;
+  overflow-wrap: anywhere;
+}
+html body .report-template-shell .report-total-grid .report-summary-card strong {
+  color: var(--text-primary);
+  font-size: clamp(1rem, 1.2vw, 1.2rem);
+  line-height: 1.3;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+html body .report-template-shell .report-total-grid .report-summary-card.is-primary {
+  grid-column: 1 / -1;
+  flex-direction: row;
+  align-items: center;
+  min-height: 72px;
+  border-color: var(--border-hover);
+  border-left: 4px solid var(--accent);
+  background: var(--accent-glow);
+}
+html body .report-template-shell .report-total-grid .report-summary-card.is-primary strong {
+  color: var(--accent);
+  font-size: clamp(1.15rem, 1.5vw, 1.45rem);
+  text-align: right;
+}
+
+/* Judul dan isi tabel laporan mengikuti makna setiap kolom. */
+html body .report-template-shell .report-template-table :is(th, td) {
+  box-sizing: border-box;
+  vertical-align: middle;
+}
+html body .report-template-shell .report-template-table thead th {
+  line-height: 1.35;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+html body .report-template-shell .report-template-table :is(th, td).report-col-no,
+html body .report-template-shell .report-template-table :is(th, td).report-col-center,
+html body .report-template-shell .report-template-table :is(th, td).report-col-month {
+  text-align: center;
+}
+html body .report-template-shell .report-template-table :is(th, td).report-col-money {
+  min-width: 144px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+html body .report-template-shell .report-template-table tbody td.report-col-money {
+  white-space: nowrap;
+}
+html body .report-template-shell .report-template-table :is(th, td).report-col-month {
+  min-width: 148px;
+}
+html body .report-template-shell .report-template-table :is(th, td).report-col-date {
+  min-width: 155px;
+  text-align: left;
+  font-variant-numeric: tabular-nums;
+}
+html body .report-template-shell .report-template-table :is(th, td).report-col-id {
+  min-width: 155px;
+  text-align: left;
+}
+html body .report-template-shell .report-template-table :is(th, td).report-col-name {
+  min-width: 210px;
+  text-align: left;
+}
+html body .report-template-shell .report-template-table :is(th, td).report-col-text {
+  min-width: 145px;
+  text-align: left;
+}
+html body .report-template-shell .report-template-table td.report-col-center .du-class-year-cell {
+  display: flex;
+  justify-content: center;
+}
+html body .report-template-shell .report-template-table td.report-col-month small {
+  text-align: center;
+}
+html body .report-template-shell .report-billing-matrix-table :is(th, td).billing-matrix-no,
+html body .report-template-shell .report-billing-matrix-table :is(th, td).billing-matrix-class {
+  text-align: center;
+}
+html body .report-template-shell .report-billing-matrix-table :is(th, td).billing-matrix-component,
+html body .report-template-shell .report-billing-matrix-table :is(th, td).billing-matrix-total {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+html body .report-template-shell .report-billing-matrix-table .billing-matrix-empty {
+  text-align: right;
+}
+html body .report-template-shell .report-settlement-component-table :is(th, td):first-child {
+  text-align: center;
+}
+html body .report-template-shell .report-settlement-component-table :is(th, td):last-child {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+html body .report-template-shell .report-settlement-component-table tfoot th:first-child {
+  text-align: right;
+}
+
+/* Aksi surat mempunyai posisi dan ukuran yang konsisten pada setiap baris. */
+html body .letter-student-table :is(th, td).letter-action-cell {
+  box-sizing: border-box;
+  width: 158px;
+  min-width: 158px;
+  padding-inline: 12px;
+  text-align: center;
+  vertical-align: middle;
+}
+html body .letter-student-table td.letter-action-cell .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: min(100%, 136px);
+  min-height: 38px;
+  padding: 8px 10px;
+  line-height: 1.2;
+}
+html body .letter-student-table:not(.principal-student-table) :is(th, td):nth-child(3),
+html body .letter-student-table:not(.principal-student-table) :is(th, td):nth-child(4),
+html body .principal-student-table :is(th, td):nth-child(3),
+html body .principal-student-table :is(th, td):nth-child(4) {
+  text-align: center;
+}
+html body .letter-student-table:not(.principal-student-table) :is(th, td):nth-child(5),
+html body .principal-student-table :is(th, td):nth-child(5),
+html body .principal-student-table :is(th, td):nth-child(6) {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 1050px) {
+  html body .report-template-shell .report-total-section .report-total-grid {
+    grid-template-columns: repeat(min(2, var(--report-total-columns, 2)), minmax(0, 1fr));
+  }
+}
+@media (max-width: 600px) {
+  html body .report-template-shell .report-total-section .report-total-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  html body .report-template-shell .report-total-grid .report-summary-card.is-primary {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  html body .report-template-shell .report-total-grid .report-summary-card.is-primary strong {
+    text-align: left;
+  }
+}

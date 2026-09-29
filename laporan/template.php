@@ -59,9 +59,20 @@ if($isCashRecap){
             : number_format((int)($report['settlement']['payment_count']??0)).' transaksi pembayaran');
 }
 function template_url(array $changes=[]):string { global $query; return 'template.php?'.http_build_query(array_merge($query,$changes)); }
+function report_table_column_class(array $column): string {
+    $key=(string)($column[0]??'');
+    $type=(string)($column[2]??'text');
+    if(in_array($type,['money','money_optional'],true))return 'report-col-money';
+    if($type==='html')return 'report-col-month';
+    if($type==='status'||in_array($key,['kelas','jenis','periode'],true))return 'report-col-center';
+    if($key==='tanggal')return 'report-col-date';
+    if($key==='nama')return 'report-col-name';
+    if(in_array($key,['nis','nis_diknas'],true))return 'report-col-id';
+    return 'report-col-text';
+}
 if($isPrincipalLetter){ require __DIR__.'/../includes/principal_letter_page.php'; exit; }
 ?>
-<!DOCTYPE html><html lang="id" data-palette="<?= unit_palette_for_view(isset($reportUnitId) ? (int)$reportUnitId : null) ?>"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title><?= report_e($report['title']) ?> | SistemSPP</title><link rel="icon" href="../assets/img/favicon.png?v=2"><link rel="stylesheet" href="../assets/css/style.css?v=unitpalette4"><script>(function(){document.documentElement.setAttribute('data-theme',localStorage.getItem('spp_theme')||'light')})();</script></head><body>
+<!DOCTYPE html><html lang="id" data-palette="<?= unit_palette_for_view(isset($reportUnitId) ? (int)$reportUnitId : null) ?>"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title><?= report_e($report['title']) ?> | SistemSPP</title><link rel="icon" href="../assets/img/favicon.png?v=2"><link rel="stylesheet" href="../assets/css/style.css?v=unitpalette6"><script>(function(){document.documentElement.setAttribute('data-theme',localStorage.getItem('spp_theme')||'light')})();</script></head><body>
 <div class="bg-orbs"><div class="orb orb-1"></div><div class="orb orb-2"></div><div class="orb orb-3"></div></div><div class="layout"><?php include '../includes/sidebar.php'; ?><main class="main-content">
 <div class="topbar"><button class="sidebar-toggle" onclick="toggleSidebar()" aria-label="Buka navigasi"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button><div class="topbar-title"><h2><?= report_e($report['title']) ?></h2><span class="breadcrumb"><?= $isPrincipalLetter ? '<a href="surat_laporan.php">Surat Laporan</a>' : '<a href="global.php?unit='.($reportUnitId===0?'all':'active').'">Laporan Global</a>' ?> / <?= report_e($registry[$template]['label']) ?></span></div><div class="clock-badge" id="liveClock">--:--:--</div></div>
 <?php if($isPrincipalLetter): ?><a class="letter-back-link letter-principal-back" href="surat_laporan.php">&larr; Kembali ke pilihan surat</a><?php endif; ?>
@@ -129,20 +140,20 @@ if($isPrincipalLetter){ require __DIR__.'/../includes/principal_letter_page.php'
 <div class="table-container class-recap-scroll report-wide-table report-template-table-wrap">
   <table class="payment-table class-recap-table report-template-table">
     <thead><tr>
-      <th class="<?= $useGlobalIdentitySticky ? 'report-identity-sticky report-identity-no' : '' ?>">No</th>
+      <th scope="col" class="report-col-no <?= $useGlobalIdentitySticky ? 'report-identity-sticky report-identity-no' : '' ?>">No</th>
       <?php foreach($report['columns'] as $columnIndex=>$column):
         $identityClass=$useGlobalIdentitySticky&&$columnIndex===0?'report-identity-sticky report-identity-nis':($useGlobalIdentitySticky&&$columnIndex===1?'report-identity-sticky report-identity-name':'');
-      ?><th class="<?= $identityClass ?>"><?= report_e($column[1]) ?></th><?php endforeach; ?>
+      ?><th scope="col" class="<?= report_table_column_class($column).' '.$identityClass ?>"><?= report_e($column[1]) ?></th><?php endforeach; ?>
     </tr></thead>
     <tbody>
     <?php if(!$pagination['rows']): ?>
       <tr><td colspan="<?= count($report['columns'])+1 ?>"><div class="empty-state"><p>Tidak ada data</p><span>Ubah filter atau lengkapi data master yang dibutuhkan.</span></div></td></tr>
     <?php else: foreach($pagination['rows'] as $index=>$row): ?>
       <tr>
-        <td class="<?= $useGlobalIdentitySticky ? 'report-identity-sticky report-identity-no' : '' ?>"><?= (($pagination['page']-1)*$pagination['per_page'])+$index+1 ?></td>
+        <td class="report-col-no <?= $useGlobalIdentitySticky ? 'report-identity-sticky report-identity-no' : '' ?>"><?= (($pagination['page']-1)*$pagination['per_page'])+$index+1 ?></td>
         <?php foreach($report['columns'] as $columnIndex=>$column):
           $key=$column[0];$type=$column[2]??'text';$value=$row[$key]??'';
-          $cellClasses=[];
+          $cellClasses=[report_table_column_class($column)];
           if($type==='money'&&(float)$value<0)$cellClasses[]='report-negative';
           if($useGlobalIdentitySticky&&$columnIndex===0)$cellClasses[]='report-identity-sticky report-identity-nis';
           if($useGlobalIdentitySticky&&$columnIndex===1)$cellClasses[]='report-identity-sticky report-identity-name';
@@ -153,7 +164,7 @@ if($isPrincipalLetter){ require __DIR__.'/../includes/principal_letter_page.php'
   </table>
 </div>
 <?php endif; ?>
-<?php if($moneyTotals): ?><div class="report-total-section" style="margin-top:16px"><div class="card-title">Total Rupiah</div><div class="report-summary-grid"><?php foreach($moneyTotals as $total): ?><div class="report-summary-card"><span><?= report_e($total['label']) ?></span><strong><?= report_money($total['value']) ?></strong></div><?php endforeach; ?></div></div><?php endif; ?>
+<?php if($moneyTotals): $primaryTotalKeys=['total_penerimaan','total_bersih'];$secondaryTotalCount=count(array_filter($moneyTotals,static fn($total)=>!in_array($total['key']??'', $primaryTotalKeys,true))); ?><div class="report-total-section" style="margin-top:16px"><div class="card-title">Total Rupiah</div><div class="report-summary-grid report-total-grid" style="--report-total-columns:<?= max(1,min(4,$secondaryTotalCount)) ?>"><?php foreach($moneyTotals as $total): $isPrimaryTotal=in_array($total['key']??'', $primaryTotalKeys,true); ?><div class="report-summary-card<?= $isPrimaryTotal?' is-primary':'' ?>"><span><?= report_e($total['label']) ?></span><strong><?= report_money($total['value']) ?></strong></div><?php endforeach; ?></div></div><?php endif; ?>
 <?php render_pagination('template.php', $query, $pagination['page'], $pagination['pages'], $pagination['total'], $pagination['per_page'], $paginationUnit); endif; ?>
 </section>
 </main></div><script src="../assets/js/app.js?v=10.5"></script><?php if($template==='per-item'): ?><script>
