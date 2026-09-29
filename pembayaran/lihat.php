@@ -281,7 +281,7 @@ foreach ($studentOptions as $studentOption) {
                   $updatedDateTime = format_payment_datetime($row['updated_at'] ?? null);
                   $wasUpdated = payment_was_updated($row['created_at'] ?? null, $row['updated_at'] ?? null);
                   $pendingRequest = $pendingRequests[(int)$row['id']] ?? null;
-                  $canEdit = hasRole(['admin']) && (int)($row['payment_link_version'] ?? 0) === 1 && !$pendingRequest;
+                  $canEdit = hasRole(['admin', 'kasir']) && (int)($row['payment_link_version'] ?? 0) === 1 && !$pendingRequest;
                   $editUrl = 'edit.php?id=' . (int)$row['id'];
                   $rowAttrs = $canEdit
                     ? ' class="clickable-payment-row" data-edit-url="' . htmlspecialchars($editUrl, ENT_QUOTES, 'UTF-8') . '" tabindex="0" role="link" aria-label="Edit pembayaran ' . htmlspecialchars($row['NAMA'], ENT_QUOTES, 'UTF-8') . '"'
@@ -317,9 +317,9 @@ foreach ($studentOptions as $studentOption) {
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                     Edit
                   </a>
-                  <button type="button" class="btn-tbl btn-tbl-del open-payment-delete-request" data-id="<?= (int)$row['id'] ?>" data-student="<?= htmlspecialchars($row['NAMA'], ENT_QUOTES, 'UTF-8') ?>" title="Ajukan penghapusan">
+                  <button type="button" class="btn-tbl btn-tbl-del open-payment-delete-request" data-id="<?= (int)$row['id'] ?>" data-student="<?= htmlspecialchars($row['NAMA'], ENT_QUOTES, 'UTF-8') ?>" title="<?= isRole('kasir') ? 'Ajukan penghapusan' : 'Hapus transaksi' ?>">
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
-                    Ajukan Hapus
+                    <?= isRole('kasir') ? 'Ajukan Hapus' : 'Hapus' ?>
                   </button>
                   <?php if ((int)($row['payment_batch_count'] ?? 1) === 12): ?>
                   <a href="../laporan/cetak_struk_tahunan.php?batch=<?= urlencode((string)$row['payment_batch_token']) ?>" class="btn-tbl btn-tbl-print" target="_blank" rel="noopener" title="Cetak seluruh struk tahunan">12 Struk</a>
@@ -356,15 +356,17 @@ foreach ($studentOptions as $studentOption) {
       <input type="hidden" name="aksi" value="hapus" />
       <input type="hidden" name="id" id="payment-delete-request-id" value="" />
       <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_payment']) ?>" />
-      <h3 id="payment-delete-request-title">Ajukan penghapusan transaksi</h3>
-      <p id="payment-delete-request-copy">Transaksi tidak akan dihapus sebelum permintaan disetujui.</p>
+      <h3 id="payment-delete-request-title"><?= isRole('kasir') ? 'Ajukan penghapusan transaksi' : 'Hapus transaksi' ?></h3>
+      <p id="payment-delete-request-copy"><?= isRole('kasir') ? 'Transaksi tidak akan dihapus sebelum disetujui administrator.' : 'Transaksi akan langsung dihapus setelah Anda menyimpan tindakan ini.' ?></p>
+      <?php if (isRole('kasir')): ?>
       <label class="field-row">
         <span class="field-label">Alasan penghapusan</span>
         <textarea class="field-input" name="authorization_reason" rows="4" minlength="5" maxlength="500" required placeholder="Jelaskan alasan transaksi perlu dihapus."></textarea>
       </label>
+      <?php endif; ?>
       <div class="authorization-modal-actions">
         <button type="button" class="btn btn-ghost" id="payment-delete-request-cancel">Batal</button>
-        <button type="submit" class="btn btn-danger">Ajukan Penghapusan</button>
+        <button type="submit" class="btn btn-danger"><?= isRole('kasir') ? 'Ajukan Penghapusan' : 'Hapus Transaksi' ?></button>
       </div>
     </form>
   </div>
@@ -379,10 +381,10 @@ foreach ($studentOptions as $studentOption) {
     document.querySelectorAll('.open-payment-delete-request').forEach(button => button.addEventListener('click', event => {
       event.stopPropagation();
       idInput.value = button.dataset.id || '';
-      copy.textContent = `Transaksi ${button.dataset.student || 'siswa'} tidak akan dihapus sebelum disetujui bendahara atau administrator lain.`;
+      copy.textContent = <?= json_encode(isRole('kasir') ? 'Penghapusan transaksi %s menunggu persetujuan administrator.' : 'Transaksi %s akan langsung dihapus setelah tindakan ini disimpan.') ?>.replace('%s', button.dataset.student || 'siswa');
       modal.hidden = false;
       document.body.classList.add('modal-open');
-      modal.querySelector('textarea').focus();
+      (modal.querySelector('textarea') || modal.querySelector('button[type="submit"]')).focus();
     }));
     document.getElementById('payment-delete-request-cancel')?.addEventListener('click', close);
     modal?.addEventListener('click', event => { if (event.target === modal) close(); });

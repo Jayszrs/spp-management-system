@@ -5,7 +5,7 @@ if (!isset($_SESSION['admin_id'])) { header('Location: login.php'); exit; }
 require_once 'koneksi.php';
 require_once 'includes/auth.php';
 require_once 'includes/transaction_authorization.php';
-requireRole(['admin', 'bendahara']);
+requireRole(['admin', 'bendahara', 'kasir']);
 
 if (empty($_SESSION['csrf_transaction_authorization'])) {
     $_SESSION['csrf_transaction_authorization'] = bin2hex(random_bytes(32));
@@ -23,6 +23,9 @@ function authorization_redirect_flash(string $type, string $message, string $sta
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (isRole('bendahara')) {
+        authorization_redirect_flash('error', 'Bendahara hanya dapat memeriksa data otorisasi.');
+    }
     if (!hash_equals($csrfToken, (string)($_POST['csrf_token'] ?? ''))) {
         authorization_redirect_flash('error', 'Permintaan tidak valid atau sesi telah kedaluwarsa.');
     }
@@ -43,6 +46,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             transaction_authorization_decide($koneksi, $requestId, 'cancelled', $currentId, 'Dibatalkan oleh pemohon.');
             $message = 'Permintaan berhasil dibatalkan.';
         } elseif ($action === 'reject') {
+            if (!isRole('admin')) throw new RuntimeException('Hanya administrator yang dapat menolak pengajuan.');
             if ((int)$request['requested_by'] === $currentId) {
                 throw new RuntimeException('Pemohon tidak boleh menolak permintaannya sendiri.');
             }
@@ -67,6 +71,11 @@ $search = trim((string)($_GET['q'] ?? ''));
 $where = [];
 $params = [];
 $types = '';
+if (isRole('kasir')) {
+    $where[] = 'r.requested_by=?';
+    $params[] = $currentId;
+    $types .= 'i';
+}
 if ($statusFilter !== 'all') {
     $where[] = 'r.status=?';
     $params[] = $statusFilter;
@@ -135,7 +144,7 @@ function authorization_request_summary(array $request): array
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Otorisasi Transaksi | SistemSPP</title>
+  <title><?= isRole('admin') ? 'Otorisasi Transaksi' : (isRole('kasir') ? 'Pengajuan Saya' : 'Riwayat Otorisasi') ?> | SistemSPP</title>
   <link rel="icon" type="image/png" href="assets/img/favicon.png?v=2" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
@@ -149,7 +158,7 @@ function authorization_request_summary(array $request): array
         <button class="sidebar-toggle" onclick="toggleSidebar()" id="btn-sidebar-toggle" title="Buka menu" aria-label="Buka menu">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
         </button>
-        <div class="topbar-title"><h2>Otorisasi Transaksi</h2><span class="breadcrumb">SistemSPP / Pembayaran / Otorisasi</span></div>
+        <div class="topbar-title"><h2><?= isRole('admin') ? 'Otorisasi Transaksi' : (isRole('kasir') ? 'Pengajuan Saya' : 'Riwayat Otorisasi') ?></h2><span class="breadcrumb">SistemSPP / Pembayaran / Otorisasi</span></div>
         <div class="clock-badge" id="liveClock">--:--:--</div>
       </div>
 
@@ -157,7 +166,7 @@ function authorization_request_summary(array $request): array
       <?php if ($schemaError): ?><div class="alert alert-error"><?= htmlspecialchars($schemaError) ?></div><?php endif; ?>
 
       <section class="authorization-hero">
-        <div><span>Kontrol Transaksi</span><h1>Antrean Otorisasi</h1><p>Periksa usulan perubahan atau penghapusan sebelum data pembayaran benar-benar diubah.</p></div>
+        <div><span>Kontrol Transaksi</span><h1><?= isRole('admin') ? 'Antrean Otorisasi' : (isRole('kasir') ? 'Pengajuan Saya' : 'Riwayat Otorisasi') ?></h1><p><?= isRole('admin') ? 'Periksa dan putuskan pengajuan perubahan atau penghapusan dari kasir.' : (isRole('kasir') ? 'Pantau status pengajuan perubahan atau penghapusan Anda.' : 'Periksa riwayat pengajuan dan keputusan transaksi pembayaran.') ?></p></div>
         <div class="authorization-hero-count"><span>Hasil filter</span><strong><?= number_format(count($requests)) ?></strong><small>permintaan</small></div>
       </section>
 
@@ -194,7 +203,7 @@ function authorization_request_summary(array $request): array
               <div><strong><?= htmlspecialchars($request['requested_by_name']) ?></strong><span><?= htmlspecialchars(ucfirst($request['requested_by_role'])) ?> &middot; <?= htmlspecialchars(date('d/m/Y H:i', strtotime($request['requested_at']))) ?></span><?php if($request['decided_by_name']): ?><small>Diproses oleh <?= htmlspecialchars($request['decided_by_name']) ?></small><?php endif; ?></div>
               <?php if ($isPending && $isRequester): ?>
                 <form method="post" onsubmit="return confirm('Batalkan permintaan ini?')"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken) ?>"><input type="hidden" name="request_id" value="<?= (int)$request['id'] ?>"><input type="hidden" name="action" value="cancel"><button class="btn btn-ghost" type="submit">Batalkan Permintaan</button></form>
-              <?php elseif ($isPending): ?>
+              <?php elseif ($isPending && isRole('admin') && $request['requested_by_role'] === 'kasir'): ?>
                 <div class="authorization-decision-actions">
                   <form method="post" action="pembayaran/proses.php" onsubmit="return confirm('Setujui dan terapkan perubahan transaksi ini?')"><input type="hidden" name="aksi" value="otorisasi_setujui"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken) ?>"><input type="hidden" name="request_id" value="<?= (int)$request['id'] ?>"><input class="field-input" name="decision_note" maxlength="1000" placeholder="Catatan persetujuan (opsional)"><button class="btn btn-primary" type="submit">Setujui dan Terapkan</button></form>
                   <form method="post"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken) ?>"><input type="hidden" name="request_id" value="<?= (int)$request['id'] ?>"><input type="hidden" name="action" value="reject"><input class="field-input" name="decision_note" maxlength="1000" required placeholder="Alasan penolakan wajib diisi"><button class="btn btn-danger" type="submit">Tolak</button></form>

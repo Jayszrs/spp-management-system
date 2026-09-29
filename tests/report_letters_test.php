@@ -23,6 +23,9 @@ try{
             letter_assert((float)$item['sisa']>.001,'Surat memuat tagihan lunas atau nol.');
             letter_assert(!in_array($item['status'],['Dibatalkan','Potongan Penuh','Tercakup Uang PSB'],true),'Surat memuat tagihan yang dikecualikan.');
             if(in_array($item['komponen_key'],['spp','komite'],true))letter_assert($item['periode_code']<=substr($today,0,7),'Surat memuat bulan mendatang.');
+            $itemAcademicStart=report_academic_year_start((string)($item['tahun_ajaran']??''));
+            $currentAcademicStart=report_academic_year_start(du_academic_year_label((int)substr($today,5,2),(int)substr($today,0,4)));
+            letter_assert($itemAcademicStart===null||$itemAcademicStart<=$currentAcademicStart,'Surat memuat tagihan tahun ajaran mendatang.');
             $detailTotal+=(float)$item['sisa'];
         }
         letter_assert(abs($detailTotal-$student['total_tunggakan'])<.001,'Jumlah rincian surat tidak cocok.');

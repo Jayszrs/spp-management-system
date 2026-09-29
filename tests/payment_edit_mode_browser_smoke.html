@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <title>PAYMENT_EDIT_MODE_PENDING</title>
+  <script>
+    window.sppPublishedBilling = true;
+    window.sppEditPaymentId = 959;
+    window.sppEditOriginal = { no_induk: '20279999', bulan: '09', tahun: '2026', amount: 260000 };
+    sessionStorage.setItem('paymentDraftReload', JSON.stringify({
+      source_path: '/pembayaran/form.php', edit_id: 0, no_induk: '20279999',
+      bulan_bayar: '09', tahun_bayar: '2026', spp_action: 'titipan', uang_spp: '0'
+    }));
+  </script>
+</head>
+<body>
+  <form id="form-bayar" action="javascript:void(0)">
+    <input id="disp-nis" value="20279999">
+    <select id="bulan-bayar"><option value="09">September</option><option value="10">Oktober</option></select>
+    <input id="tahun-bayar" value="2026">
+    <input id="hidden-total" value="260000">
+    <input id="spp-action" value="bayar">
+    <input id="gunakan-titipan-spp" value="0">
+    <button type="button" id="spp-record-deposit-button">Catat Titipan SPP</button>
+    <span id="spp-action-context"></span>
+    <table><tbody><tr>
+      <td><span id="spp-component-label">Uang SPP</span></td>
+      <td><input id="spp-total" class="tbl-input" value="260000"></td>
+      <td><input id="spp-bayar" class="tbl-input" value="0"></td>
+      <td><input id="spp-sisa" class="tbl-input" value="0"></td>
+      <td><input id="spp-input" class="tbl-input tbl-pay" value="260000"></td>
+    </tr></tbody></table>
+    <button id="btn-update" type="submit">Simpan Perubahan</button>
+  </form>
+  <div id="spp-warning-overlay" aria-hidden="true">
+    <h3 id="spp-warning-title"></h3>
+    <p id="spp-warning-message"></p>
+    <div id="spp-warning-amount"></div>
+    <button id="spp-warning-secondary" hidden>Kembali</button>
+    <button id="spp-warning-close">Mengerti</button>
+  </div>
+  <script src="../assets/js/app.js"></script>
+  <script>
+    window.addEventListener('load', () => setTimeout(async () => {
+      try {
+        const action = document.getElementById('spp-action');
+        const amount = document.getElementById('spp-input');
+        const modeButton = document.getElementById('spp-record-deposit-button');
+        const form = document.getElementById('form-bayar');
+        if (action.value !== 'bayar' || sessionStorage.getItem('paymentDraftReload')) throw Error('draft_lintas_halaman');
+        sessionStorage.setItem('paymentDraftReload', JSON.stringify({
+          source_path: location.pathname, edit_id: 958, spp_action: 'titipan', uang_spp: '0'
+        }));
+        await restorePaymentDraft();
+        if (action.value !== 'bayar' || sessionStorage.getItem('paymentDraftReload')) throw Error('draft_transaksi_lain');
+
+        modeButton.click();
+        amount.value = '0';
+        document.getElementById('btn-update').click();
+        if (document.getElementById('spp-warning-title').textContent !== 'Periksa mode Titipan SPP') throw Error('validasi_titipan_kosong');
+        document.getElementById('spp-warning-close').click();
+
+        document.getElementById('bulan-bayar').value = '10';
+        document.getElementById('bulan-bayar').dispatchEvent(new Event('change', { bubbles: true }));
+        if (action.value !== 'bayar') throw Error('reset_periode');
+
+        modeButton.click();
+        amount.value = '100000';
+        let submitted = false;
+        form.submit = () => { submitted = true; };
+        document.getElementById('btn-update').click();
+        if (!submitted) throw Error('titipan_valid');
+        document.title = 'PAYMENT_EDIT_MODE_OK';
+      } catch (error) {
+        document.title = 'PAYMENT_EDIT_MODE_FAILED_' + error.message;
+      }
+    }, 120));
+  </script>
+</body>
+</html>

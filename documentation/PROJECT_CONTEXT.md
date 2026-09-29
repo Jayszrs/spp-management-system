@@ -24,7 +24,10 @@ SistemSPP adalah aplikasi administrasi pembayaran sekolah berbasis PHP, JavaScri
 | Aksi | Admin | Kasir | Bendahara |
 | --- | :---: | :---: | :---: |
 | Input, lihat, cetak pembayaran | Ya | Ya | Tidak |
-| Edit/hapus pembayaran | Ya | Tidak | Tidak |
+| Edit pembayaran | Langsung | Ajukan perubahan; berlaku setelah disetujui Admin | Tidak |
+| Hapus pembayaran | Langsung | Ajukan penghapusan; berlaku setelah disetujui Admin | Tidak |
+| Setujui/tolak pengajuan kasir | Ya | Tidak | Tidak |
+| Periksa antrean/riwayat otorisasi | Ya | Pengajuan sendiri | Ya, baca saja |
 | Kelola Data Siswa, Kelas/Rombel, SPP, Biaya Lain, Daftar Ulang | Ya | Ya | Tidak |
 | Kelola akun/role | Ya | Tidak | Tidak |
 | Laporan Global | Ya | Ya | Ya |
