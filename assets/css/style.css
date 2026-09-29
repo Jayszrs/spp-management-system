@@ -12883,3 +12883,20 @@ html body .principal-student-table :is(th, td):nth-child(6) {
     text-align: left;
   }
 }
+
+/* Seluruh judul kolom laporan berada di tengah; isi tetap mengikuti jenis datanya. */
+html body .report-template-shell .report-template-table thead tr > th,
+html body .report-template-shell .report-billing-matrix-table thead tr > th,
+html body .report-template-shell .report-settlement-component-table thead tr > th,
+html body .principal-list-shell .principal-student-table thead tr > th {
+  text-align: center !important;
+  vertical-align: middle;
+}
+html body .report-template-shell .report-template-table tbody td.report-col-no,
+html body .report-template-shell .report-settlement-component-table tbody td:first-child,
+html body .report-template-shell .report-billing-matrix-table tbody td.billing-matrix-no {
+  text-align: center;
+}
+html body .report-template-shell .report-settlement-component-table tbody td:nth-child(2) {
+  text-align: left;
+}

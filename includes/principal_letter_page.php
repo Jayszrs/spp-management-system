@@ -23,7 +23,7 @@ $excelPreview = 'export_global.php?' . http_build_query(array_merge($exportQuery
     <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
     <title>Surat Laporan ke Kepala Sekolah | SistemSPP</title>
     <link rel="icon" href="../assets/img/favicon.png?v=2">
-    <link rel="stylesheet" href="../assets/css/style.css?v=unitpalette6">
+    <link rel="stylesheet" href="../assets/css/style.css?v=unitpalette7">
     <script>(function(){document.documentElement.setAttribute('data-theme',localStorage.getItem('spp_theme')||'light')})();</script>
 </head>
 <body>
