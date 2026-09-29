@@ -29,10 +29,15 @@ try{
     letter_http_assert(str_contains($headers[0]??'','302'),'Katalog surat tanpa login tidak ditolak.');
     [$headers]=letter_http_get($base.'laporan/surat_orang_tua.php');
     letter_http_assert(str_contains($headers[0]??'','302'),'Halaman surat tanpa login tidak ditolak.');
+    $accountIds=[];
+    foreach($koneksi->query("SELECT id,role FROM admin WHERE unit_id=1 AND is_active=1 AND role IN ('admin','bendahara','kasir') ORDER BY id") as $account){
+        $accountIds[$account['role']]??=(int)$account['id'];
+    }
     foreach(['admin','bendahara','kasir'] as $role){
+        letter_http_assert(isset($accountIds[$role]),"Akun aktif SD untuk peran $role tidak tersedia.");
         $id='letterhttp'.bin2hex(random_bytes(8));
         session_id($id);session_start();
-        $_SESSION=['admin_id'=>-1,'admin_role'=>$role,'admin_nama'=>'Uji Surat'];
+        $_SESSION=['admin_id'=>$accountIds[$role],'admin_role'=>$role,'admin_nama'=>'Uji Surat'];
         session_write_close();
         [$headers,$body]=letter_http_get($base.'laporan/surat_laporan.php',$id);
         letter_http_assert(str_contains($headers[0]??'','200')&&str_contains($body,'href="surat_orang_tua.php"')&&str_contains($body,'href="template.php?template=tunggakan-siswa"')&&str_contains($body,'href="../laporan/surat_laporan.php" class="nav-item active"'),"Katalog surat gagal untuk $role.");

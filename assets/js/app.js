@@ -315,8 +315,8 @@ function studentSearchOptionsForClass(input, options) {
   if (!filter.value) return options;
   if (filter.type === 'tingkat') {
     return options.filter(opt => {
-      const level = String(opt.dataset.tingkat || '').match(/[1-6]/)?.[0]
-        || String(opt.dataset.kelas || '').match(/[1-6]/)?.[0]
+      const level = String(opt.dataset.tingkat || '').match(/^(?:1[0-2]|[1-9])$/)?.[0]
+        || String(opt.dataset.kelas || '').match(/(?:1[0-2]|[1-9])/)?.[0]
         || '';
       return level === filter.level;
     });

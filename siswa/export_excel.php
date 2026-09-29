@@ -51,7 +51,7 @@ ob_start();
 <!DOCTYPE html><html lang="id"><head><meta charset="UTF-8"><title>Data Siswa</title><style>
 @page{margin:12mm;size:A4 landscape}*{box-sizing:border-box}body{margin:0;padding:26px;font-family:Arial,sans-serif;color:#17231d;font-size:10px;background:#fff}.heading{padding-bottom:12px;border-bottom:3px double #15543c;text-align:center}.heading h1{margin:0;color:#123d2e;font-size:18px}.heading p{margin:5px 0 0;color:#52645b}.meta{display:flex;justify-content:space-between;gap:20px;margin:12px 0;color:#52645b}.summary{display:flex;gap:10px;margin-bottom:12px}.summary div{min-width:170px;padding:9px 12px;border:1px solid #c9e0d4;background:#f1f8f4}.summary span{display:block;color:#607269;font-size:8px;font-weight:bold;text-transform:uppercase}.summary strong{display:block;margin-top:4px;color:#0c7042;font-size:13px}table{width:100%;border-collapse:collapse}th,td{padding:6px 7px;border:1px solid #b9d4c7;text-align:left;vertical-align:top}th{background:#12503a;color:#fff;font-size:8px;text-transform:uppercase}tbody tr:nth-child(even){background:#f5faf7}.money{text-align:right;white-space:nowrap}.center{text-align:center}.footer{margin-top:14px;padding-top:7px;border-top:1px solid #c9d9d0;color:#687970;font-size:8px}
 </style></head><body>
-<header class="heading"><h1>DATA SISWA</h1><p>Sekolah Dasar Al-Qur'an (SDA) Mutiara Hikmah</p></header>
+<header class="heading"><h1>DATA SISWA · UNIT <?= $escape(unit_label(unit_active_id())) ?></h1><p><?= $escape(unit_school_name(unit_active_id())) ?></p></header>
 <div class="meta"><span><?= $escape($filterLabel) ?></span><span>Dibuat: <?= $escape($generated) ?></span></div>
 <div class="summary"><div><span>Jumlah Siswa</span><strong><?= number_format(count($rows)) ?></strong></div></div>
 <table><thead><tr><th>No</th><th>NIS</th><th>NIS Diknas</th><th>Nama</th><th>Kelas/Rombel</th><th>SPP Per Bulan</th><th>Status</th></tr></thead><tbody>
@@ -64,7 +64,7 @@ $documentHtml = ob_get_clean();
 
 if (($_GET['download'] ?? '') === '1') {
     header('Content-Type: application/vnd.ms-excel; charset=UTF-8');
-    header('Content-Disposition: attachment; filename="data-siswa-' . date('Ymd-His') . '.xls"');
+    header('Content-Disposition: attachment; filename="data-siswa-' . strtolower(unit_label(unit_active_id())) . '-' . date('Ymd-His') . '.xls"');
     echo "\xEF\xBB\xBF" . $documentHtml;
     exit;
 }

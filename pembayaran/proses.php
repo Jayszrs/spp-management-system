@@ -211,7 +211,8 @@ function sync_spp_period_claim(mysqli $db, int $bayarId, string $noInduk, string
 
 function normalize_student_class_for_du(array $student): string {
     $kelas = preg_replace('/\D+/', '', (string)($student['KELAS'] ?? ''));
-    if (!in_array($kelas, ['1','2','3','4','5','6'], true)) {
+    [$firstLevel, $lastLevel] = unit_level_bounds();
+    if ((int)$kelas < $firstLevel || (int)$kelas > $lastLevel) {
         throw new RuntimeException('Kelas siswa tidak valid untuk Daftar Ulang.');
     }
     return $kelas;

@@ -42,7 +42,7 @@ try {
     $stmt->close();
 
     $studentPage = file_get_contents(__DIR__ . '/../siswa/daftar.php');
-    graduation_assert(str_contains($studentPage, "sta.kelas IN ('1','2','3','4','5','6')"), 'Timeline belum mengecualikan masa PSB.');
+    graduation_assert(str_contains($studentPage, 'CAST(sta.kelas AS UNSIGNED) " . unit_level_between_sql()'), 'Timeline belum mengecualikan masa PSB.');
     graduation_assert(str_contains($studentPage, 'student-class-history-toggle'), 'Kontrol expandable Riwayat Kelas belum tersedia.');
     graduation_assert(str_contains($studentPage, 'student-class-history-panel'), 'Panel Riwayat Kelas belum memakai struktur visual yang baru.');
     graduation_assert(str_contains($studentPage, 'student-class-timeline-item is-'), 'Timeline kelas belum memiliki penanda status visual.');
@@ -56,7 +56,7 @@ try {
 }
 
 if ($failure) {
-    fwrite(STDERR, 'FAILED: ' . $failure->getMessage() . PHP_EOL);
+    fwrite(STDERR, 'FAILED: ' . $failure->getMessage() . PHP_EOL . $failure->getTraceAsString() . PHP_EOL);
     exit(1);
 }
 echo "OK: tahun kelulusan, snapshot kelas 6, dan kontrak timeline tervalidasi.\n";

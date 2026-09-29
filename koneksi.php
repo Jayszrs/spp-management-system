@@ -24,6 +24,8 @@ try {
     $koneksi->set_charset('utf8mb4');
     $koneksi->query("SET NAMES utf8mb4 COLLATE utf8mb4_general_ci");
     $koneksi->query("SET time_zone = '+07:00'");
+    require_once __DIR__ . '/includes/units.php';
+    unit_bootstrap_context($koneksi);
 } catch (Throwable $error) {
     error_log('Koneksi database SistemSPP gagal: ' . $error->getMessage());
     if (PHP_SAPI !== 'cli' && !headers_sent()) {

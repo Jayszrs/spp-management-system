@@ -16,7 +16,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $password = $_POST['password'] ?? '';
 
     if ($username && $password) {
-        $stmt = $koneksi->prepare("SELECT id, nama, password, role FROM admin WHERE username = ?");
+        $stmt = $koneksi->prepare("SELECT id, nama, password, role, unit_id, is_active FROM admin WHERE username = ?");
         $stmt->bind_param('s', $username);
         $stmt->execute();
         $result = $stmt->get_result();
@@ -39,7 +39,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
 
-        if ($admin && $passwordValid) {
+        if ($admin && $passwordValid && (int)$admin['is_active'] === 1) {
             if ($legacyMd5 || password_needs_rehash($admin['password'], PASSWORD_DEFAULT)) {
                 $newHash = password_hash($password, PASSWORD_DEFAULT);
                 $update  = $koneksi->prepare("UPDATE admin SET password = ? WHERE id = ?");
@@ -52,6 +52,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $_SESSION['admin_id']   = $admin['id'];
             $_SESSION['admin_nama'] = $admin['nama'];
             $_SESSION['admin_role'] = $admin['role'];
+            $_SESSION['admin_unit_id'] = $admin['unit_id'] === null ? null : (int)$admin['unit_id'];
+            $_SESSION['active_unit_id'] = $admin['role'] === 'super_admin' ? 1 : (int)$admin['unit_id'];
 
             if ($admin['role'] === 'kasir') {
                 $loginRedirect = 'tabungan/masuk.php';
@@ -83,7 +85,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
   <!-- Prevent theme flash -->
   <script>(function(){var t=localStorage.getItem('spp_theme')||'light';document.documentElement.setAttribute('data-theme',t);})();</script>
-  <link rel="stylesheet" href="assets/css/style.css?v=9.6" />
+  <link rel="stylesheet" href="assets/css/style.css?v=unitpalette4" />
   <link rel="stylesheet" href="assets/css/login.css?v=3.5" />
 </head>
 <body class="login-split-body">
@@ -220,9 +222,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <a href="#" class="link-accent" onclick="return false">Syarat Penggunaan</a> dan
         <a href="#" class="link-accent" onclick="return false">Kebijakan Privasi</a> kami.
       </p>
-
-      <!-- Hint -->
-      <p class="login-hint-bottom">Default: <code>admin</code> / <code>admin123</code></p>
 
     </div><!-- /right-inner -->
   </div><!-- /login-right -->

@@ -43,7 +43,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $where = ['s.is_active=1']; $types = ''; $params = []; $targetValue = null;
             if ($target === 'tingkat') {
                 $level = (int)($_POST['tingkat'] ?? 0);
-                if ($level < 1 || $level > 6) throw new RuntimeException('Pilih tingkat kelas 1 sampai 6.');
+                [$firstLevel, $lastLevel] = unit_level_bounds();
+                if ($level < $firstLevel || $level > $lastLevel) throw new RuntimeException("Pilih tingkat kelas {$firstLevel} sampai {$lastLevel}.");
                 $where[] = 's.KELAS=?'; $types .= 'i'; $params[] = $level; $targetValue = (string)$level;
             } elseif ($target === 'rombel') {
                 $classId = (int)($_POST['master_kelas_id'] ?? 0);
@@ -260,7 +261,7 @@ $activeClasses = class_all($koneksi, true);
 $activeStudents = $koneksi->query("SELECT s.NO_INDUK,s.NO_induk_diknas,s.NAMA,s.KELAS,s.master_kelas_id,mk.tingkat,mk.kode_rombel,mk.is_placeholder FROM siswa s LEFT JOIN master_kelas mk ON mk.id=s.master_kelas_id WHERE s.is_active=1 ORDER BY s.NAMA")->fetch_all(MYSQLI_ASSOC);
 ?>
 <!DOCTYPE html>
-<html lang="id">
+<html lang="id" data-palette="<?= unit_palette_for_view(isset($reportUnitId) ? (int)$reportUnitId : null) ?>">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -268,7 +269,7 @@ $activeStudents = $koneksi->query("SELECT s.NO_INDUK,s.NO_induk_diknas,s.NAMA,s.
   <link rel="icon" type="image/png" href="assets/img/favicon.png?v=2" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="assets/css/style.css?v=9.6" />
+  <link rel="stylesheet" href="assets/css/style.css?v=unitpalette4" />
   <script>(function(){var t=localStorage.getItem('spp_theme')||'light';document.documentElement.setAttribute('data-theme',t);})();</script>
 </head>
 <body>
@@ -344,7 +345,7 @@ $activeStudents = $koneksi->query("SELECT s.NO_INDUK,s.NO_induk_diknas,s.NAMA,s.
           <div class="report-filter-grid">
             <div class="field-row"><label class="field-label">Item Biaya</label><select class="field-input field-select" name="master_id" id="publish-fee" required><?php foreach($activeMasters as $master): ?><option value="<?= (int)$master['id'] ?>" data-nominal="<?= (float)$master['nominal'] ?>"><?= htmlspecialchars($master['nama']) ?> (Rp <?= number_format((float)$master['nominal'],0,',','.') ?>)</option><?php endforeach; ?></select></div>
             <div class="field-row"><label class="field-label">Target</label><select class="field-input field-select" name="target" id="publish-target"><option value="all">Semua siswa aktif</option><option value="tingkat">Tingkat kelas</option><option value="rombel">Rombel tertentu</option><option value="siswa">Pilih siswa</option></select></div>
-            <div class="field-row publish-target-field" data-target="tingkat" hidden><label class="field-label">Tingkat</label><select class="field-input field-select" name="tingkat" id="publish-level"><?php for($i=1;$i<=6;$i++): ?><option value="<?= $i ?>">Kelas <?= $i ?></option><?php endfor; ?></select></div>
+            <div class="field-row publish-target-field" data-target="tingkat" hidden><label class="field-label">Tingkat</label><select class="field-input field-select" name="tingkat" id="publish-level"><?php for($i=unit_level_bounds()[0];$i<=unit_level_bounds()[1];$i++): ?><option value="<?= $i ?>">Kelas <?= $i ?></option><?php endfor; ?></select></div>
             <div class="field-row publish-target-field" data-target="rombel" hidden><label class="field-label">Rombel</label><select class="field-input field-select" name="master_kelas_id" id="publish-class"><?php foreach($activeClasses as $class): ?><option value="<?= (int)$class['id'] ?>"><?= htmlspecialchars(class_label($class)) ?></option><?php endforeach; ?></select></div>
             <div class="field-row publish-target-field publish-students-field" data-target="siswa" hidden>
               <label class="field-label">Siswa (bisa lebih dari satu)</label>

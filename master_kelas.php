@@ -5,6 +5,7 @@ require_once 'includes/auth.php';
 require_once 'includes/kelas.php';
 require_once 'includes/pagination.php';
 requireRole(['admin', 'kasir']);
+[$unitMinLevel,$unitMaxLevel]=unit_level_bounds();
 
 if (empty($_SESSION['csrf_master_kelas'])) $_SESSION['csrf_master_kelas'] = bin2hex(random_bytes(32));
 
@@ -35,7 +36,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $_SESSION['promotion_batch_result'] = $batchResult;
             $successCount = count($batchResult['successes']);
             $failureCount = count($batchResult['failures']);
-            $verb = $expectedLevel === 6 ? 'diluluskan' : 'dinaikkan';
+            $verb = $expectedLevel === $unitMaxLevel ? 'diluluskan' : 'dinaikkan';
             $message = $successCount . ' siswa berhasil ' . $verb . '.';
             if ($failureCount > 0) {
                 $message .= ' ' . $failureCount . ' siswa belum berhasil diproses.';
@@ -64,7 +65,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $level = (int)($_POST['tingkat'] ?? 0);
             $code = strtoupper(trim((string)($_POST['kode_rombel'] ?? '')));
             $code = preg_replace('/\s+/', '', $code);
-            if ($level < 1 || $level > 6) throw new RuntimeException('Tingkat kelas harus 1 sampai 6. Kelas PSB dibuat otomatis oleh sistem.');
+            if ($level < $unitMinLevel || $level > $unitMaxLevel) throw new RuntimeException('Tingkat kelas harus '.$unitMinLevel.' sampai '.$unitMaxLevel.'. Kelas PSB dibuat otomatis oleh sistem.');
             if (!preg_match('/^[A-Z0-9]{1,10}$/', $code)) throw new RuntimeException('Kode rombel hanya boleh berisi huruf/angka, maksimal 10 karakter.');
 
             $stmt = $koneksi->prepare('SELECT id FROM master_kelas WHERE tingkat = ? AND kode_rombel = ? AND id <> ? LIMIT 1');
@@ -120,7 +121,7 @@ $editId = (int)($_GET['edit'] ?? 0);
 $editClass = $editId > 0 ? class_find($koneksi, $editId) : null;
 $currentPromotionLevel = class_highest_active_regular_level($koneksi);
 $promotionStudents = class_students_for_manual_step($koneksi, $currentPromotionLevel);
-$promotionTargets = $currentPromotionLevel >= 1 && $currentPromotionLevel <= 5
+$promotionTargets = $currentPromotionLevel >= $unitMinLevel && $currentPromotionLevel < $unitMaxLevel
     ? class_target_rombel_options($koneksi, $currentPromotionLevel + 1)
     : [];
 $promotionSourceRombels = [];
@@ -186,12 +187,12 @@ $classInactiveCount = count(array_filter($classRows, static fn(array $class): bo
 $classFilterQuery = ['q_kelas' => $classSearch, 'tingkat_kelas' => $classLevelFilter, 'status_kelas' => $classStatusFilter, 'class_per_page' => $classPerPage];
 ?>
 <!DOCTYPE html>
-<html lang="id">
+<html lang="id" data-palette="<?= unit_palette_for_view(isset($reportUnitId) ? (int)$reportUnitId : null) ?>">
 <head>
   <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
   <title>Master Kelas | SistemSPP</title>
   <link rel="icon" type="image/png" href="assets/img/favicon.png?v=2">
-  <link rel="stylesheet" href="assets/css/style.css?v=9.6">
+  <link rel="stylesheet" href="assets/css/style.css?v=unitpalette4">
   <script>(function(){var t=localStorage.getItem('spp_theme')||'light';document.documentElement.setAttribute('data-theme',t);})();</script>
 </head>
 <body>
@@ -222,11 +223,11 @@ $classFilterQuery = ['q_kelas' => $classSearch, 'tingkat_kelas' => $classLevelFi
     </section>
 
     <div class="main-card master-modern-card master-modern-form">
-      <div class="card-title-row"><div><div class="card-title"><?= $editClass ? 'Edit Rombel' : 'Tambah Rombel' ?></div><p class="payment-auto-note">Tingkat tetap 1–6. Kode rombel membentuk label seperti 1A, 1B, atau 2C.</p></div></div>
+      <div class="card-title-row"><div><div class="card-title"><?= $editClass ? 'Edit Rombel' : 'Tambah Rombel' ?></div><p class="payment-auto-note">Tingkat unit ini <?= $unitMinLevel ?>–<?= $unitMaxLevel ?>. Kode rombel membentuk label seperti <?= $unitMinLevel ?>A atau <?= $unitMinLevel ?>B.</p></div></div>
       <form method="post" class="report-filter-grid">
         <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_master_kelas']) ?>">
         <input type="hidden" name="aksi" value="<?= $editClass ? 'update' : 'tambah' ?>"><input type="hidden" name="id" value="<?= (int)($editClass['id'] ?? 0) ?>">
-        <div class="field-row"><label class="field-label">Tingkat</label><select class="field-input field-select" name="tingkat" required><?php for($i=1;$i<=6;$i++): ?><option value="<?= $i ?>" <?= (int)($editClass['tingkat'] ?? 1)===$i?'selected':'' ?>>Kelas <?= $i ?></option><?php endfor; ?></select></div>
+        <div class="field-row"><label class="field-label">Tingkat</label><select class="field-input field-select" name="tingkat" required><?php for($i=$unitMinLevel;$i<=$unitMaxLevel;$i++): ?><option value="<?= $i ?>" <?= (int)($editClass['tingkat'] ?? $unitMinLevel)===$i?'selected':'' ?>>Kelas <?= $i ?></option><?php endfor; ?></select></div>
         <div class="field-row"><label class="field-label">Kode Rombel</label><input class="field-input" name="kode_rombel" maxlength="10" required placeholder="Contoh: A" value="<?= htmlspecialchars((string)($editClass['kode_rombel'] ?? '')) ?>" <?= $editClass && (int)$editClass['is_placeholder']===1?'disabled':'' ?>></div>
         <div class="report-filter-actions"><button class="btn btn-primary" type="submit" <?= $editClass && (int)$editClass['is_placeholder']===1?'disabled':'' ?>><?= $editClass?'Simpan Perubahan':'Tambah Rombel' ?></button><?php if($editClass): ?><a class="btn btn-ghost" href="master_kelas.php">Batal</a><?php endif; ?></div>
       </form>
@@ -243,41 +244,41 @@ $classFilterQuery = ['q_kelas' => $classSearch, 'tingkat_kelas' => $classLevelFi
       </div>
       <?php endif; ?>
       <div class="master-promotion-actions">
-        <?php if($currentPromotionLevel >= 1 && $currentPromotionLevel <= 6): ?>
-        <form method="post" id="promotion-batch-form" class="promotion-batch-form" data-promotion-action="<?= $currentPromotionLevel === 6 ? 'Luluskan' : 'Naikkan' ?>">
+        <?php if($currentPromotionLevel >= $unitMinLevel && $currentPromotionLevel <= $unitMaxLevel): ?>
+        <form method="post" id="promotion-batch-form" class="promotion-batch-form" data-promotion-action="<?= $currentPromotionLevel === $unitMaxLevel ? 'Luluskan' : 'Naikkan' ?>">
           <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_master_kelas']) ?>">
           <input type="hidden" name="aksi" value="proses_siswa_batch">
           <input type="hidden" name="target_tahun_ajaran" value="<?= htmlspecialchars($nextAcademicYear) ?>">
           <input type="hidden" name="expected_level" value="<?= (int)$currentPromotionLevel ?>">
 
           <div class="promotion-stage-overview">
-            <div><span>Tahap Aktif</span><strong><?= $currentPromotionLevel === 6 ? 'Kelulusan Kelas 6' : 'Kenaikan Kelas ' . (int)$currentPromotionLevel ?></strong></div>
+            <div><span>Tahap Aktif</span><strong><?= $currentPromotionLevel === $unitMaxLevel ? 'Kelulusan Kelas '.$unitMaxLevel : 'Kenaikan Kelas ' . (int)$currentPromotionLevel ?></strong></div>
             <div><span>Siswa Tersisa</span><strong><?= number_format(count($promotionStudents)) ?> siswa</strong></div>
-            <div><span><?= $currentPromotionLevel === 6 ? 'Tahun Ajaran Kelulusan' : 'Tahun Ajaran Tujuan' ?></span><strong><?= htmlspecialchars($currentPromotionLevel === 6 ? du_current_academic_year() : $nextAcademicYear) ?></strong></div>
+            <div><span><?= $currentPromotionLevel === $unitMaxLevel ? 'Tahun Ajaran Kelulusan' : 'Tahun Ajaran Tujuan' ?></span><strong><?= htmlspecialchars($currentPromotionLevel === $unitMaxLevel ? du_current_academic_year() : $nextAcademicYear) ?></strong></div>
           </div>
 
           <div class="promotion-filter-bar">
             <div class="field-row promotion-search-field"><label class="field-label" for="promotion-batch-search">Cari Siswa</label><div class="search-box"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input type="search" id="promotion-batch-search" placeholder="Ketik nama, NIS, atau NIS Diknas..." autocomplete="off"></div></div>
-            <div class="field-row"><label class="field-label" for="promotion-source-filter">Rombel Asal</label><select class="field-input field-select" id="promotion-source-filter"><?php if($currentPromotionLevel === 6): ?><option value="">Semua Rombel (<?= number_format(count($promotionStudents)) ?>)</option><?php endif; ?><?php foreach($promotionSourceRombels as $sourceKey => $source): ?><option value="<?= htmlspecialchars($sourceKey) ?>" <?= $promotionDefaultSourceKey === (string)$sourceKey ? 'selected' : '' ?>><?= htmlspecialchars($source['label']) ?> (<?= number_format($source['count']) ?>)</option><?php endforeach; ?></select></div>
+            <div class="field-row"><label class="field-label" for="promotion-source-filter">Rombel Asal</label><select class="field-input field-select" id="promotion-source-filter"><?php if($currentPromotionLevel === $unitMaxLevel): ?><option value="">Semua Rombel (<?= number_format(count($promotionStudents)) ?>)</option><?php endif; ?><?php foreach($promotionSourceRombels as $sourceKey => $source): ?><option value="<?= htmlspecialchars($sourceKey) ?>" <?= $promotionDefaultSourceKey === (string)$sourceKey ? 'selected' : '' ?>><?= htmlspecialchars($source['label']) ?> (<?= number_format($source['count']) ?>)</option><?php endforeach; ?></select></div>
           </div>
 
           <div class="promotion-selection-toolbar">
             <div><strong id="promotion-visible-count"><?= number_format(count($promotionStudents)) ?> siswa ditampilkan</strong><span id="promotion-selected-count">0 siswa dipilih</span></div>
-            <div><button class="btn btn-ghost" type="button" id="promotion-select-visible">Pilih Kelas ini</button><?php if($currentPromotionLevel === 6): ?><button class="btn btn-ghost" type="button" id="promotion-select-all">Pilih Semua Kelas</button><?php endif; ?><button class="btn btn-ghost" type="button" id="promotion-clear-selection">Kosongkan Pilihan</button></div>
+            <div><button class="btn btn-ghost" type="button" id="promotion-select-visible">Pilih Kelas ini</button><?php if($currentPromotionLevel === $unitMaxLevel): ?><button class="btn btn-ghost" type="button" id="promotion-select-all">Pilih Semua Kelas</button><?php endif; ?><button class="btn btn-ghost" type="button" id="promotion-clear-selection">Kosongkan Pilihan</button></div>
           </div>
 
           <div class="promotion-student-list" id="promotion-student-list">
             <?php foreach($promotionStudents as $index => $student):
               $studentNis = (string)$student['NO_INDUK'];
               $studentDiknas = trim((string)($student['NO_induk_diknas'] ?? ''));
-              $defaultTargetId = $currentPromotionLevel < 6 ? ($promotionTargetByCode[strtoupper((string)($student['kode_rombel'] ?? ''))] ?? 0) : 0;
+              $defaultTargetId = $currentPromotionLevel < $unitMaxLevel ? ($promotionTargetByCode[strtoupper((string)($student['kode_rombel'] ?? ''))] ?? 0) : 0;
               $searchText = strtolower(trim($student['NAMA'] . ' ' . $studentNis . ' ' . $studentDiknas . ' ' . $student['kelas_label']));
             ?>
             <article class="promotion-student-row" data-promotion-student data-source-rombel="<?= htmlspecialchars($student['source_key']) ?>" data-search="<?= htmlspecialchars($searchText) ?>">
               <label class="promotion-student-check" for="promotion-student-<?= (int)$index ?>"><input type="checkbox" id="promotion-student-<?= (int)$index ?>" name="selected_students[]" value="<?= htmlspecialchars($studentNis) ?>"><span></span></label>
               <label class="promotion-student-identity" for="promotion-student-<?= (int)$index ?>"><strong><?= htmlspecialchars($student['NAMA']) ?></strong><small>NIS <?= htmlspecialchars($studentNis) ?><?= $studentDiknas !== '' ? ' · NIS Diknas ' . htmlspecialchars($studentDiknas) : '' ?></small></label>
               <span class="kelas-badge"><?= htmlspecialchars($student['kelas_label']) ?></span>
-              <?php if($currentPromotionLevel < 6): ?>
+              <?php if($currentPromotionLevel < $unitMaxLevel): ?>
               <div class="promotion-target-field"><label for="promotion-target-<?= (int)$index ?>">Rombel Tujuan</label><select class="field-input field-select" id="promotion-target-<?= (int)$index ?>" name="target_master_kelas_id[<?= htmlspecialchars($studentNis) ?>]" disabled><option value="">Pilih rombel</option><?php foreach($promotionTargets as $target): ?><option value="<?= (int)$target['id'] ?>" <?= $defaultTargetId === (int)$target['id'] ? 'selected' : '' ?>><?= htmlspecialchars($target['label']) ?></option><?php endforeach; ?></select></div>
               <?php endif; ?>
             </article>
@@ -285,7 +286,7 @@ $classFilterQuery = ['q_kelas' => $classSearch, 'tingkat_kelas' => $classLevelFi
             <div class="promotion-empty-filter" id="promotion-empty-filter" hidden>Tidak ada siswa yang cocok dengan pencarian atau rombel ini.</div>
           </div>
 
-          <div class="promotion-submit-bar"><div><strong id="promotion-submit-summary">Belum ada siswa dipilih</strong><span><?= $currentPromotionLevel === 6 ? 'Siswa terpilih akan diarsipkan sebagai lulusan.' : 'Rombel tujuan dapat diatur berbeda untuk setiap siswa.' ?></span></div><button class="btn btn-primary" id="promotion-submit-button" type="submit" disabled><?= $currentPromotionLevel === 6 ? 'Luluskan' : 'Naikkan' ?> 0 Siswa</button></div>
+          <div class="promotion-submit-bar"><div><strong id="promotion-submit-summary">Belum ada siswa dipilih</strong><span><?= $currentPromotionLevel === $unitMaxLevel ? 'Siswa terpilih akan diarsipkan sebagai lulusan.' : 'Rombel tujuan dapat diatur berbeda untuk setiap siswa.' ?></span></div><button class="btn btn-primary" id="promotion-submit-button" type="submit" disabled><?= $currentPromotionLevel === $unitMaxLevel ? 'Luluskan' : 'Naikkan' ?> 0 Siswa</button></div>
         </form>
         <?php else: ?>
         <div class="alert alert-info" style="margin:0">Tidak ada siswa reguler aktif yang perlu diproses. Siswa PSB tidak ikut kenaikan kelas.</div>
@@ -312,7 +313,7 @@ $classFilterQuery = ['q_kelas' => $classSearch, 'tingkat_kelas' => $classLevelFi
       <div class="card-title-row"><div><div class="card-title">Daftar Kelas/Rombel</div><p class="payment-auto-note">Cari dan kelola rombel tanpa memuat seluruh daftar sekaligus.</p></div><span class="master-list-count"><?= number_format($classTotalRows) ?> rombel</span></div>
       <form method="get" class="master-class-filter-bar">
         <div class="search-box"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input type="search" name="q_kelas" value="<?= htmlspecialchars($classSearch) ?>" placeholder="Cari label atau kode rombel..."></div>
-        <select class="field-input field-select" name="tingkat_kelas" aria-label="Filter tingkat"><option value="">Semua tingkat</option><option value="psb" <?= $classLevelFilter==='psb'?'selected':'' ?>>PSB</option><?php for($i=1;$i<=6;$i++): ?><option value="<?= $i ?>" <?= $classLevelFilter===(string)$i?'selected':'' ?>>Kelas <?= $i ?></option><?php endfor; ?></select>
+        <select class="field-input field-select" name="tingkat_kelas" aria-label="Filter tingkat"><option value="">Semua tingkat</option><option value="psb" <?= $classLevelFilter==='psb'?'selected':'' ?>>PSB</option><?php for($i=$unitMinLevel;$i<=$unitMaxLevel;$i++): ?><option value="<?= $i ?>" <?= $classLevelFilter===(string)$i?'selected':'' ?>>Kelas <?= $i ?></option><?php endfor; ?></select>
         <select class="field-input field-select" name="status_kelas" aria-label="Filter status"><option value="">Semua status</option><option value="aktif" <?= $classStatusFilter==='aktif'?'selected':'' ?>>Aktif</option><option value="nonaktif" <?= $classStatusFilter==='nonaktif'?'selected':'' ?>>Nonaktif</option><option value="placeholder" <?= $classStatusFilter==='placeholder'?'selected':'' ?>>Placeholder</option></select>
         <select class="field-input field-select" name="class_per_page" aria-label="Baris per halaman"><?php foreach([10,25,50] as $size): ?><option value="<?= $size ?>" <?= $classPerPage===$size?'selected':'' ?>><?= $size ?> / halaman</option><?php endforeach; ?></select>
         <button class="btn btn-primary" type="submit">Tampilkan</button><a class="btn btn-ghost" href="master_kelas.php">Reset</a>

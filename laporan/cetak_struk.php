@@ -266,7 +266,7 @@ $signer = $payment['operator_name'] ?: ($_SESSION['admin_nama'] ?? 'Bagian Keuan
   </div>
 
   <main class="receipt-sheet">
-    <h1>SEKOLAH DASAR AL-QUR'AN<br>( SDA ) MUTIARA HIKMAH</h1>
+    <h1><?= receipt_e(unit_school_name(unit_active_id())) ?></h1>
     <p class="address">Perum Bekasi Griya Asri II, Blok E Jl.H.Nabrih Ds. Sumber Jaya Kp.Buwek Tambun Selatan Telp. 021.88363466</p>
     <div class="rule"></div>
     <div class="document-title"><?= $sppAllocation && (float)$sppAllocation['uang_baru']<=.001 && (float)$sppAllocation['titipan_digunakan']>0 ? 'BUKTI PENGGUNAAN TITIPAN SPP' : 'SLIP PEMBAYARAN SEKOLAH' ?></div>

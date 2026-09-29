@@ -19,14 +19,14 @@ function requireRole(array $roles): void {
     }
 
     $currentRole = $_SESSION['admin_role'] ?? '';
-    if (!in_array($currentRole, ['admin', 'bendahara', 'kasir'], true)) {
+    if (!in_array($currentRole, ['super_admin', 'admin', 'bendahara', 'kasir'], true)) {
         session_unset();
         session_destroy();
         header('Location: ' . $root . 'login.php');
         exit;
     }
 
-    if (!in_array($currentRole, $roles, true)) {
+    if (!in_array($currentRole, $roles, true) && !($currentRole === 'super_admin' && in_array('admin', $roles, true))) {
         // Redirect ke halaman default sesuai role
         if ($currentRole === 'kasir') {
             header('Location: ' . $root . 'tabungan/masuk.php');
@@ -43,12 +43,14 @@ function requireRole(array $roles): void {
  * Cek apakah user yang sedang login memiliki role tertentu.
  */
 function isRole(string $role): bool {
-    return ($_SESSION['admin_role'] ?? '') === $role;
+    return ($_SESSION['admin_role'] ?? '') === $role
+        || ($role === 'admin' && ($_SESSION['admin_role'] ?? '') === 'super_admin');
 }
 
 /**
  * Cek apakah user memiliki salah satu dari beberapa role.
  */
 function hasRole(array $roles): bool {
-    return in_array($_SESSION['admin_role'] ?? '', $roles, true);
+    return in_array($_SESSION['admin_role'] ?? '', $roles, true)
+        || (($_SESSION['admin_role'] ?? '') === 'super_admin' && in_array('admin', $roles, true));
 }

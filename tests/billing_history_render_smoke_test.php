@@ -47,7 +47,7 @@ try {
         || str_contains($matrixMatch[0], '>Sisa<')) {
         throw new RuntimeException('Matriks harus hanya menampilkan nominal tagihan per komponen.');
     }
-    if (!str_contains($html, 'assets/css/style.css?v=10.29')) {
+    if (!str_contains($html, 'assets/css/style.css?v=unitpalette4')) {
         throw new RuntimeException('Versi cache stylesheet laporan belum diperbarui.');
     }
     foreach (['report-date-range-field', 'report-field-komponen-tagihan', 'report-field-status', 'report-field-siswa-status'] as $filterClass) {

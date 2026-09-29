@@ -14,7 +14,8 @@ function komite_sync_placement(mysqli $db, int $placementId): int {
     $stmt = $db->prepare('SELECT sta.*,ta.label,s.POMG FROM siswa_tahun_ajaran sta JOIN tahun_ajaran ta ON ta.id=sta.tahun_ajaran_id JOIN siswa s ON s.NO_INDUK=sta.no_induk WHERE sta.id=? FOR UPDATE');
     $stmt->bind_param('i', $placementId); $stmt->execute();
     $placement = $stmt->get_result()->fetch_assoc(); $stmt->close();
-    if (!$placement || $placement['status']!=='aktif' || !in_array((string)$placement['kelas'], ['1','2','3','4','5','6'], true)) return 0;
+    [$firstLevel, $lastLevel] = unit_level_bounds();
+    if (!$placement || $placement['status']!=='aktif' || (int)$placement['kelas'] < $firstLevel || (int)$placement['kelas'] > $lastLevel) return 0;
     $periods = spp_academic_periods((string)$placement['label']);
     $start = (string)($placement['komite_mulai_bulan'] ?? '07');
     $startIndex = 0;

@@ -1,16 +1,17 @@
 <?php
 session_start();
+require_once __DIR__.'/../koneksi.php';
 require_once __DIR__.'/../includes/auth.php';
 requireRole(['admin','bendahara','kasir']);
 ?>
 <!doctype html>
-<html lang="id">
+<html lang="id" data-palette="<?= unit_palette_for_view() ?>">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Surat Laporan | SistemSPP</title>
   <link rel="icon" href="../assets/img/favicon.png?v=2">
-  <link rel="stylesheet" href="../assets/css/style.css?v=10.13">
+  <link rel="stylesheet" href="../assets/css/style.css?v=unitpalette4">
   <script>(function(){document.documentElement.setAttribute('data-theme',localStorage.getItem('spp_theme')||'light')})();</script>
 </head>
 <body>

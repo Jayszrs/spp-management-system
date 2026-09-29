@@ -2,25 +2,56 @@
 session_start();
 require_once '../koneksi.php'; require_once '../includes/auth.php'; require_once '../includes/reports.php';
 requireRole(['admin','bendahara','kasir']);
+$reportUnitId=unit_report_scope($koneksi,(string)($_GET['unit']??''));
 $registry=report_registry();$template=(string)($_GET['template']??'');if(!isset($registry[$template])){http_response_code(404);exit('Template tidak ditemukan.');}
 $format=(string)($_GET['format']??'preview');if(!in_array($format,['preview','print','pdf','excel'],true))$format='preview';
 $excelDownload=$format==='excel'&&($_GET['download']??'')==='1';
 if($format==='pdf'){require_once __DIR__.'/../includes/pdf.php';require_pdf_library();}
 $filters=report_filters($koneksi,$_GET);if($template==='riwayat-tagihan'&&!isset($_GET['siswa_status']))$filters['siswa_status']='all';if(!isset($_GET['kategori'])&&$template==='penerimaan')$filters['kategori']='semua';
 $report=report_build($koneksi,$template,$filters);$generated=date('d-m-Y H:i:s');$operator=(string)($_SESSION['admin_nama']??$_SESSION['admin_username']??'Pengguna');
-if($template==='tunggakan-siswa'&&$format==='pdf'){
+if($template==='tunggakan-siswa'&&in_array($format,['preview','print','pdf'],true)){
     require_once __DIR__.'/../includes/report_letters.php';
     $today=$report['as_of_date']??report_letter_today();
+    $letterRows=$report['rows'];
+    $letterMode=(string)($_GET['mode']??'filtered');
+    if($letterMode==='all'){
+        $allFilters=$filters;$allFilters['kelas']='';$allFilters['q']='';
+        $letterRows=report_student_debt_data($koneksi,$allFilters)['rows'];
+    }elseif(in_array($letterMode,['selected','single'],true)){
+        $requested=array_slice(array_values(array_unique(array_filter(array_map('trim',explode(',',(string)($_GET['nis']??'')))))),0,500);
+        if($letterMode==='single')$requested=array_slice($requested,0,1);
+        $allowed=array_fill_keys($requested,true);
+        $letterRows=array_values(array_filter($letterRows,static fn($row)=>isset($allowed[$row['nis']])));
+        if(!$letterRows){http_response_code(404);exit('Siswa dengan tunggakan tidak ditemukan pada filter ini.');}
+    }
+    $letterHtml=report_principal_letter_html($letterRows,$today);
+    if($format!=='pdf'){
+        require_once __DIR__.'/../includes/report_preview.php';
+        $downloadQuery=$_GET;$downloadQuery['format']='pdf';$downloadQuery['download']='1';unset($downloadQuery['preview_action']);
+        $backQuery=$_GET;unset($backQuery['format'],$backQuery['download'],$backQuery['preview_action']);
+        render_report_pdf_preview($letterHtml,[
+            'title'=>$report['title'],
+            'subtitle'=>$report['subtitle'],
+            'generated'=>$generated,
+            'row_count'=>count($letterRows),
+            'orientation'=>'portrait',
+            'stage_width'=>'794px',
+            'download_url'=>'export_global.php?'.http_build_query($downloadQuery),
+            'back_url'=>'template.php?'.http_build_query(array_merge(['template'=>$template],$backQuery)),
+            'auto_print'=>false,
+        ]);
+    }
     $options=new \Dompdf\Options();
     $options->set('isRemoteEnabled',false);
     $options->set('isHtml5ParserEnabled',true);
+    $options->setDefaultMediaType('print');
     $options->setChroot(realpath(__DIR__.'/..'));
     $pdf=new \Dompdf\Dompdf($options);
-    $pdf->loadHtml(report_principal_letter_html($report['rows'],$today),'UTF-8');
+    $pdf->loadHtml($letterHtml,'UTF-8');
     $pdf->setPaper('A4','portrait');
     $pdf->render();
     header('Cache-Control: no-store, private');
-    $pdf->stream('surat-tunggakan-kepala-sekolah-'.str_replace('-','',$today).'.pdf',['Attachment'=>false]);
+    $pdf->stream('surat-tunggakan-kepala-sekolah-'.str_replace('-','',$today).'.pdf',['Attachment'=>($_GET['download']??'')==='1']);
     exit;
 }
 $isCashRecap=in_array($template,['setoran','kas-tabungan','titipan-spp'],true);$isSavingsCashRecap=$template==='kas-tabungan';
@@ -62,8 +93,8 @@ thead{display:table-header-group}tfoot{display:table-row-group}tr{page-break-ins
 .billing-export-table tbody tr{page-break-inside:avoid}
 <?php endif; ?>
 </style></head><body>
-<table class="kop"><tr><td style="width:70px"><?php if($logoData): ?><img src="<?= $logoData ?>" alt="Logo sekolah"><?php elseif($format==='excel'): ?><div class="kop-logo-text">SD MH</div><?php endif; ?></td><td><h1>SEKOLAH DASAR AL-QUR'AN (SDA) MUTIARA HIKMAH</h1><p>Perum Bekasi Griya Asri II, Tambun Selatan · Telp. 021-88363466</p></td><td style="width:70px"></td></tr></table>
-<div class="title"><h2><?= report_e(strtoupper($report['title'])) ?></h2><div><?= report_e($report['subtitle']) ?></div></div><table class="meta"><tr><td>Dibuat: <?= report_e($generated) ?></td><td style="text-align:right">Petugas: <?= report_e($operator) ?></td></tr></table>
+<table class="kop"><tr><td style="width:70px"><?php if($logoData): ?><img src="<?= $logoData ?>" alt="Logo sekolah"><?php elseif($format==='excel'): ?><div class="kop-logo-text"><?= report_e(unit_label($reportUnitId)) ?></div><?php endif; ?></td><td><h1><?= report_e(unit_school_name($reportUnitId)) ?></h1><p>Perum Bekasi Griya Asri II, Tambun Selatan · Telp. 021-88363466</p></td><td style="width:70px"></td></tr></table>
+<div class="title"><p>Unit <?= report_e(unit_label($reportUnitId)) ?></p><h2><?= report_e(strtoupper($report['title'])) ?></h2><div><?= report_e($report['subtitle']) ?></div></div><table class="meta"><tr><td>Dibuat: <?= report_e($generated) ?></td><td style="text-align:right">Petugas: <?= report_e($operator) ?></td></tr></table>
 <?php if($template==='riwayat-tagihan'&&$moneyTotals): ?><table class="billing-export-overview"><tr><?php foreach($moneyTotals as $total): ?><td><span><?= report_e($total['label']) ?></span><strong><?= report_money($total['value']) ?></strong></td><?php endforeach; ?></tr></table><?php endif; ?>
 <?php if($isCashRecap):
   $componentRows=$report['component_rows']??($report['component_summary']??[]);

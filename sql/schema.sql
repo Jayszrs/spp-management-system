@@ -21,16 +21,8 @@ CREATE TABLE IF NOT EXISTS `admin` (
   `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB;
 
--- Default users: admin / bendahara / kasir
-INSERT INTO `admin` (`username`, `password`, `nama`, `role`) VALUES
-('admin',      MD5('admin123'),      'Administrator', 'admin'),
-('bendahara',  MD5('bendahara123'),  'Bendahara TU',  'bendahara'),
-('kasir',      MD5('kasir123'),      'Kasir',         'kasir'),
-('kasir1',     MD5('kasir123'),      'Kasir Loket 1', 'kasir'),
-('kasir2',     MD5('kasir123'),      'Kasir Loket 2', 'kasir'),
-('kasir3',     MD5('kasir123'),      'Kasir Loket 3', 'kasir'),
-('kasir4',     MD5('kasir123'),      'Kasir Loket 4', 'kasir')
-ON DUPLICATE KEY UPDATE `nama`=VALUES(`nama`), `role`=VALUES(`role`);
+-- Akun awal dibuat oleh bootstrap_unit_accounts.php sesudah migrasi multiunit.
+-- Skema ini hanya untuk instalasi baru; jangan jalankan pada database aktif.
 
 -- Master kelas/rombel. Data lama menggunakan placeholder per tingkat sampai
 -- admin memindahkan siswa ke rombel sebenarnya (1A, 1B, dan seterusnya).
@@ -428,7 +420,7 @@ CREATE TABLE `bayar_komite` (
 ) ENGINE=InnoDB;
 CREATE TABLE `Daftar_ulang` (
   `id` INT AUTO_INCREMENT PRIMARY KEY, `tahun_ajaran_id` INT DEFAULT NULL,
-  `th_ajaran` CHAR(9) DEFAULT NULL, `kelas` CHAR(1) DEFAULT NULL,
+  `th_ajaran` CHAR(9) DEFAULT NULL, `kelas` VARCHAR(2) DEFAULT NULL,
   `Jumlah` DECIMAL(18,2) DEFAULT 0,
   `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   UNIQUE KEY `uk_daftar_ulang_period_class` (`th_ajaran`,`kelas`),

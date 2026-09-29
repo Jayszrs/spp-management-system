@@ -10,6 +10,7 @@ require_once '../includes/daftar_ulang.php';
 require_once '../includes/kelas.php';
 require_once '../includes/tagihan_tahunan.php';
 requireRole(['admin', 'bendahara']);
+$reportUnitId=unit_report_scope($koneksi,(string)($_GET['unit']??''));
 
 $flash = $_SESSION['flash'] ?? null;
 unset($_SESSION['flash']);
@@ -378,6 +379,7 @@ if (!$isUnpaidReport) {
 }
 
 $laporanPaginationQuery = pagination_query([
+    'unit' => $reportUnitId===0?'all':'active',
     'bulan' => $filter_bulan,
     'tahun' => $filter_tahun,
     'tanggal_awal' => $filter_tanggal_awal,
@@ -388,6 +390,7 @@ $laporanPaginationQuery = pagination_query([
     'per_page' => $perPage,
 ]);
 $exportQuery = http_build_query([
+    'unit' => $reportUnitId===0?'all':'active',
     'bulan' => $filter_bulan,
     'tahun' => $filter_tahun,
     'tanggal_awal' => $filter_tanggal_awal,
@@ -396,7 +399,7 @@ $exportQuery = http_build_query([
 ]);
 ?>
 <!DOCTYPE html>
-<html lang="id">
+<html lang="id" data-palette="<?= unit_palette_for_view(isset($reportUnitId) ? (int)$reportUnitId : null) ?>">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -405,7 +408,7 @@ $exportQuery = http_build_query([
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
   <script>(function(){var t=localStorage.getItem('spp_theme')||'light';document.documentElement.setAttribute('data-theme',t);})();</script>
-  <link rel="stylesheet" href="../assets/css/style.css?v=9.6" />
+  <link rel="stylesheet" href="../assets/css/style.css?v=unitpalette4" />
 </head>
 <body>
 <div class="bg-orbs"><div class="orb orb-1"></div><div class="orb orb-2"></div><div class="orb orb-3"></div></div>
@@ -434,12 +437,16 @@ $exportQuery = http_build_query([
 
       <section class="main-card class-recap-card recap-report-shell report-general-shell" style="margin-bottom:16px;">
         <div class="recap-report-header">
-          <div class="recap-report-copy">
-            <span class="recap-class-overline">Laporan Umum</span>
-            <h1>Rekap Laporan Keuangan</h1>
-            <p><?= report_e($reportTypes[$report_type]) ?> untuk periode <?= report_e($periodLabel) ?>.</p>
+          <div class="report-general-heading">
+            <div class="recap-report-copy">
+              <span class="recap-class-overline">Laporan Umum</span>
+              <h1>Rekap Laporan Keuangan</h1>
+              <p><?= report_e($reportTypes[$report_type]) ?> untuk periode <?= report_e($periodLabel) ?>.</p>
+            </div>
+            <a class="report-general-catalog-link" href="global.php?unit=<?= $reportUnitId===0?'all':'active' ?>">Laporan Global <span aria-hidden="true">&rarr;</span></a>
           </div>
-        <form method="GET" class="recap-header-controls report-filter-card report-general-filter report-filter-grid">
+        <form method="GET" class="recap-header-controls report-filter-card report-general-filter report-filter-grid<?= unit_is_super() ? ' has-scope' : '' ?>">
+          <?= unit_report_selector($reportUnitId) ?>
           <div class="field-row report-date-range-field">
             <label class="field-label">Tanggal transaksi</label>
             <div class="report-date-range-control report-date-range-picker" data-range-picker data-empty-label="<?= report_e($periodLabel) ?>">
@@ -509,9 +516,8 @@ $exportQuery = http_build_query([
             </datalist>
           </div>
           <div class="report-filter-actions">
-            <button type="submit" class="btn btn-primary">Tampilkan</button>
-            <a href="index.php" class="btn btn-ghost">Reset</a>
-            <a href="global.php" class="btn btn-success">Laporan Global</a>
+            <button type="submit" class="btn btn-primary">Tampilkan Rekap</button>
+            <a href="index.php?unit=<?= $reportUnitId===0?'all':'active' ?>" class="btn btn-ghost">Reset</a>
           </div>
           <div class="report-export-actions">
             <a href="export_excel.php?<?= report_e($exportQuery) ?>" class="btn btn-success" target="_blank" rel="noopener">Export Excel</a>
@@ -612,7 +618,7 @@ $exportQuery = http_build_query([
           </table>
         </div>
         <?php else: ?>
-        <form method="GET" action="export_pdf.php" id="print-selected-form" target="_blank" rel="noopener">
+        <form method="GET" action="export_pdf.php" id="print-selected-form" target="_blank" rel="noopener"><input type="hidden" name="unit" value="<?= $reportUnitId===0?'all':'active' ?>">
           <input type="hidden" name="output" value="preview">
           <input type="hidden" name="bulan" value="<?= report_e($filter_bulan) ?>">
           <input type="hidden" name="tahun" value="<?= report_e($filter_tahun) ?>">

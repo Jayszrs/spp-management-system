@@ -438,7 +438,7 @@ $stmtList = $koneksi->prepare("
       AND (? = 0 OR s.master_kelas_id = ?)
       AND (? = 'all' OR s.is_active = IF(? = 'archived', 0, 1))
     ORDER BY s.is_active DESC,
-      CASE WHEN s.KELAS REGEXP '^[1-6]$' THEN 0 ELSE 1 END,
+      CASE WHEN s.KELAS REGEXP '^([1-9]|1[0-2])$' THEN 0 ELSE 1 END,
       CAST(s.KELAS AS UNSIGNED), s.KELAS, s.NAMA ASC
     LIMIT ? OFFSET ?
 ");
@@ -457,7 +457,7 @@ if ($studentRows) {
             sta.kelas,sta.kelas_rombel_snapshot,sta.status
         FROM siswa_tahun_ajaran sta
         JOIN tahun_ajaran ta ON ta.id=sta.tahun_ajaran_id
-        WHERE sta.no_induk IN ($placeholders) AND sta.kelas IN ('1','2','3','4','5','6')
+        WHERE sta.no_induk IN ($placeholders) AND CAST(sta.kelas AS UNSIGNED) " . unit_level_between_sql() . "
         ORDER BY ta.label DESC,sta.id DESC");
     $historyTypes = str_repeat('s', count($historyStudentIds));
     $stmtHistory->bind_param($historyTypes, ...$historyStudentIds);
@@ -505,7 +505,7 @@ $previewDiscount = (float)form_student_value('potongan_spp_persen', $oldInput, $
 $sppRatePreview = spp_current_effective_rate($koneksi, $previewLevel, $previewDiscount);
 ?>
 <!DOCTYPE html>
-<html lang="id">
+<html lang="id" data-palette="<?= unit_palette_for_view(isset($reportUnitId) ? (int)$reportUnitId : null) ?>">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -513,7 +513,7 @@ $sppRatePreview = spp_current_effective_rate($koneksi, $previewLevel, $previewDi
   <link rel="icon" type="image/png" href="../assets/img/favicon.png?v=2" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="../assets/css/style.css?v=9.9" />
+  <link rel="stylesheet" href="../assets/css/style.css?v=unitpalette4" />
   <script>(function(){var t=localStorage.getItem('spp_theme')||'light';document.documentElement.setAttribute('data-theme',t);})();</script>
 </head>
 <body>
@@ -778,7 +778,7 @@ $sppRatePreview = spp_current_effective_rate($koneksi, $previewLevel, $previewDi
     </main>
   </div>
 
-  <script src="../assets/js/app.js?v=10.4"></script>
+  <script src="../assets/js/app.js?v=10.5"></script>
   <script>
     document.addEventListener('DOMContentLoaded', function () {
       const toggle = document.getElementById('advanced-enabled');

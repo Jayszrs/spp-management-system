@@ -215,7 +215,7 @@ $otherStmt->close();
   <div class="print-toolbar"><span><?= count($receipts) ?> struk tahunan siap dicetak</span><div class="print-toolbar-actions"><button class="print-secondary" onclick="window.close()">Tutup</button><button class="print-primary" onclick="window.print()">Cetak <?= count($receipts) ?> Struk</button></div></div>
   <?php foreach ($receipts as $receipt): ?>
   <main class="receipt-sheet">
-    <h1>SEKOLAH DASAR AL-QUR'AN<br>( SDA ) MUTIARA HIKMAH</h1>
+    <h1><?= annual_receipt_e(unit_school_name(unit_active_id())) ?></h1>
     <p class="address">Perum Bekasi Griya Asri II, Blok E Jl.H.Nabrih Ds. Sumber Jaya Kp.Buwek Tambun Selatan Telp. 021.88363466</p>
     <div class="rule"></div><div class="document-title">SLIP PEMBAYARAN SEKOLAH · No. #<?= (int)$receipt['id'] ?> · <?= (int)$receipt['payment_batch_sequence'] ?>/<?= (int)$receipt['payment_batch_count'] ?></div>
     <table class="info"><tr><td><table class="mini"><tr><td class="label">No. Induk</td><td class="separator">:</td><td><?= annual_receipt_e($receipt['NO_INDUK']) ?></td></tr><?php if (!empty($receipt['NO_induk_diknas'])): ?><tr><td class="label">NIS Diknas</td><td class="separator">:</td><td><?= annual_receipt_e($receipt['NO_induk_diknas']) ?></td></tr><?php endif; ?><tr><td class="label">Nama Siswa</td><td class="separator">:</td><td><?= annual_receipt_e($receipt['NAMA']) ?></td></tr></table></td><td><table class="mini"><tr><td class="label">Kelas</td><td class="separator">:</td><td><?= annual_receipt_e($receipt['KELAS_SISWA']) ?></td></tr><tr><td class="label">Periode</td><td class="separator">:</td><td><?= annual_receipt_e(annual_receipt_month($receipt['BULAN'])) ?> <?= annual_receipt_e($receipt['TAHUN']) ?></td></tr></table></td></tr></table>

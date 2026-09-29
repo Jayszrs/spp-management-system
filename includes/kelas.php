@@ -53,7 +53,7 @@ function class_ensure_psb(mysqli $db): int {
 function class_ensure_rombel_templates(mysqli $db): int {
     $created = class_ensure_psb($db);
     $stmt = $db->prepare("INSERT IGNORE INTO master_kelas (tingkat, kode_rombel, is_placeholder, is_active) VALUES (?, ?, 0, 1)");
-    foreach (range(1, 6) as $level) {
+    foreach (range(...unit_level_bounds()) as $level) {
         foreach (range('A', 'J') as $code) {
             $stmt->bind_param('is', $level, $code);
             $stmt->execute();
@@ -65,16 +65,18 @@ function class_ensure_rombel_templates(mysqli $db): int {
 }
 
 function class_highest_active_regular_level(mysqli $db): int {
+    $range = unit_level_between_sql();
     $row = $db->query("SELECT COALESCE(MAX(COALESCE(mk.tingkat, CAST(s.KELAS AS UNSIGNED))), 0) AS level
         FROM siswa s
         LEFT JOIN master_kelas mk ON mk.id = s.master_kelas_id
         WHERE s.is_active = 1
-          AND COALESCE(mk.tingkat, CAST(s.KELAS AS UNSIGNED)) BETWEEN 1 AND 6")->fetch_assoc();
+          AND COALESCE(mk.tingkat, CAST(s.KELAS AS UNSIGNED)) {$range}")->fetch_assoc();
     return (int)($row['level'] ?? 0);
 }
 
 function class_students_for_manual_step(mysqli $db, int $level): array {
-    if ($level < 1 || $level > 6) return [];
+    [$first,$last] = unit_level_bounds();
+    if ($level < $first || $level > $last) return [];
     $stmt = $db->prepare("SELECT s.NO_INDUK, s.NO_induk_diknas, s.NAMA, s.KELAS, s.master_kelas_id,
         s.SPP_PERBULAN, s.POMG, mk.tingkat, mk.kode_rombel, mk.is_placeholder
         FROM siswa s
@@ -92,7 +94,8 @@ function class_students_for_manual_step(mysqli $db, int $level): array {
 }
 
 function class_target_rombel_options(mysqli $db, int $level): array {
-    if ($level < 1 || $level > 6) return [];
+    [$first,$last] = unit_level_bounds();
+    if ($level < $first || $level > $last) return [];
     $stmt = $db->prepare("SELECT id, tingkat, kode_rombel, is_placeholder, is_active
         FROM master_kelas
         WHERE tingkat = ? AND is_placeholder = 0 AND is_active = 1
@@ -114,7 +117,8 @@ function class_process_students_batch(
     int $expectedLevel
 ): array {
     $targetYear = du_normalize_academic_year($targetYear);
-    if ($expectedLevel < 1 || $expectedLevel > 6) {
+    [$first,$last] = unit_level_bounds();
+    if ($expectedLevel < $first || $expectedLevel > $last) {
         throw new RuntimeException('Tahap proses tahun ajaran tidak valid. Muat ulang halaman lalu coba kembali.');
     }
 
@@ -128,12 +132,13 @@ function class_process_students_batch(
     if (!$selected) throw new RuntimeException('Pilih minimal satu siswa yang akan diproses.');
 
     // Lock siswa reguler aktif agar dua proses tahun ajaran tidak berjalan bersamaan.
+    $range = unit_level_between_sql();
     $lockedStudents = $db->query("SELECT s.NO_INDUK, s.NAMA,
         COALESCE(mk.tingkat, CAST(s.KELAS AS UNSIGNED)) AS current_level
         FROM siswa s
         LEFT JOIN master_kelas mk ON mk.id = s.master_kelas_id
         WHERE s.is_active = 1
-          AND COALESCE(mk.tingkat, CAST(s.KELAS AS UNSIGNED)) BETWEEN 1 AND 6
+          AND COALESCE(mk.tingkat, CAST(s.KELAS AS UNSIGNED)) {$range}
         FOR UPDATE")->fetch_all(MYSQLI_ASSOC);
 
     $currentLevel = 0;
@@ -159,7 +164,7 @@ function class_process_students_batch(
 
         $db->query('SAVEPOINT class_batch_student');
         try {
-            if ($expectedLevel === 6) {
+            if ($expectedLevel === $last) {
                 $result = class_manual_graduate_student($db, $noInduk, $targetYear);
             } else {
                 $targetClassId = (int)($targetClassIds[$noInduk] ?? 0);
@@ -189,11 +194,12 @@ function class_process_students_batch(
 }
 
 function class_manual_graduate_student(mysqli $db, string $noInduk, string $targetYear): array {
+    [, $last] = unit_level_bounds();
     $targetYear = du_normalize_academic_year($targetYear);
     $graduationYear = class_previous_academic_year_label($targetYear);
     $currentStep = class_highest_active_regular_level($db);
-    if ($currentStep !== 6) {
-        throw new RuntimeException('Kelas 6 harus diselesaikan terlebih dahulu sebelum tahap kelas lain diproses.');
+    if ($currentStep !== $last) {
+        throw new RuntimeException('Kelas '.$last.' harus diselesaikan terlebih dahulu sebelum tahap kelas lain diproses.');
     }
     $yearId = class_ensure_academic_year($db, $graduationYear);
     $stmt = $db->prepare("SELECT s.NO_INDUK, s.NAMA, s.KELAS, s.master_kelas_id, s.SPP_PERBULAN, s.POMG,
@@ -206,11 +212,11 @@ function class_manual_graduate_student(mysqli $db, string $noInduk, string $targ
     $stmt->close();
     if (!$student) throw new RuntimeException('Siswa tidak ditemukan atau sudah tidak aktif.');
     $level = (int)($student['tingkat'] ?: $student['KELAS']);
-    if ($level !== 6) throw new RuntimeException('Pada tahap ini hanya siswa kelas 6 yang boleh diluluskan.');
+    if ($level !== $last) throw new RuntimeException('Pada tahap ini hanya siswa kelas '.$last.' yang boleh diluluskan.');
 
     $snapshot = class_label($student);
     $status = 'lulus';
-    $classText = '6';
+    $classText = (string)$last;
     $classId = (int)($student['master_kelas_id'] ?? 0);
     $spp = (float)$student['SPP_PERBULAN'];
     $komite = (float)$student['POMG'];
@@ -236,12 +242,13 @@ function class_manual_graduate_student(mysqli $db, string $noInduk, string $targ
 }
 
 function class_manual_promote_student(mysqli $db, string $noInduk, int $targetClassId, string $targetYear): array {
+    [$first,$last] = unit_level_bounds();
     $targetYear = du_normalize_academic_year($targetYear);
     $sourceYear = class_previous_academic_year_label($targetYear);
     $currentStep = class_highest_active_regular_level($db);
-    if ($currentStep < 1 || $currentStep > 5) {
-        throw new RuntimeException($currentStep === 6
-            ? 'Selesaikan kelulusan kelas 6 terlebih dahulu.'
+    if ($currentStep < $first || $currentStep >= $last) {
+        throw new RuntimeException($currentStep === $last
+            ? 'Selesaikan kelulusan kelas '.$last.' terlebih dahulu.'
             : 'Tidak ada siswa reguler aktif yang perlu dinaikkan.');
     }
     $target = class_find($db, $targetClassId, true);
@@ -288,6 +295,11 @@ function class_manual_promote_student(mysqli $db, string $noInduk, int $targetCl
     $stmt->execute();
     $placementId = (int)$db->insert_id;
     $stmt->close();
+    if ($placementId <= 0) {
+        $stmt = $db->prepare('SELECT id FROM siswa_tahun_ajaran WHERE tahun_ajaran_id=? AND no_induk=? LIMIT 1');
+        $stmt->bind_param('is', $yearId, $noInduk); $stmt->execute();
+        $placementId = (int)($stmt->get_result()->fetch_assoc()['id'] ?? 0); $stmt->close();
+    }
     if ($placementId > 0) komite_sync_placement($db, $placementId);
     return ['student' => (string)$student['NAMA'], 'target_year' => $targetYear, 'action' => 'naik', 'target' => $snapshot];
 }
@@ -311,10 +323,17 @@ function class_ensure_academic_year(mysqli $db, string $label): int {
     $stmt->execute();
     $yearId = (int)$db->insert_id;
     $stmt->close();
+    if ($yearId <= 0) {
+        $stmt = $db->prepare('SELECT id FROM tahun_ajaran WHERE label=? LIMIT 1');
+        $stmt->bind_param('s', $label); $stmt->execute();
+        $yearId = (int)($stmt->get_result()->fetch_assoc()['id'] ?? 0); $stmt->close();
+    }
+    if ($yearId <= 0) throw new RuntimeException('Tahun ajaran tidak dapat disiapkan.');
     return $yearId;
 }
 
 function class_process_year_promotion(mysqli $db, string $targetYear): array {
+    [$first,$last] = unit_level_bounds();
     $targetYear = du_normalize_academic_year($targetYear);
     $yearId = class_ensure_academic_year($db, $targetYear);
     $graduationYear = class_previous_academic_year_label($targetYear);
@@ -341,11 +360,11 @@ function class_process_year_promotion(mysqli $db, string $targetYear): array {
     foreach ($students as $student) {
         $level = (int)($student['tingkat'] ?: $student['KELAS']);
         $code = strtoupper(trim((string)($student['kode_rombel'] ?? '')));
-        if ($level < 1 || $level > 6 || $code === '' || (int)($student['is_placeholder'] ?? 1) === 1) {
+        if ($level < $first || $level > $last || $code === '' || (int)($student['is_placeholder'] ?? 1) === 1) {
             $skipped++;
             continue;
         }
-        if ($level >= 6) {
+        if ($level >= $last) {
             $noInduk = (string)$student['NO_INDUK'];
             $classId = (int)($student['master_kelas_id'] ?? 0);
             $snapshot = class_label($student);
@@ -382,6 +401,11 @@ function class_process_year_promotion(mysqli $db, string $targetYear): array {
         $insertPlacement->bind_param('issisdds', $yearId, $noInduk, $classText, $nextClassId, $snapshot, $spp, $komite, $status);
         $insertPlacement->execute();
         $placementId = (int)$db->insert_id;
+        if ($placementId <= 0) {
+            $lookup = $db->prepare('SELECT id FROM siswa_tahun_ajaran WHERE tahun_ajaran_id=? AND no_induk=? LIMIT 1');
+            $lookup->bind_param('is', $yearId, $noInduk); $lookup->execute();
+            $placementId = (int)($lookup->get_result()->fetch_assoc()['id'] ?? 0); $lookup->close();
+        }
         if ($placementId > 0) {
             komite_sync_placement($db, $placementId);
         }

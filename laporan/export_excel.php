@@ -6,6 +6,7 @@ session_start();
 require_once '../koneksi.php';
 require_once '../includes/auth.php';
 requireRole(['admin', 'bendahara']);
+$reportUnitId=unit_report_scope($koneksi,(string)($_GET['unit']??''));
 
 $filter_bulan = (int)($_GET['bulan'] ?? date('m'));
 $filter_tahun = (int)($_GET['tahun'] ?? date('Y'));
@@ -357,7 +358,7 @@ ob_start();
 
 <div class="report-head">
   <div>
-    <h2 class="report-title">Laporan Keuangan Sistem SPP</h2>
+    <h2 class="report-title">Laporan Keuangan Sistem SPP · <?= htmlspecialchars(unit_label($reportUnitId), ENT_QUOTES, 'UTF-8') ?></h2>
     <p class="report-meta">Dicetak: <?= date('d M Y H:i') ?></p>
   </div>
   <span class="period-pill">Periode <?= htmlspecialchars($period_label) ?></span>

@@ -10,6 +10,12 @@ function letter_assert(bool $condition,string $message):void{if(!$condition)thro
 try{
     $stressInfo='';
     $today=report_letter_today();
+    foreach([1,2,3,0] as $unitId){
+        unit_set_context($koneksi,$unitId);
+        letter_assert(str_contains(report_principal_letter_html([],$today),report_e(unit_school_name($unitId))),
+            "Identitas sekolah pada surat unit {$unitId} salah.");
+    }
+    unit_set_context($koneksi,1);
     $filters=report_filters($koneksi,['siswa_status'=>'active']);
     $students=report_student_debt_groups($koneksi,$filters,'',[],$today);
     $principal=report_student_debt_data($koneksi,$filters)['rows'];
@@ -77,7 +83,9 @@ try{
     }
     session_id('letter-test-'.bin2hex(random_bytes(6)));
     session_start();
-    $_SESSION=['admin_id'=>-1,'admin_role'=>'kasir','admin_nama'=>'Uji Kasir'];
+    $kasir=$koneksi->query("SELECT id FROM admin WHERE role='kasir' AND unit_id=1 AND is_active=1 ORDER BY id LIMIT 1")->fetch_assoc();
+    letter_assert((bool)$kasir,'Akun kasir SD aktif tidak tersedia.');
+    $_SESSION=['admin_id'=>(int)$kasir['id'],'admin_role'=>'kasir','admin_nama'=>'Uji Kasir'];
     session_write_close();
     $_SERVER['PHP_SELF']='/laporan/surat_orang_tua.php';
     $_GET=['siswa_status'=>'active'];

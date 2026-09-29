@@ -34,6 +34,11 @@ function annual_fee_year_id(mysqli $db, string $academicYear, bool $create = tru
     $stmt->execute();
     $id = (int)$db->insert_id;
     $stmt->close();
+    if ($id <= 0) {
+        $stmt = $db->prepare('SELECT id FROM tahun_ajaran WHERE label=? LIMIT 1');
+        $stmt->bind_param('s', $academicYear); $stmt->execute();
+        $id = (int)($stmt->get_result()->fetch_assoc()['id'] ?? 0); $stmt->close();
+    }
     return $id > 0 ? $id : null;
 }
 
@@ -129,6 +134,11 @@ function annual_fee_find_or_create_placement(mysqli $db, string $noInduk, string
     $stmt->execute();
     $placementId = (int)$db->insert_id;
     $stmt->close();
+    if ($placementId <= 0) {
+        $stmt = $db->prepare('SELECT id FROM siswa_tahun_ajaran WHERE tahun_ajaran_id=? AND no_induk=? LIMIT 1');
+        $stmt->bind_param('is', $yearId, $noInduk); $stmt->execute();
+        $placementId = (int)($stmt->get_result()->fetch_assoc()['id'] ?? 0); $stmt->close();
+    }
 
     $stmt = $db->prepare('SELECT * FROM siswa_tahun_ajaran WHERE id = ? LIMIT 1' . ($forUpdate ? ' FOR UPDATE' : ''));
     $stmt->bind_param('i', $placementId);

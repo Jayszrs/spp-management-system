@@ -469,6 +469,11 @@ function du_create_bill_for_placement(mysqli $db, int $placementId, bool $syncLe
     $stmt->execute();
     $id = (int)$db->insert_id;
     $stmt->close();
+    if ($id <= 0) {
+        $stmt = $db->prepare('SELECT id FROM tagihan_daftar_ulang WHERE penempatan_id=? LIMIT 1');
+        $stmt->bind_param('i', $rowPlacementId); $stmt->execute();
+        $id = (int)($stmt->get_result()->fetch_assoc()['id'] ?? 0); $stmt->close();
+    }
     if ($syncLegacy && $id > 0 && $label === du_current_academic_year()) du_sync_student_legacy_from_bill($db, $id);
     return $id ?: null;
 }
@@ -487,20 +492,22 @@ function du_publish_year_from_active_students(mysqli $db, int $yearId, string $l
         return $total;
     }
 
+    [$unitFirst,$unitLast]=unit_level_bounds();
+    $regularClasses=unit_level_in_sql();
     $stmt = $db->prepare("SELECT COUNT(DISTINCT kelas) total FROM Daftar_ulang
-        WHERE tahun_ajaran_id=? AND kelas IN ('1','2','3','4','5','6') AND Jumlah>0");
+        WHERE tahun_ajaran_id=? AND kelas IN {$regularClasses} AND Jumlah>0");
     $stmt->bind_param('i', $yearId); $stmt->execute();
     $masterCount = (int)$stmt->get_result()->fetch_assoc()['total']; $stmt->close();
-    if ($masterCount !== 6) throw new RuntimeException('Lengkapi nominal Daftar Ulang kelas 1 sampai 6 sebelum menerbitkan.');
+    if ($masterCount !== $unitLast-$unitFirst+1) throw new RuntimeException('Lengkapi nominal Daftar Ulang kelas '.$unitFirst.' sampai '.$unitLast.' sebelum menerbitkan.');
 
-    $activeStudents = $db->query("SELECT NO_INDUK, KELAS FROM siswa WHERE is_active=1 AND KELAS IN ('1','2','3','4','5','6') FOR UPDATE");
+    $activeStudents = $db->query("SELECT NO_INDUK, KELAS FROM siswa WHERE is_active=1 AND KELAS IN {$regularClasses} FOR UPDATE");
     $activeCount = $activeStudents->num_rows;
-    if ($activeCount === 0) throw new RuntimeException('Tidak ada siswa aktif kelas 1 sampai 6 yang dapat dibuatkan tagihan.');
+    if ($activeCount === 0) throw new RuntimeException('Tidak ada siswa aktif pada kelas unit ini yang dapat dibuatkan tagihan.');
     $invalidCount = 0;
     while ($activeStudent = $activeStudents->fetch_assoc()) {
-        if (!in_array((string)$activeStudent['KELAS'], ['1','2','3','4','5','6'], true)) $invalidCount++;
+        if ((int)$activeStudent['KELAS']<$unitFirst || (int)$activeStudent['KELAS']>$unitLast) $invalidCount++;
     }
-    if ($invalidCount > 0) throw new RuntimeException($invalidCount . ' siswa aktif memiliki kelas tidak valid (harus 1–6). Perbaiki Data Siswa terlebih dahulu.');
+    if ($invalidCount > 0) { [$firstLevel, $lastLevel] = unit_level_bounds(); throw new RuntimeException($invalidCount . " siswa aktif memiliki kelas tidak valid (harus {$firstLevel}–{$lastLevel}). Perbaiki Data Siswa terlebih dahulu."); }
 
     $stmt = $db->prepare('SELECT COUNT(*) total FROM tagihan_daftar_ulang WHERE tahun_ajaran_id=?');
     $stmt->bind_param('i', $yearId); $stmt->execute();
@@ -520,14 +527,14 @@ function du_publish_year_from_active_students(mysqli $db, int $yearId, string $l
                s.SPP_PERBULAN,s.POMG,'aktif'
         FROM siswa s
         LEFT JOIN master_kelas mk ON mk.id=s.master_kelas_id
-        WHERE s.is_active=1 AND s.KELAS IN ('1','2','3','4','5','6')
+        WHERE s.is_active=1 AND s.KELAS IN {$regularClasses}
         ON DUPLICATE KEY UPDATE kelas=VALUES(kelas),master_kelas_id=VALUES(master_kelas_id),
           kelas_rombel_snapshot=VALUES(kelas_rombel_snapshot),
           spp_perbulan_snapshot=VALUES(spp_perbulan_snapshot),komite_snapshot=VALUES(komite_snapshot),status='aktif'");
     $stmt->bind_param('i', $yearId); $stmt->execute(); $stmt->close();
 
     require_once __DIR__ . '/komite_billing.php';
-    $stmtPlacement=$db->prepare("SELECT id FROM siswa_tahun_ajaran WHERE tahun_ajaran_id=? AND status='aktif' AND kelas IN ('1','2','3','4','5','6')");
+    $stmtPlacement=$db->prepare("SELECT id FROM siswa_tahun_ajaran WHERE tahun_ajaran_id=? AND status='aktif' AND kelas IN {$regularClasses}");
     $stmtPlacement->bind_param('i',$yearId);$stmtPlacement->execute();
     foreach ($stmtPlacement->get_result()->fetch_all(MYSQLI_ASSOC) as $placement) komite_sync_placement($db,(int)$placement['id']);
     $stmtPlacement->close();

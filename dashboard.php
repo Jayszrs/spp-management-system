@@ -10,6 +10,8 @@ if (!isset($_SESSION['admin_id'])) {
 require_once 'koneksi.php';
 require_once 'includes/auth.php';
 requireRole(['admin', 'bendahara']);
+// Rekap gabungan hanya tersedia bagi Super Admin; unit operasional tetap tersimpan.
+$reportUnitId=unit_report_scope($koneksi,(string)($_GET['unit']??''));
 require_once 'includes/reports.php';
 
 // Data Rekap Penerimaan Hari Ini
@@ -64,12 +66,13 @@ $bulanIndo = [
     '12' => 'Desember',
 ];
 $todayLabel = date('d') . ' ' . ($bulanIndo[date('m')] ?? date('F')) . ' ' . date('Y');
-$exportSetoranPdfUrl = 'laporan/export_global.php?template=setoran&format=preview&tanggal_awal=' . $todayDate . '&tanggal_akhir=' . $todayDate;
-$exportSetoranExcelUrl = 'laporan/export_global.php?template=setoran&format=excel&tanggal_awal=' . $todayDate . '&tanggal_akhir=' . $todayDate;
+$reportUnitQuery = '&unit=' . ($reportUnitId===0?'all':'active');
+$exportSetoranPdfUrl = 'laporan/export_global.php?template=setoran&format=preview&tanggal_awal=' . $todayDate . '&tanggal_akhir=' . $todayDate . $reportUnitQuery;
+$exportSetoranExcelUrl = 'laporan/export_global.php?template=setoran&format=excel&tanggal_awal=' . $todayDate . '&tanggal_akhir=' . $todayDate . $reportUnitQuery;
 
 ?>
 <!DOCTYPE html>
-<html lang="id">
+<html lang="id" data-palette="<?= unit_palette_for_view(isset($reportUnitId) ? (int)$reportUnitId : null) ?>">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -78,7 +81,7 @@ $exportSetoranExcelUrl = 'laporan/export_global.php?template=setoran&format=exce
   <meta name="description" content="Dashboard admin sistem pembayaran SPP sekolah. Fokus rekap harian." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="assets/css/style.css?v=9.6" />
+  <link rel="stylesheet" href="assets/css/style.css?v=unitpalette4" />
   <!-- Prevent theme flash -->
   <script>(function(){var t=localStorage.getItem('spp_theme')||'light';document.documentElement.setAttribute('data-theme',t);})();</script>
 </head>
@@ -109,6 +112,19 @@ $exportSetoranExcelUrl = 'laporan/export_global.php?template=setoran&format=exce
       </div>
 
       <section class="dashboard-closing-shell">
+        <?php if (unit_is_super()): ?>
+        <div class="dashboard-scope-card" aria-label="Cakupan rekap dashboard">
+          <div class="dashboard-scope-copy">
+            <span class="dashboard-scope-kicker">Cakupan rekap</span>
+            <strong><?= $reportUnitId === 0 ? 'Seluruh unit sekolah' : 'Unit ' . htmlspecialchars(unit_label(unit_active_id())) ?></strong>
+            <span><?= $reportUnitId === 0 ? 'Ringkasan keuangan SD, SMP, dan SMA hari ini.' : 'Ringkasan keuangan unit operasional hari ini.' ?></span>
+          </div>
+          <nav class="dashboard-scope-options" aria-label="Pilih cakupan rekap">
+            <a href="dashboard.php?unit=active" class="dashboard-scope-option<?= $reportUnitId !== 0 ? ' is-selected' : '' ?>"<?= $reportUnitId !== 0 ? ' aria-current="page"' : '' ?>>Unit <?= htmlspecialchars(unit_label(unit_active_id())) ?></a>
+            <a href="dashboard.php?unit=all" class="dashboard-scope-option<?= $reportUnitId === 0 ? ' is-selected' : '' ?>"<?= $reportUnitId === 0 ? ' aria-current="page"' : '' ?>>Semua Unit</a>
+          </nav>
+        </div>
+        <?php endif; ?>
         <div class="dashboard-closing-hero">
           <div class="dashboard-total-card">
             <span class="dashboard-eyebrow">Dashboard Closing</span>
@@ -161,7 +177,7 @@ $exportSetoranExcelUrl = 'laporan/export_global.php?template=setoran&format=exce
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
             Tabungan
           </a>
-          <a href="laporan/template.php?template=setoran" class="quick-btn quick-btn-ghost">
+          <a href="laporan/template.php?template=setoran<?= htmlspecialchars($reportUnitQuery) ?>" class="quick-btn quick-btn-ghost">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
             Laporan
           </a>

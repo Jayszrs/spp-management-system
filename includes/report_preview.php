@@ -39,7 +39,8 @@ function render_report_export_preview(string $documentHtml, array $options): voi
         ? 'Lembar Excel'
         : ($orientation === 'landscape' ? 'A4 Landscape' : 'A4 Portrait');
     $frameTitle = 'Dokumen ' . $title;
-    $stageWidth = $orientation === 'landscape' ? '1480px' : '980px';
+    $stageWidth = (string)($options['stage_width'] ?? ($orientation === 'landscape' ? '1480px' : '980px'));
+    if (!preg_match('/^\d{3,4}px$/', $stageWidth)) $stageWidth = '980px';
     ?>
 <!DOCTYPE html>
 <html lang="id">

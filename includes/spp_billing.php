@@ -40,7 +40,8 @@ function spp_master_ensure_year(mysqli $db, string $label, bool $forUpdate = fal
 }
 
 function spp_master_rates(mysqli $db, int $masterYearId): array {
-    $rates = array_fill(1, 6, 0.0);
+    [$firstLevel, $lastLevel] = unit_level_bounds();
+    $rates = array_fill($firstLevel, $lastLevel - $firstLevel + 1, 0.0);
     $stmt = $db->prepare('SELECT tingkat,nominal_dasar FROM master_spp_tarif WHERE master_spp_tahun_id=? ORDER BY tingkat');
     $stmt->bind_param('i', $masterYearId); $stmt->execute();
     $result = $stmt->get_result();
@@ -58,7 +59,8 @@ function spp_net_tariff(float $base, float $discountPercent): array {
 /** Tarif informasi untuk Master Siswa. Tagihan baru tetap hanya berasal dari proses penerbitan. */
 function spp_current_effective_rate(mysqli $db, string $level, float $discountPercent): array {
     $empty = ['base'=>0.0, 'discount_percent'=>$discountPercent, 'discount'=>0.0, 'net'=>0.0, 'year'=>'Belum disiapkan'];
-    if (!spp_billing_schema_ready($db) || !preg_match('/^[1-6]$/', $level)) return $empty;
+    [$firstLevel, $lastLevel] = unit_level_bounds();
+    if (!spp_billing_schema_ready($db) || !ctype_digit($level) || (int)$level < $firstLevel || (int)$level > $lastLevel) return $empty;
     $currentYear = du_current_academic_year();
     $stmt = $db->prepare("SELECT ta.label,mst.id FROM master_spp_tahun mst JOIN tahun_ajaran ta ON ta.id=mst.tahun_ajaran_id WHERE mst.status IN ('published','draft') ORDER BY (ta.label=?) DESC,(mst.status='published') DESC,ta.tanggal_mulai DESC,mst.id DESC LIMIT 1");
     $stmt->bind_param('s', $currentYear); $stmt->execute(); $master=$stmt->get_result()->fetch_assoc(); $stmt->close();
@@ -106,7 +108,8 @@ function spp_master_save_rates(mysqli $db, int $masterYearId, array $rates): arr
     $status = (string)($stmt->get_result()->fetch_assoc()['status'] ?? ''); $stmt->close();
     if ($status === '' || $status === 'closed') throw new RuntimeException('Tahun SPP sudah ditutup atau tidak tersedia.');
     $changed = 0; $updatedBills = 0; $lockedBills = 0;
-    for ($level=1; $level<=6; $level++) {
+    [$firstLevel, $lastLevel] = unit_level_bounds();
+    for ($level=$firstLevel; $level<=$lastLevel; $level++) {
         $new = (float)($rates[$level] ?? 0);
         if ($new <= 0) throw new RuntimeException('Tarif dasar kelas '.$level.' harus lebih dari Rp0.');
         $stmt = $db->prepare('SELECT id,nominal_dasar FROM master_spp_tarif WHERE master_spp_tahun_id=? AND tingkat=? FOR UPDATE');
@@ -170,7 +173,7 @@ function spp_publish_students(mysqli $db, int $masterYearId, array $students, ar
     $created=0;$skipped=0;$ineligible=[];
     $find=$db->prepare("SELECT sta.id,sta.no_induk,sta.kelas,sta.master_kelas_id,sta.kelas_rombel_snapshot,sta.spp_covered_by_psb,sta.komite_mulai_bulan,s.potongan_spp_persen,s.is_active
       FROM siswa_tahun_ajaran sta JOIN siswa s ON s.NO_INDUK=sta.no_induk
-      WHERE sta.tahun_ajaran_id=? AND sta.no_induk=? AND sta.kelas IN ('1','2','3','4','5','6') LIMIT 1 FOR UPDATE");
+      WHERE sta.tahun_ajaran_id=? AND sta.no_induk=? AND CAST(sta.kelas AS UNSIGNED) " . unit_level_between_sql() . " LIMIT 1 FOR UPDATE");
     $insert=$db->prepare("INSERT IGNORE INTO tagihan_spp(master_spp_tahun_id,tahun_ajaran_id,penempatan_id,no_induk,tingkat_snapshot,master_kelas_id,kelas_rombel_snapshot,bulan,tahun,tarif_dasar_snapshot,potongan_persen_snapshot,potongan_nominal_snapshot,nominal_tagihan,status)
       VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
     foreach(array_keys($selected) as $nis){

@@ -88,11 +88,12 @@ $allNavItems = [
 
   ['role_management.php', 'Role Management',
    '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/>',
-   ['admin'], 'Pengaturan'],
+   ['super_admin'], 'Pengaturan'],
 ];
 
 // Filter nav items berdasarkan role
-$navItems = array_filter($allNavItems, fn($item) => in_array($role, $item[3], true));
+$navItems = array_filter($allNavItems, fn($item) => in_array($role, $item[3], true)
+  || ($role === 'super_admin' && in_array('admin', $item[3], true)));
 $navItems = array_values($navItems);
 
 // Short label untuk bottom nav
@@ -120,17 +121,21 @@ $shortLabels = [
 ];
 
 // Role label
-$roleLabels = ['admin' => 'Administrator', 'bendahara' => 'Bendahara TU', 'kasir' => 'Kasir'];
+$roleLabels = ['super_admin' => 'Super Admin', 'admin' => 'Administrator', 'bendahara' => 'Bendahara TU', 'kasir' => 'Kasir'];
 $roleLabel  = $roleLabels[$role] ?? 'Pengguna';
 $roleAvatars = [
+  'super_admin' => 'SA',
   'admin' => 'AD',
   'bendahara' => 'BD',
   'kasir' => 'KS',
 ];
 $roleAvatar = $roleAvatars[$role] ?? 'US';
+if (empty($_SESSION['csrf_unit_switch'])) $_SESSION['csrf_unit_switch']=bin2hex(random_bytes(32));
+$activeUnit=unit_active_id();
+$unitPalette = unit_palette_for_view(isset($reportUnitId) ? (int)$reportUnitId : null);
 ?>
 <!-- Early theme init to prevent flash -->
-<script>(function(){var t=localStorage.getItem('spp_theme')||'light';document.documentElement.setAttribute('data-theme',t);})();</script>
+<script>(function(){document.documentElement.setAttribute('data-palette',<?= json_encode($unitPalette, JSON_HEX_TAG | JSON_HEX_AMP) ?>);try{document.documentElement.setAttribute('data-theme',localStorage.getItem('spp_theme')||'light')}catch(e){document.documentElement.setAttribute('data-theme',document.documentElement.getAttribute('data-theme')||'light')}})();</script>
 
 <aside class="sidebar" id="sidebar">
   <div class="sidebar-brand">
@@ -139,6 +144,46 @@ $roleAvatar = $roleAvatars[$role] ?? 'US';
     </div>
     <span class="brand-name">SistemSPP</span>
   </div>
+
+  <?php if (unit_is_super()): ?>
+  <div class="sidebar-unit-panel">
+    <form action="<?= $root ?>unit_switch.php" method="post" class="sidebar-unit-form">
+      <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_unit_switch'],ENT_QUOTES,'UTF-8') ?>">
+      <input type="hidden" name="next" value="<?= htmlspecialchars($_SERVER['REQUEST_URI'] ?? '/dashboard.php',ENT_QUOTES,'UTF-8') ?>">
+      <span class="sidebar-unit-kicker"><span aria-hidden="true"></span> SUPER ADMIN</span>
+      <label for="sidebar-unit-select">Unit operasional</label>
+      <span class="sidebar-unit-select-wrap">
+        <select id="sidebar-unit-select" name="unit_id" onchange="this.form.submit()">
+          <?php foreach ([1=>'SD',2=>'SMP',3=>'SMA'] as $id=>$name): ?>
+          <option value="<?= $id ?>" <?= $activeUnit===$id?'selected':'' ?>><?= $name ?></option>
+          <?php endforeach; ?>
+        </select>
+        <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>
+      </span>
+      <small>Menu operasional mengikuti unit ini.</small>
+    </form>
+  </div>
+  <?php endif; ?>
+  <?php if (unit_is_super()): ?>
+  <script>
+  document.addEventListener('DOMContentLoaded', function () {
+    var bar = document.querySelector('.topbar');
+    if (!bar || bar.querySelector('.topbar-unit')) return;
+    var badge = document.createElement('span');
+    badge.className = 'topbar-unit';
+    var label = document.createElement('span');
+    label.className = 'topbar-unit-label';
+    label.textContent = <?= json_encode(isset($reportUnitId) && (int)$reportUnitId === 0 ? 'Rekap' : 'Unit operasional', JSON_HEX_TAG|JSON_HEX_AMP) ?>;
+    var value = document.createElement('strong');
+    value.className = 'topbar-unit-value';
+    value.textContent = <?= json_encode(isset($reportUnitId) && (int)$reportUnitId === 0 ? 'Semua Unit' : unit_label($activeUnit), JSON_HEX_TAG|JSON_HEX_AMP) ?>;
+    badge.setAttribute('aria-label', label.textContent + ': ' + value.textContent);
+    badge.append(label, value);
+    var clock = bar.querySelector('.clock-badge');
+    bar.insertBefore(badge, clock);
+  });
+  </script>
+  <?php endif; ?>
 
   <nav class="sidebar-nav">
     <?php $lastSection = null; ?>

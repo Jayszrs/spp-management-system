@@ -140,7 +140,7 @@ function authorization_request_summary(array $request): array
 }
 ?>
 <!DOCTYPE html>
-<html lang="id">
+<html lang="id" data-palette="<?= unit_palette_for_view(isset($reportUnitId) ? (int)$reportUnitId : null) ?>">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -148,7 +148,7 @@ function authorization_request_summary(array $request): array
   <link rel="icon" type="image/png" href="assets/img/favicon.png?v=2" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="assets/css/style.css?v=10.9" />
+  <link rel="stylesheet" href="assets/css/style.css?v=unitpalette4" />
 </head>
 <body>
   <div class="layout">
@@ -179,7 +179,7 @@ function authorization_request_summary(array $request): array
           </select></label>
           <label class="field-row authorization-search-field"><span class="field-label">Cari transaksi atau siswa</span><input class="field-input" name="q" value="<?= htmlspecialchars($search) ?>" placeholder="Nomor transaksi, NIS, atau nama siswa" /></label>
           <button class="btn btn-primary" type="submit">Tampilkan</button>
-          <a class="btn btn-ghost" href="otorisasi_transaksi.php">Reset</a>
+          <a class="btn btn-ghost authorization-reset-button" href="otorisasi_transaksi.php"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 3v5h5"/></svg><span>Reset</span></a>
         </form>
       </section>
 
