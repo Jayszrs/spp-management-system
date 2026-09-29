@@ -12900,3 +12900,52 @@ html body .report-template-shell .report-billing-matrix-table tbody td.billing-m
 html body .report-template-shell .report-settlement-component-table tbody td:nth-child(2) {
   text-align: left;
 }
+
+/* Hanya tabel dengan identitas No/NIS/Nama yang menahan tiga kolom saat digulir.
+   Pada rekap tabungan, kolom kedua adalah tanggal dan NIS berada di kolom ketiga. */
+html body .report-template-shell .report-template-table.report-standard-scroll
+  :is(thead th, tbody td):nth-child(-n+3) {
+  position: static !important;
+  left: auto !important;
+  z-index: auto !important;
+  box-shadow: none !important;
+}
+html body .report-template-shell .report-template-table.report-standard-scroll
+  tbody td:nth-child(-n+3) {
+  background: transparent !important;
+}
+html body .report-template-shell .report-template-table.report-standard-scroll
+  :is(th, td).report-col-date {
+  min-width: 185px !important;
+  white-space: nowrap;
+}
+html body .report-template-shell .report-template-table.report-standard-scroll
+  :is(th, td).report-col-id {
+  min-width: 180px !important;
+}
+html body .report-template-shell .report-template-table.report-standard-scroll
+  :is(th, td).report-col-name {
+  min-width: 220px !important;
+}
+
+/* Isi tetap sejajar dengan judul dan dapat dibaca pada semua jenis laporan. */
+html body .report-template-shell .report-template-table tbody td {
+  line-height: 1.45;
+}
+html body .report-template-shell .report-template-table tbody td.report-col-id .badge-nis {
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+html body .report-template-shell .report-template-table tbody td.report-col-id .report-secondary-id {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+html body .report-template-shell .report-template-table tbody td.report-col-text {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+html body .report-template-shell .report-template-table tbody td.report-col-center .report-status,
+html body .report-template-shell .report-template-table tbody td.report-col-center .matrix-main {
+  justify-content: center;
+}
