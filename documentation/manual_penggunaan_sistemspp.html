@@ -181,7 +181,7 @@
     <h2>Surat ke Orang Tua</h2>
     <div class="steps"><ol><li>Pilih <b>Surat ke Orang Tua</b>, lalu atur kelas, status siswa, dan pencarian.</li><li>Periksa daftar siswa serta sisa tagihan. Siswa yang sudah lunas tidak masuk daftar.</li><li>Pilih satu siswa, beberapa siswa, satu rombel, atau seluruh rombel sesuai kebutuhan.</li><li>Periksa hasil cetak sebelum menyerahkan surat.</li></ol></div>
     <h2>Surat ke Kepala Sekolah</h2>
-    <div class="steps"><ol><li>Pilih <b>Surat ke Kepala Sekolah</b> dan atur filter siswa.</li><li>Periksa jumlah siswa dan total tunggakan pada bagian atas, lalu periksa baris pada tabel.</li><li>Gunakan <b>Cetak Surat</b> pada satu siswa, <b>Cetak Dipilih</b>, <b>Cetak Kelas/Rombel</b>, atau <b>Cetak Semua Rombel</b>.</li><li>Di halaman pratinjau, periksa identitas sekolah, daftar siswa, dan total. Pilih <b>Cetak</b> atau <b>Download PDF</b> setelah sesuai.</li></ol></div>
+    <div class="steps"><ol><li>Pilih <b>Surat ke Kepala Sekolah</b>, lalu atur cakupan kelas/rombel dan status siswa.</li><li>Periksa jumlah siswa menunggak serta total tunggakan pada setiap rombel.</li><li>Buka <b>Pratinjau Surat Pilihan</b>. Jika sedang memfilter kelas, gunakan <b>Pratinjau Seluruh Kelas</b> untuk melihat semua rombel.</li><li>Di pratinjau, cocokkan identitas sekolah, cakupan, jumlah siswa, dan total. Pilih <b>Cetak</b> atau <b>Download PDF</b> setelah sesuai.</li></ol></div>
     <div class="card"><h3>Pratinjau Excel</h3><p>Pada surat kepala sekolah tersedia <b>Preview Excel</b> bila rekap perlu diperiksa sebagai tabel sebelum diunduh. Gunakan PDF untuk surat resmi.</p></div>
     <div class="footer">Manual Penggunaan SistemSPP | 8</div>
   </section>
@@ -303,8 +303,8 @@
     <div class="topline"><strong>SistemSPP</strong><span>Data Master / Kelas dan SPP</span></div>
     <div class="eyebrow">MENYIAPKAN TAGIHAN</div><h1>Kelas/Rombel dan Penerbitan SPP</h1>
     <h2>Master Kelas/Rombel</h2>
-    <p>Buat rombel nyata untuk tingkat pada unit aktif, misalnya 1A, 7A, atau 10A sesuai unit. Isi tingkat dan kode rombel, lalu simpan. Daftar dapat difilter berdasarkan tingkat, status, dan kata kunci. Fitur penempatan/kenaikan kelas memindahkan siswa ke rombel tujuan; periksa pilihan tujuan per siswa sebelum menyimpan.</p>
-    <div class="steps"><ol><li>Pastikan unit SD, SMP, atau SMA benar.</li><li>Tambah rombel yang belum ada; hindari label ganda.</li><li>Tempatkan siswa ke rombel nyata; periksa jumlah siswa pada rombel asal dan tujuan.</li></ol></div>
+    <p>Buat rombel nyata untuk tingkat pada unit aktif, misalnya 1A, 7A, atau 10A sesuai unit. Isi tingkat dan kode rombel, lalu simpan. Daftar dapat difilter berdasarkan tingkat, status, dan kata kunci. Proses tahun ajaran memindahkan siswa reguler berdasarkan riwayat kelas tahun asal; tahapnya berjalan dari kelas tertinggi terlebih dahulu.</p>
+    <div class="steps"><ol><li>Pastikan unit SD, SMP, atau SMA dan tahun ajaran tujuan benar.</li><li>Tambah rombel yang belum ada; hindari label ganda.</li><li>Periksa riwayat kelas tahun asal. Selesaikan kelulusan kelas tertinggi, lalu kenaikan kelas berikutnya sesuai tahap aktif.</li><li>Pilih rombel tujuan per siswa dan cocokkan hasil sebelum menerbitkan tagihan tahun berikutnya. Siswa PSB tidak ikut proses kenaikan.</li></ol></div>
     <h2>Master Penerbitan SPP</h2>
     <p>Menu ini mengatur tagihan SPP bulanan untuk tahun ajaran Juli-Juni. Pilih tahun ajaran, tinjau status draft/published/closed, siswa, rombel, tarif efektif, potongan, dan bulan mulai tagihan. Terbitkan untuk siswa yang tepat; periksa jumlah bulan tagihan setelah selesai.</p>
     <div class="card"><h3>Urutan yang aman</h3><p>Rombel benar > siswa ditempatkan > tarif/potongan diperiksa > tahun ajaran dipilih > SPP diterbitkan > Laporan Status Pembayaran diperiksa.</p></div>
@@ -319,7 +319,7 @@
     <p>Gunakan untuk membuat item biaya beserta nominalnya, lalu menerbitkan tagihan kepada sasaran yang dipilih. Sasaran dapat berupa seluruh siswa aktif, satu tingkat, satu rombel, atau siswa tertentu. Buat master biaya lebih dahulu, kemudian gunakan bagian penerbitan. Periksa nama item, nominal, target, serta jumlah tagihan yang terbentuk.</p>
     <div class="steps"><ol><li>Tambah item biaya dengan nama dan nominal yang jelas.</li><li>Pilih item pada bagian penerbitan, lalu tentukan target siswa.</li><li>Periksa daftar target sebelum mengonfirmasi dan cocokkan hasil pada Riwayat Tagihan Siswa.</li></ol></div>
     <h2>Master Daftar Ulang</h2>
-    <p>Menu ini mengelola kewajiban tahunan Daftar Ulang. Pilih tahun ajaran yang benar, periksa status penerbitan, tarif/penyesuaian, serta siswa sasaran. Setelah menerbitkan, cocokkan jumlah tagihan dengan siswa yang seharusnya terkena kewajiban. Pembayaran dan sisa dipantau lewat <b>Riwayat Daftar Ulang</b>.</p>
+    <p>Menu ini mengelola kewajiban tahunan Daftar Ulang. Pilih tahun ajaran yang benar, periksa status penerbitan, tarif/penyesuaian, serta riwayat kelas siswa pada tahun tersebut. Tahun ajaran lampau memakai penempatan historis; untuk tahun berikutnya, selesaikan proses kenaikan kelas dahulu. Setelah menerbitkan, cocokkan jumlah tagihan. Pembayaran dan sisa dipantau lewat <b>Riwayat Daftar Ulang</b>.</p>
     <div class="warning">Penerbitan tagihan adalah tindakan yang memengaruhi kewajiban siswa. Verifikasi tahun ajaran, unit, sasaran, dan nominal sebelum menekan tombol penerbitan.</div>
     <div class="footer">Manual Penggunaan SistemSPP | 17</div>
   </section>
@@ -470,9 +470,9 @@
     <div class="eyebrow">SURAT RESMI</div><h1>Cetak Surat ke Kepala Sekolah</h1>
     <p class="lead">Rekap tunggakan siswa untuk pimpinan sekolah. Jenis ini berada dalam mesin Laporan Global, tetapi dibuka melalui <b>Surat Laporan > Kepala Sekolah</b>, bukan dari kartu katalog laporan biasa.</p>
     <h2>Menyiapkan isi surat</h2>
-    <div class="steps"><ol><li>Pilih unit dan filter kelas/rombel, status siswa, atau cari siswa pada halaman surat.</li><li>Periksa jumlah siswa, total tunggakan, serta tiap baris <b>Total Tagihan</b>, <b>Sudah Dibayar</b>, dan <b>Total Tunggakan</b>.</li><li>Pilih satu siswa melalui <b>Cetak Surat</b>, beberapa melalui <b>Cetak Dipilih</b>, satu rombel melalui <b>Cetak Kelas/Rombel</b>, atau seluruh hasil melalui <b>Cetak Semua Rombel</b>.</li><li>Pada pratinjau, cek kop sekolah, tanggal, tujuan, daftar siswa, total, dan ruang tanda tangan. Setelah benar, klik Cetak atau Download PDF.</li></ol></div>
+    <div class="steps"><ol><li>Pilih unit, lalu tentukan cakupan <b>Seluruh Kelas/Rombel</b>, seluruh rombel pada satu tingkat, atau satu rombel. Pilih status siswa Aktif, Arsip/Lulus, atau Semua.</li><li>Tekan <b>Tampilkan Rekap</b> dan cocokkan jumlah siswa menunggak serta total tiap rombel dengan total pilihan.</li><li>Buka <b>Pratinjau Surat Pilihan</b>. Jika cakupan sedang dibatasi, <b>Pratinjau Seluruh Kelas</b> menampilkan semua rombel pada unit yang sama.</li><li>Periksa kop sekolah, tanggal, cakupan, jumlah siswa per rombel, total, dan ruang tanda tangan. Setelah benar, klik Cetak atau Download PDF.</li></ol></div>
     <div class="report-key"><p><b>Pratinjau Excel:</b> Gunakan bila perlu memeriksa atau mengunduh tabel rekap. PDF adalah bentuk surat resmi.</p></div>
-    <div class="warning">Surat dapat terdiri dari beberapa halaman. Periksa halaman terakhir dan total seluruh siswa sebelum menyerahkan kepada kepala sekolah.</div>
+    <div class="warning">Surat kepala sekolah memuat ringkasan per rombel tanpa nama atau NIS siswa. Periksa total seluruh halaman sebelum menyerahkannya kepada kepala sekolah.</div>
     <div class="footer">Manual Penggunaan SistemSPP | 29</div>
   </section>
 
@@ -515,7 +515,7 @@
     <h2>Cetak Surat ke Orang Tua</h2>
     <div class="steps"><ol><li>Pilih kelas/rombel, status siswa, dan cari siswa bila perlu; tekan Tampilkan siswa.</li><li>Baca jumlah tagihan dan sisa per siswa. Siswa yang sudah lunas tidak termasuk daftar tunggakan.</li><li>Cetak satu siswa, siswa yang dicentang, satu kelas/rombel, atau semua rombel sesuai kebutuhan.</li><li>Periksa nama siswa, identitas sekolah, rincian kewajiban, total, serta halaman sebelum mencetak.</li></ol></div>
     <h2>Surat ke Kepala Sekolah</h2>
-    <p>Gunakan pilihan surat kepala sekolah untuk daftar tunggakan agregat. Filter dan tombolnya dijelaskan pada halaman 29. Pratinjau surat dan PDF akhir harus diperiksa sebelum diberikan kepada pimpinan; Excel ditujukan sebagai rekap tabel.</p>
+    <p>Gunakan pilihan surat kepala sekolah untuk ringkasan tunggakan per rombel tanpa identitas siswa. Pilihan cakupan dan tombol pratinjau dijelaskan pada halaman 29. Periksa PDF sebelum diberikan kepada pimpinan; Excel ditujukan sebagai rekap tabel.</p>
     <div class="warning">Jangan mengirim satu surat massal orang tua yang memuat identitas siswa lain. Pilih keluaran sesuai penerima dan periksa semua halaman.</div>
     <div class="footer">Manual Penggunaan SistemSPP | 33</div>
   </section>
