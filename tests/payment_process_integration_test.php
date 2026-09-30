@@ -104,7 +104,7 @@ if (spp_billing_schema_ready($koneksi)) {
         $level = '1';
         $stmt = $koneksi->prepare('INSERT INTO siswa(NO_INDUK,NAMA,KELAS,master_kelas_id,SPP_PERBULAN,POMG) VALUES(?,?,?,?,250000,15000)');
         $stmt->bind_param('sssi', $nis, $name, $level, $classId); $stmt->execute(); $stmt->close();
-        $snapshot = '1A'; $status = 'aktif'; $spp = 250000.0; $komite = 0.0;
+        $snapshot = '1A'; $status = 'aktif'; $spp = 250000.0; $komite = 15000.0;
         $stmt = $koneksi->prepare('INSERT INTO siswa_tahun_ajaran(tahun_ajaran_id,no_induk,kelas,master_kelas_id,kelas_rombel_snapshot,spp_perbulan_snapshot,komite_snapshot,status) VALUES(?,?,?,?,?,?,?,?)');
         $stmt->bind_param('issisdds', $yearId, $nis, $level, $classId, $snapshot, $spp, $komite, $status); $stmt->execute(); $placementId=(int)$koneksi->insert_id; $stmt->close();
         komite_sync_placement($koneksi,$placementId);

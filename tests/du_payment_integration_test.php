@@ -36,6 +36,10 @@ function du_http_flash(string $baseUrl, array &$cookies): string {
     if (preg_match('/id="flash-msg"[^>]*>(.*?)<\/div>/s', $page['body'], $match)) {
         return trim(html_entity_decode(strip_tags($match[1])));
     }
+    if (preg_match('/window\.sppFlashWarning\s*=\s*([^\r\n]+);/', $page['body'], $match)) {
+        $warning = json_decode(trim($match[1]), true);
+        if (is_array($warning)) return (string)($warning['message'] ?? '');
+    }
     return '';
 }
 
@@ -122,8 +126,8 @@ try {
     $receipt = du_http_request($baseUrl . '/laporan/cetak_struk.php?id=' . (int)$payment['id'], [], $cookies);
     du_http_assert($receipt['status'] === 200 && str_contains($receipt['body'], 'Uang Daftar Ulang (TA ' . $previous . ')'), 'Struk tidak menampilkan tahun tagihan Daftar Ulang.');
 
-    du_http_assert($submit($students[1], 0, 100000)['status'] === 302 && str_contains(du_http_flash($baseUrl, $cookies), 'Pilih ulang tagihan'), 'Submit DU tanpa ID tidak ditolak.');
-    du_http_assert($submit($students[1], $studentBills[$previous], 100000)['status'] === 302 && str_contains(du_http_flash($baseUrl, $cookies), 'tidak ditemukan untuk siswa'), 'ID tagihan milik siswa lain tidak ditolak.');
+    du_http_assert($submit($students[1], 0, 100000)['status'] === 302 && str_contains(du_http_flash($baseUrl, $cookies), 'Pilih tagihan Daftar Ulang'), 'Submit DU tanpa ID tidak ditolak.');
+    du_http_assert($submit($students[1], $studentBills[$previous], 100000)['status'] === 302 && str_contains(du_http_flash($baseUrl, $cookies), 'tidak cocok dengan siswa'), 'ID tagihan milik siswa lain tidak ditolak.');
 
     $edit = du_http_request($baseUrl . '/pembayaran/edit.php?id=' . (int)$payment['id'], [], $cookies);
     du_http_assert(preg_match('/name="csrf_token" value="([a-f0-9]+)"/', $edit['body'], $tokenMatch) === 1, 'Token CSRF edit tidak ditemukan.');
