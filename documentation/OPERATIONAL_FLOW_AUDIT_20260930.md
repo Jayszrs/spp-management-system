@@ -1,6 +1,18 @@
 # Audit alur operasional SistemSPP — 30 September 2026
 
-## Kesimpulan
+## Hasil perbaikan pada 30 September 2026
+
+Tiga temuan aplikasi pada audit awal telah diperbaiki. Filter Aktif, Arsip/Lulus, dan Semua pada Status Pembayaran SPP/Komite/Daftar Ulang serta SPP Tahun Ajaran kini mengikuti `siswa.is_active`; kelas dan nominal tetap berasal dari penempatan serta tagihan tahun yang dilaporkan. Per Item SPP/Komite memakai penempatan dan ID penempatan tagihan, memisahkan baris siswa per tahun ajaran, memberi tanda `—` pada bulan di luar tahun baris, serta menyediakan filter status siswa. Jalur kompatibilitas SPP tetap membaca penempatan `pindah` dan `lulus`; pesan penolakan pembayaran menyebut bulan dan tahun tunggakan tertua pada input maupun edit.
+
+Pengujian transaksi yang dibatalkan mencakup kenaikan 5A ke 6A lalu kelulusan, laporan tahun asal/tujuan, nominal dan filter rombel historis, Per Item lintas tahun, status aktif/arsip/semua, serta isolasi SD/SMP/SMA (`historical_reports_after_promotion_test.php`). Tes urutan SPP dan pembayaran HTTP juga lulus. Pada salinan database, keluaran layar, Excel, dan teks PDF Per Item lintas tahun cocok untuk ketiga unit: masing-masing menampilkan dua kelas/tahun dan nominal Rp300.000 serta Rp320.000 pada baris yang tepat. Tes HTTP pembayaran berlanjut melewati penolakan tunggakan hingga input, edit, titipan, penghapusan yang ditolak, dan struk. Ekspektasi tes lama untuk pesan Komite dan pembayaran Komite mandiri saat SPP masih terutang disesuaikan dengan aturan aplikasi saat ini.
+
+Satu skenario HTTP pada database disposable juga lulus: pendaftaran siswa kelas 1, penerbitan 12 tagihan dan pembayaran Juli, lima kenaikan tahunan, penerbitan tahun tujuan, pemeriksaan rekap pada beberapa tahun, lalu kelulusan dengan enam penempatan historis (`full_student_lifecycle_http_test.php`). Simulasi pergantian tahun memakai header khusus yang hanya aktif bila flag tes menyala dan nama database berawalan `db_spp_audit_`. Skenario ini memeriksa satu siswa, bukan seluruh kombinasi potongan, cicilan, atau penggunaan serentak banyak kasir.
+
+Database utama hanya dibaca selama perbaikan ini. Jumlah awal dan akhir tetap **150 siswa serta 1.002 pembayaran**. Angka ini berbeda dari snapshot audit awal (**222 siswa dan 1.036 pembayaran**); tidak ada asumsi bahwa data lama masih menjadi isi database saat ini. Salinan database latihan serta berkas hasil ekspor hanya dipakai untuk verifikasi.
+
+## Kesimpulan saat audit awal (sebelum perbaikan)
+
+Bagian ini mempertahankan bukti dan batas pengujian sebelum perbaikan. Status terkini tercatat pada bagian hasil perbaikan di atas.
 
 Alur inti pendaftaran, penerbitan tagihan, pembayaran, dan kenaikan kelas lolos pengujian terpisah pada salinan database. **Alur satu siswa dari pendaftaran sampai kelulusan belum diuji sebagai satu rangkaian penuh.** Sistem belum dapat dinyatakan lancar untuk seluruh siklus tahun ajaran: setelah siswa dinaikkan, beberapa rekap tahun asal salah mengelompokkan status siswa atau memakai kelas terbaru untuk tagihan lama.
 
@@ -21,9 +33,9 @@ Dua pengujian lintas unit berbasis fixture berhenti karena asumsi data awal tida
 
 Tes yang lulus mencakup `student_psb_integration_test.php`, `du_payment_integration_test.php`, `class_promotion_sequence_test.php`, `class_promotion_multiunit_test.php`, `class_graduation_history_test.php`, `academic_year_history_publish_test.php`, `academic_year_billing_test.php`, `modular_reports_test.php`, `billing_history_report_integration_test.php`, dan `report_letters_test.php`. `payment_process_integration_test.php` berhenti pada pesan penolakan SPP; `demo_multiunit_reports_test.php` dan `multiunit_isolation_test.php` berhenti pada asumsi fixture di atas.
 
-## Temuan yang perlu ditangani
+## Temuan pada audit awal (sudah diperbaiki)
 
-### 1. Rekap historis keliru setelah kenaikan kelas — prioritas tinggi
+### 1. Rekap historis keliru setelah kenaikan kelas — telah diperbaiki
 
 Dalam transaksi uji yang kemudian dibatalkan, seorang siswa kelas 5A pada tahun asal dinaikkan ke 6A pada tahun tujuan; siswa tetap aktif. Sebelum kenaikan, rekap **Status Pembayaran SPP** bulan September menampilkan tagihan Rp305.000 dan rekap **SPP Tahun Ajaran** menampilkan Rp3.660.000 pada kelas 5A. Sesudah kenaikan, kedua rekap itu tidak lagi menampilkan siswa pada filter **Aktif**, tetapi memasukkannya ke **Arsip/Lulus**. Filter **Semua** masih menyimpan kelas historis 5A. Rekap **Per Item SPP** untuk September tahun asal masih memuat Rp305.000, namun menandainya sebagai kelas 6A.
 
@@ -31,13 +43,13 @@ Penyebabnya berbeda tetapi berhubungan: proses kenaikan memberi status `pindah` 
 
 Untuk pemeriksaan sementara, pilih **Semua** pada rekap tahun asal dan cocokkan kelas serta nominal dengan **Riwayat Tagihan Siswa**. Jangan jadikan pengelompokan kelas pada Per Item periode lampau sebagai dasar keputusan sampai diperbaiki.
 
-### 2. Jalur kompatibilitas SPP melupakan penempatan lama — prioritas menengah
+### 2. Jalur kompatibilitas SPP melupakan penempatan lama — telah diperbaiki
 
 Simulasi yang dibatalkan menunjukkan `spp_payment_status()` menghitung 12 periode tahun asal sebelum kenaikan, tetapi nol setelah status penempatan asal menjadi `pindah`. Tarif lama Rp250.000 juga jatuh ke tarif siswa sekarang Rp300.000. Penyebabnya `spp_active_placements()` hanya membaca penempatan berstatus `aktif` (`includes/spp_payment_status.php` dan `includes/spp_sequence.php`).
 
 **Batas temuan:** instalasi saat ini memakai tagihan SPP terbit. Endpoint status dan alokasi pembayaran aktif membaca tagihan terbit lintas tahun di `includes/spp_billing.php`, tanpa menyaring penempatan lama berstatus `aktif`. Karena itu eksperimen ini **belum membuktikan** tunggakan dapat dilewati pada jalur pembayaran yang sedang dipakai. Jalur kompatibilitas tetap perlu diperbaiki atau dipensiunkan dengan jelas.
 
-### 3. Pesan penolakan SPP terlalu umum — prioritas menengah
+### 3. Pesan penolakan SPP terlalu umum — telah diperbaiki
 
 Pada tes HTTP, kiriman pembayaran Agustus ketika Juli belum lunas ditolak oleh `spp_allocate_payment()` sesuai aturan. `pembayaran/proses.php` kemudian mengganti alasan spesifik (“Lunasi dahulu SPP Juli ...”) dengan pesan umum “Nominal atau status tagihan berubah ...”. Kasir tidak mendapat petunjuk periode yang harus dilunasi. Skrip uji HTTP yang memeriksa pesan spesifik berhenti di sini, sehingga rangkaian edit, titipan, dan struk di bagian lanjutannya belum berjalan dalam tes tersebut.
 
@@ -51,8 +63,8 @@ Gunakan **database latihan/salinan** dan satu siswa uji dengan NIS unik. Catat j
 4. Di **Input Pembayaran**, pilih siswa dan periode tagihan. Bayar Juli SPP bersama Komite bulan itu; coba Agustus sebelum Juli pada siswa uji lain untuk memastikan ditolak. Uji Daftar Ulang lunas/cicilan, dropdown tanpa tunggakan, dan tanda `!` bila ada tunggakan tahun sebelumnya. Cocokkan nominal di struk, Riwayat Pembayaran, Riwayat Daftar Ulang, dan Riwayat Tagihan Siswa.
 5. Cocokkan total transaksi dengan **Penerimaan Harian**, **Rekap Kas**, **Status Pembayaran**, **SPP Tahun Ajaran**, dan surat tunggakan. Bedakan tanggal uang diterima dari bulan/tahun tagihan yang dilunasi.
 6. Saat berganti tahun, buka **Master Kelas/Rombel → Proses Tahun Ajaran**. Luluskan kelas tertinggi dahulu, lalu naikkan tingkat di bawahnya secara berurutan. Naikkan dua siswa satu per satu dan pastikan tahap tetap pada kelas asal sampai seluruh siswa asal diproses. Periksa satu penempatan tujuan per siswa serta kelas aktif yang langsung berubah.
-7. Terbitkan tagihan tahun tujuan hanya setelah penempatan tujuan lengkap. Ulangi rekap tahun asal dan tahun tujuan. Saat ini, terapkan catatan temuan nomor 1 untuk laporan tahun asal setelah kenaikan.
+7. Terbitkan tagihan tahun tujuan hanya setelah penempatan tujuan lengkap. Ulangi rekap tahun asal dan tahun tujuan. Siswa yang masih aktif tetap muncul pada filter Aktif di kedua tahun, dengan kelas sesuai penempatan masing-masing.
 
 ## Batas pengujian
 
-Tes transaksi database dibatalkan dengan `ROLLBACK`; tes HTTP berjalan pada database disposable yang dihapus setelah audit. Audit tidak mencakup pemakaian bersama oleh beberapa kasir secara serentak, seluruh kombinasi potongan/tarif, pencetakan fisik, atau satu perjalanan siswa penuh dari pendaftaran hingga kelulusan. Hasil tes yang gagal karena fixture atau pesan harus dibedakan dari penolakan transaksi bisnis yang benar.
+Tes transaksi database dibatalkan dengan `ROLLBACK`; tes HTTP berjalan pada database disposable. Audit tidak mencakup pemakaian bersama oleh beberapa kasir secara serentak, seluruh kombinasi potongan/tarif, atau pencetakan fisik. Satu perjalanan siswa penuh kini telah diuji pada salinan database sebagaimana dicatat di bagian hasil perbaikan. Hasil tes yang gagal karena fixture atau pesan harus dibedakan dari penolakan transaksi bisnis yang benar.

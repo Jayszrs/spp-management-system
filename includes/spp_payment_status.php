@@ -173,11 +173,11 @@ function spp_payment_amount_status(string $bulan, string $tahun, float $tariff):
     ];
 }
 
-function spp_active_placements(mysqli $db, string $noInduk, bool $forUpdate = false): array {
+function spp_period_placements(mysqli $db, string $noInduk, bool $forUpdate = false): array {
     $sql = 'SELECT ta.label AS tahun_ajaran, sta.spp_perbulan_snapshot, sta.spp_covered_by_psb, sta.status
         FROM siswa_tahun_ajaran sta
         JOIN tahun_ajaran ta ON ta.id = sta.tahun_ajaran_id
-        WHERE sta.no_induk = ? AND sta.status = \'aktif\'
+        WHERE sta.no_induk = ? AND sta.status IN (\'aktif\',\'pindah\',\'lulus\')
         ORDER BY ta.label ASC';
     if ($forUpdate) $sql .= ' FOR UPDATE';
     $stmt = $db->prepare($sql);
@@ -210,7 +210,7 @@ function spp_tariff_for_payment_period(
     bool $forUpdate = false
 ): float {
     return spp_sequence_tariff_for_period(
-        spp_active_placements($db, $noInduk, $forUpdate),
+        spp_period_placements($db, $noInduk, $forUpdate),
         $bulan,
         $tahun,
         $fallback
@@ -303,7 +303,7 @@ function spp_payment_status(
     $student['exists'] = true;
     $student['allow_inactive'] = $allowInactive;
 
-    $placements = spp_active_placements($db, $noInduk, $forUpdate);
+    $placements = spp_period_placements($db, $noInduk, $forUpdate);
     $student['spp_covered_by_psb'] = spp_period_is_covered_by_psb($placements, $month, $tahun);
     $tariff = spp_sequence_tariff_for_period($placements, $month, $tahun, (float)$student['SPP_PERBULAN']);
     $paidPeriods = $forUpdate ? null : spp_paid_period_map($db, $noInduk, $excludePaymentId);
@@ -338,7 +338,7 @@ function first_paid_spp_following_period(
     int $excludePaymentId = 0,
     bool $forUpdate = true
 ): ?array {
-    $placements = spp_active_placements($db, $noInduk, $forUpdate);
+    $placements = spp_period_placements($db, $noInduk, $forUpdate);
     $paidPeriods = $forUpdate ? null : spp_paid_period_map($db, $noInduk, $excludePaymentId);
     foreach (spp_sequence_following_periods($placements, $bulan, $tahun) as $period) {
         $paid = $forUpdate

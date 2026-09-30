@@ -38,8 +38,8 @@ function payment_process_request(string $url, array $data, array &$cookies): arr
     return ['status' => $status, 'body' => $body];
 }
 
-function payment_process_flash(string $baseUrl, array &$cookies): string {
-    $page = payment_process_request($baseUrl . '/pembayaran/form.php', [], $cookies);
+function payment_process_flash(string $baseUrl, array &$cookies, string $pagePath = 'form.php'): string {
+    $page = payment_process_request($baseUrl . '/pembayaran/' . $pagePath, [], $cookies);
     if (preg_match('/id="flash-msg"[^>]*>(.*?)<\/div>/s', $page['body'], $match)) {
         return trim(html_entity_decode(strip_tags($match[1])));
     }
@@ -128,9 +128,11 @@ if (spp_billing_schema_ready($koneksi)) {
         $blockedFlash=payment_process_flash($baseUrl,$cookies);
         payment_process_assert(str_contains($blockedFlash,'Lunasi dahulu SPP Juli'),'Bulan baru tidak diblokir oleh tunggakan lama: '.$blockedFlash);
         payment_process_assert($post('07',600000,15000)['status']===302,'Permintaan kelebihan SPP tidak mengembalikan respons.');
-        payment_process_assert(str_contains(payment_process_flash($baseUrl,$cookies),'harus dilunasi tepat'),'Kelebihan SPP tidak diblokir.');
+        $excessFlash=payment_process_flash($baseUrl,$cookies);
+        payment_process_assert(str_contains($excessFlash,'harus dilunasi tepat'),'Kelebihan SPP tidak diblokir: '.$excessFlash);
         payment_process_assert($post('07',250000,0)['status']===302,'Permintaan tanpa Komite tidak mengembalikan respons.');
-        payment_process_assert(str_contains(payment_process_flash($baseUrl,$cookies),'SPP dan Komite bulan ini'),'SPP tanpa Komite tidak diblokir.');
+        $withoutKomiteFlash=payment_process_flash($baseUrl,$cookies);
+        payment_process_assert(str_contains($withoutKomiteFlash,'harus dibayar bersama Komite'),'SPP tanpa Komite tidak diblokir: '.$withoutKomiteFlash);
         payment_process_assert($post('07',250000,15000)['status']===302,'Pembayaran Juli gagal.');
         $first=$koneksi->query("SELECT id,U_SPP,U_TITIPAN_SPP,U_KOMITE,total_jumlah FROM bayar WHERE NO_INDUK='{$nis}' ORDER BY id DESC LIMIT 1")->fetch_assoc();
         payment_process_assert($first && (float)$first['U_SPP']===250000.0 && (float)$first['U_KOMITE']===15000.0 && (float)$first['total_jumlah']===265000.0,'SPP dan Komite Juli tidak dicatat tepat.');
@@ -156,13 +158,28 @@ if (spp_billing_schema_ready($koneksi)) {
         payment_process_assert((int)($states['active']??0)===1 && (int)($states['reversed']??0)===1, 'Edit tidak mempertahankan satu batch aktif dan histori batch terbalik.');
 
         payment_process_assert($post('10',0,7500)['status']===302,'Komite parsial tidak mengembalikan respons.');
-        payment_process_assert(str_contains(payment_process_flash($baseUrl,$cookies),'harus dibayar tepat'),'Komite parsial tidak ditolak.');
-        payment_process_assert($post('10',0,15000)['status']===302,'Komite mandiri gagal.');
-        $komiteOnly=$koneksi->query("SELECT id FROM bayar WHERE NO_INDUK='{$nis}' ORDER BY id DESC LIMIT 1")->fetch_assoc();
-        payment_process_assert($post('10',250000,0)['status']===302,'SPP setelah Komite mandiri gagal.');
-        $deleteToken=payment_process_csrf($baseUrl,(int)$komiteOnly['id'],$cookies);
-        payment_process_assert(payment_process_request($baseUrl.'/pembayaran/proses.php',['aksi'=>'hapus','id'=>(int)$komiteOnly['id'],'csrf_token'=>$deleteToken],$cookies)['status']===302,'Hapus Komite tidak mengembalikan respons.');
-        payment_process_assert((int)$koneksi->query('SELECT COUNT(*) total FROM bayar WHERE id='.(int)$komiteOnly['id'])->fetch_assoc()['total']===1,'Komite mandiri terhapus padahal SPP sudah dibayar.');
+        $partialKomiteFlash=payment_process_flash($baseUrl,$cookies);
+        payment_process_assert(str_contains($partialKomiteFlash,'harus lunas'),'Komite parsial tidak ditolak: '.$partialKomiteFlash);
+        payment_process_assert($post('10',0,15000)['status']===302,'Komite tanpa SPP tidak mengembalikan respons.');
+        payment_process_assert(str_contains(payment_process_flash($baseUrl,$cookies),'harus dibayar bersama SPP'),'Komite tanpa SPP tidak diblokir.');
+        payment_process_assert($post('10',250000,15000)['status']===302,'SPP dan Komite Oktober gagal.');
+        $october=$koneksi->query("SELECT id,U_SPP,U_KOMITE FROM bayar WHERE NO_INDUK='{$nis}' ORDER BY id DESC LIMIT 1")->fetch_assoc();
+        payment_process_assert($october && (float)$october['U_SPP']===250000.0 && (float)$october['U_KOMITE']===15000.0,'Pembayaran Oktober tidak tercatat lengkap.');
+        $august=$koneksi->query("SELECT id FROM bayar WHERE NO_INDUK='{$nis}' AND BULAN='08' AND TAHUN='{$start}' ORDER BY id LIMIT 1")->fetch_assoc();
+        payment_process_assert((bool)$august, 'Pembayaran Agustus tidak ditemukan untuk uji edit urutan.');
+        $editToken=payment_process_csrf($baseUrl,(int)$august['id'],$cookies);
+        $editSkip=payment_process_request($baseUrl.'/pembayaran/proses.php',[
+            'aksi'=>'update','id'=>(int)$august['id'],'csrf_token'=>$editToken,'no_induk'=>$nis,
+            'tanggal_bayar'=>date('Y-m-d H:i:s'),'bulan_bayar'=>'11','tahun_bayar'=>(string)$start,
+            'sistem_pembayaran'=>'Tunai','uang_spp'=>250000,'uang_komite'=>15000,'gunakan_titipan_spp'=>'0',
+        ],$cookies);
+        payment_process_assert($editSkip['status']===302,'Edit yang melompati tunggakan tidak mengembalikan respons.');
+        $editFlash=payment_process_flash($baseUrl,$cookies,'edit.php?id='.(int)$august['id']);
+        payment_process_assert(str_contains($editFlash,'Agustus '.$start),'Edit tidak menyebut bulan tunggakan tertua: '.$editFlash);
+        payment_process_assert((string)$koneksi->query('SELECT BULAN FROM bayar WHERE id='.(int)$august['id'])->fetch_assoc()['BULAN']==='08','Edit yang ditolak mengubah transaksi Agustus.');
+        $deleteToken=payment_process_csrf($baseUrl,(int)$first['id'],$cookies);
+        payment_process_assert(payment_process_request($baseUrl.'/pembayaran/proses.php',['aksi'=>'hapus','id'=>(int)$first['id'],'csrf_token'=>$deleteToken],$cookies)['status']===302,'Hapus pembayaran Juli tidak mengembalikan respons.');
+        payment_process_assert((int)$koneksi->query('SELECT COUNT(*) total FROM bayar WHERE id='.(int)$first['id'])->fetch_assoc()['total']===1,'Pembayaran Juli terhapus padahal bulan berikutnya sudah dibayar.');
 
         $receipt = payment_process_request($baseUrl . '/laporan/cetak_struk.php?id=' . (int)$first['id'], [], $cookies);
         payment_process_assert($receipt['status'] === 200 && str_contains($receipt['body'], 'SPP Juli ' . $start) && str_contains($receipt['body'],'Komite Sekolah (Juli '.$start.')'), 'Struk tidak memuat periode SPP dan Komite.');

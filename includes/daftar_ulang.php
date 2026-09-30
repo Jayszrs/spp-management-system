@@ -23,6 +23,13 @@ function du_year_dates(string $label): array {
 }
 
 function du_current_academic_year(): string {
+    // Simulasi pergantian tahun hanya untuk tes HTTP pada database disposable.
+    $testYear = (string)($_SERVER['HTTP_X_SPP_TEST_CURRENT_YEAR'] ?? '');
+    $testDatabase = (string)(getenv('SPP_DB_NAME') ?: '');
+    if ($testYear !== '' && getenv('SPP_TEST_ALLOW_MUTATION') === '1'
+        && preg_match('/^db_spp_audit_[a-z0-9_]+$/', $testDatabase)) {
+        return du_normalize_academic_year($testYear);
+    }
     return du_academic_year_label((int)date('n'), (int)date('Y'));
 }
 

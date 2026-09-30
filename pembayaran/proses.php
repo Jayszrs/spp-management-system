@@ -734,13 +734,7 @@ if ($aksi === 'input') {
                 $stmtDeposit = $koneksi->prepare('UPDATE bayar SET U_SPP=0,U_TITIPAN_SPP=? WHERE id=?');
                 $stmtDeposit->bind_param('di',$row_spp,$bayar_id);$stmtDeposit->execute();$stmtDeposit->close();
             } elseif ($usePublishedSpp && ($row_spp > 0.001 || $gunakan_titipan_spp)) {
-                try { $sppAllocation = spp_allocate_payment($koneksi, $no_induk, $bayar_id, $row_month, $row_year, $row_spp, $gunakan_titipan_spp, $tanggal_bayar, $sistem_pembayaran, $user_id); }
-                catch (RuntimeException $e) {
-                    if ($e instanceof mysqli_sql_exception) throw $e;
-                    throw new SppPaymentException(['code'=>'billing_changed','severity'=>'error','title'=>'Tagihan berubah',
-                        'message'=>'Nominal atau status tagihan berubah sejak halaman dibuka. Periksa kembali sebelum menyimpan.',
-                        'target'=>'spp-input']);
-                }
+                $sppAllocation = spp_allocate_payment($koneksi, $no_induk, $bayar_id, $row_month, $row_year, $row_spp, $gunakan_titipan_spp, $tanggal_bayar, $sistem_pembayaran, $user_id);
             } elseif (!$usePublishedSpp) {
                 sync_spp_period_claim($koneksi, $bayar_id, $no_induk, $row_month, $row_year, $row_spp);
             }

@@ -3,8 +3,8 @@
 /**
  * Helpers murni untuk menyusun urutan kewajiban SPP Juli--Juni.
  *
- * Tanggung jawab historis berasal dari penempatan siswa yang masih berstatus
- * aktif pada tahun ajaran terkait. File ini sengaja bebas database agar aturan
+ * Tanggung jawab historis berasal dari setiap penempatan yang pernah berlaku,
+ * termasuk tahun asal kenaikan dan tahun kelulusan. File ini bebas database agar aturan
  * kalender dapat diuji tanpa memutasi data aplikasi.
  */
 
@@ -42,10 +42,10 @@ function spp_sequence_academic_year_label(string $bulan, string $tahun): string 
 }
 
 /** @return array<int,array{bulan:string,tahun:string,key:string,order:int,tarif:float,tahun_ajaran:string}> */
-function spp_sequence_periods_for_active_placements(array $placements): array {
+function spp_sequence_periods_for_placements(array $placements): array {
     $periods = [];
     foreach ($placements as $placement) {
-        if (($placement['status'] ?? 'aktif') !== 'aktif') continue;
+        if (!in_array(($placement['status'] ?? 'aktif'), ['aktif','pindah','lulus'], true)) continue;
         $label = trim((string)($placement['tahun_ajaran'] ?? $placement['label'] ?? ''));
         if (!preg_match('/^(\d{4})\/(\d{4})$/', $label, $match) || (int)$match[2] !== (int)$match[1] + 1) continue;
 
@@ -75,7 +75,7 @@ function spp_sequence_prior_periods(array $placements, string $bulan, string $ta
     $selectedOrder = spp_sequence_period_order($bulan, $tahun);
     if ($selectedOrder === 0) return [];
     return array_values(array_filter(
-        spp_sequence_periods_for_active_placements($placements),
+        spp_sequence_periods_for_placements($placements),
         static fn(array $period): bool => $period['order'] < $selectedOrder
     ));
 }
@@ -85,14 +85,14 @@ function spp_sequence_following_periods(array $placements, string $bulan, string
     $selectedOrder = spp_sequence_period_order($bulan, $tahun);
     if ($selectedOrder === 0) return [];
     return array_values(array_filter(
-        spp_sequence_periods_for_active_placements($placements),
+        spp_sequence_periods_for_placements($placements),
         static fn(array $period): bool => $period['order'] > $selectedOrder
     ));
 }
 
 function spp_sequence_tariff_for_period(array $placements, string $bulan, string $tahun, float $fallback): float {
     $key = spp_sequence_period_key($bulan, $tahun);
-    foreach (spp_sequence_periods_for_active_placements($placements) as $period) {
+    foreach (spp_sequence_periods_for_placements($placements) as $period) {
         if ($period['key'] === $key) return (float)$period['tarif'];
     }
     return $fallback;

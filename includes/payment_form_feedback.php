@@ -1,6 +1,7 @@
 <?php
 
 require_once __DIR__ . '/spp_payment_status.php';
+require_once __DIR__ . '/spp_billing.php';
 require_once __DIR__ . '/daftar_ulang.php';
 
 function payment_du_selection_status(DaftarUlangSelectionException $error): array {
@@ -36,6 +37,13 @@ function payment_failure_flash(Throwable $error, string $fallbackPrefix): array 
 
     if ($error instanceof DaftarUlangSelectionException) {
         $error = new SppPaymentException(payment_du_selection_status($error));
+    }
+
+    if ($error instanceof SppBillingOrderException) {
+        $error = new SppPaymentException([
+            'code' => 'prior_unpaid', 'severity' => 'error', 'title' => 'Ada SPP yang lebih lama',
+            'message' => $error->getMessage(), 'target' => 'bulan-bayar',
+        ]);
     }
 
     if (!$error instanceof SppPaymentException) {

@@ -35,6 +35,11 @@ foreach ($cases as [$message, $code, $target]) {
 
 $typed = payment_failure_flash(new SppPaymentException(['code' => 'komite_required', 'message' => 'Isi Komite.']), 'Gagal: ');
 feedback_assert($typed['msg'] === 'Isi Komite.' && $typed['spp_status']['code'] === 'komite_required', 'Error terstruktur tidak dipertahankan.');
+$prior = payment_failure_flash(new SppBillingOrderException('07', '2026'), 'Gagal menyimpan: ');
+feedback_assert($prior['msg'] === 'Lunasi dahulu SPP Juli 2026.'
+    && ($prior['spp_status']['code'] ?? '') === 'prior_unpaid'
+    && ($prior['spp_status']['target'] ?? '') === 'bulan-bayar',
+    'Periode SPP tertua hilang dari pesan penolakan kasir.');
 $generic = payment_failure_flash(new RuntimeException('Kesalahan lain.'), 'Gagal menyimpan: ');
 feedback_assert($generic['msg'] === 'Gagal menyimpan: Kesalahan lain.' && !isset($generic['spp_status']), 'Fallback error berubah.');
 $concurrent = payment_failure_flash(new mysqli_sql_exception('Deadlock', 1213), 'Gagal: ');

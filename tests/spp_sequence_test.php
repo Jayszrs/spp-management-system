@@ -8,9 +8,9 @@ function spp_sequence_assert(bool $condition, string $message): void {
 
 try {
     $placements = [
-        ['tahun_ajaran' => '2025/2026', 'spp_perbulan_snapshot' => 250000, 'status' => 'aktif'],
+        ['tahun_ajaran' => '2025/2026', 'spp_perbulan_snapshot' => 250000, 'status' => 'pindah'],
         ['tahun_ajaran' => '2026/2027', 'spp_perbulan_snapshot' => 275000, 'status' => 'aktif'],
-        ['tahun_ajaran' => '2027/2028', 'spp_perbulan_snapshot' => 300000, 'status' => 'pindah'],
+        ['tahun_ajaran' => '2027/2028', 'spp_perbulan_snapshot' => 300000, 'status' => 'lulus'],
     ];
 
     $july2026Prior = spp_sequence_prior_periods($placements, '07', '2026');
@@ -26,7 +26,7 @@ try {
 
     $following = spp_sequence_following_periods($placements, '06', '2026');
     spp_sequence_assert($following[0]['key'] === '07-2026', 'Pembayaran setelah Juni harus menemukan Juli tahun ajaran berikutnya.');
-    spp_sequence_assert(!in_array('07-2027', array_column($following, 'key'), true), 'Penempatan pindah tidak boleh menjadi kewajiban lintas tahun.');
+    spp_sequence_assert(in_array('07-2027', array_column($following, 'key'), true), 'Penempatan tahun kelulusan tetap menyimpan kewajiban historis.');
 
     $newStudentPrior = spp_sequence_prior_periods([
         ['tahun_ajaran' => '2026/2027', 'spp_perbulan_snapshot' => 275000, 'status' => 'aktif'],
@@ -38,8 +38,12 @@ try {
         'Tarif periode aktif harus mengutamakan snapshot tahun ajaran.'
     );
     spp_sequence_assert(
-        abs(spp_sequence_tariff_for_period($placements, '07', '2027', 125000) - 125000) < 0.001,
-        'Periode tanpa penempatan aktif harus memakai fallback tanpa menciptakan kewajiban historis.'
+        abs(spp_sequence_tariff_for_period($placements, '07', '2027', 125000) - 300000) < 0.001,
+        'Tarif tahun kelulusan harus memakai snapshot penempatannya.'
+    );
+    spp_sequence_assert(
+        abs(spp_sequence_tariff_for_period($placements, '07', '2028', 125000) - 125000) < 0.001,
+        'Tahun tanpa penempatan tidak boleh menciptakan kewajiban historis.'
     );
 
     echo "OK: urutan SPP penuh lintas tahun ajaran, snapshot tarif, dan status penempatan.\n";

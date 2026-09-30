@@ -1,6 +1,6 @@
 # Audit dan Baseline SistemSPP
 
-> **Audit alur operasional 2026-09-30:** Hasil uji terbaru untuk pendaftaran, pembayaran, kenaikan kelas, dan laporan ada di [OPERATIONAL_FLOW_AUDIT_20260930.md](documentation/OPERATIONAL_FLOW_AUDIT_20260930.md). Rekap historis setelah kenaikan kelas masih memiliki temuan yang perlu diperbaiki sebelum pergantian tahun ajaran operasional.
+> **Perbaikan 2026-09-30:** Tiga temuan rekap historis dan urutan SPP dari [audit alur operasional](documentation/OPERATIONAL_FLOW_AUDIT_20260930.md) telah diperbaiki dan diuji pada database disposable. Rincian hasil, termasuk satu siklus HTTP dari kelas 1 sampai lulus, ada di dokumen tersebut.
 
 > **Pembaruan 2026-09-19:** Bagian audit di bawah adalah baseline historis 2026-09-09, bukan kontrak fitur terbaru. SPP sekarang dibayar tepat satu tagihan terbit yang dipilih melalui bulan/tahun; tunggakan lebih tua tetap menghalangi. Dana lebih atau belum cukup dicatat lewat tindakan terpisah **Catat Titipan SPP**. Komite berasal dari `siswa.POMG` per bulan, mengikuti penempatan siswa, wajib lunas pada bulan yang sama ketika SPP dibayar, dan dapat dibayar sendiri. Rincian implementasi dan migrasi ada di [PROJECT_CONTEXT.md](documentation/PROJECT_CONTEXT.md) serta [AI_CHANGELOG.md](documentation/AI_CHANGELOG.md).
 
@@ -60,10 +60,10 @@ Kontrak implementasi yang harus dipertahankan pada perubahan berikutnya:
 ## Aturan SPP terkini
 
 1. SPP wajib dibayar penuh satu kali per bulan.
-2. Kewajiban historis dibentuk dari `siswa_tahun_ajaran` berstatus `aktif`.
-3. Setiap penempatan aktif mencakup Juli sampai Juni pada tahun ajaran tersebut.
-4. Sebelum membayar periode pilihan, seluruh periode aktif terdahulu yang tercatat harus lunas berdasarkan `spp_perbulan_snapshot` tahun asalnya.
-5. Penempatan `pindah` atau `lulus`, periode sebelum penempatan aktif pertama, dan jeda tanpa penempatan aktif tidak membentuk utang otomatis.
+2. Jalur kompatibilitas menghitung kewajiban historis dari penempatan `siswa_tahun_ajaran` berstatus `aktif`, `pindah`, atau `lulus`.
+3. Setiap penempatan yang tercatat mencakup Juli sampai Juni pada tahun ajaran tersebut.
+4. Sebelum membayar periode pilihan, seluruh periode terdahulu yang tercatat harus lunas berdasarkan `spp_perbulan_snapshot` tahun asalnya. Instalasi saat ini memakai tagihan SPP terbit sebagai sumber alokasi pembayaran.
+5. Periode sebelum penempatan pertama yang diketahui dan tahun tanpa penempatan tidak direkonstruksi menjadi tunggakan.
 6. Edit atau hapus periode prasyarat ditolak apabila sudah ada pembayaran pada periode sesudahnya, termasuk lintas tahun ajaran.
 7. Form Input dan Edit memeriksa status SPP terbaru ke server ketika siswa atau periode berubah. Popup hanya membantu kasir; proses simpan tetap memvalidasi ulang di dalam transaksi database.
 

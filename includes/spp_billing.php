@@ -2,6 +2,12 @@
 
 require_once __DIR__ . '/daftar_ulang.php';
 
+class SppBillingOrderException extends RuntimeException {
+    public function __construct(public readonly string $bulan, public readonly string $tahun) {
+        parent::__construct('Lunasi dahulu SPP '.spp_month_label($bulan).' '.$tahun.'.');
+    }
+}
+
 function spp_billing_schema_ready(mysqli $db): bool {
     static $ready = null;
     if ($ready !== null) return $ready;
@@ -270,7 +276,7 @@ function spp_allocate_payment(mysqli $db, string $noInduk, ?int $bayarId, string
     foreach ($bills as $bill) if ($bill['bulan']===$month && $bill['tahun']===$year) { $selected=$bill; break; }
     if (!$selected) throw new RuntimeException('Tagihan SPP '.spp_month_label($month).' '.$year.' belum terbit atau sudah lunas.');
     $oldest=$bills[0];
-    if ((int)$oldest['id'] !== (int)$selected['id']) throw new RuntimeException('Lunasi dahulu SPP '.spp_month_label((string)$oldest['bulan']).' '.$oldest['tahun'].'.');
+    if ((int)$oldest['id'] !== (int)$selected['id']) throw new SppBillingOrderException((string)$oldest['bulan'], (string)$oldest['tahun']);
     $need=(float)$selected['remaining'];
     $depositUsed=$useDeposit?min($balance,$need):0.0;
     if ($useDeposit && $balance <= .001) throw new RuntimeException('Saldo Titipan SPP tidak tersedia.');
