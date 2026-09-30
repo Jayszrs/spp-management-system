@@ -29,7 +29,18 @@ try {
         $stmt = $koneksi->prepare('INSERT INTO Daftar_ulang(tahun_ajaran_id,th_ajaran,kelas,Jumlah) VALUES (?,?,?,?)');
         $stmt->bind_param('issd', $publishYearId, $publishLabel, $testClassText, $testAmount); $stmt->execute(); $stmt->close();
     }
+    $blocked = false;
+    try { du_publish_year_from_active_students($koneksi, $publishYearId, $publishLabel); }
+    catch (RuntimeException $error) { $blocked = true; }
+    test_assert($blocked, 'Tahun tujuan tanpa riwayat kelas siswa masih dapat diterbitkan.');
     $activeStudentCount = (int)$koneksi->query("SELECT COUNT(*) total FROM siswa WHERE is_active=1 AND KELAS IN ('1','2','3','4','5','6')")->fetch_assoc()['total'];
+    $stmt = $koneksi->prepare("INSERT INTO siswa_tahun_ajaran(tahun_ajaran_id,no_induk,kelas,master_kelas_id,kelas_rombel_snapshot,status)
+        SELECT ?,s.NO_INDUK,s.KELAS,s.master_kelas_id,
+            CASE WHEN mk.id IS NULL OR mk.is_placeholder=1 THEN CONCAT('Kelas ',s.KELAS,' (Belum Ditentukan)')
+                ELSE CONCAT(mk.tingkat,UPPER(mk.kode_rombel)) END,'aktif'
+        FROM siswa s LEFT JOIN master_kelas mk ON mk.id=s.master_kelas_id
+        WHERE s.is_active=1 AND s.KELAS IN ('1','2','3','4','5','6')");
+    $stmt->bind_param('i', $publishYearId); $stmt->execute(); $stmt->close();
     test_assert(du_publish_year_from_active_students($koneksi, $publishYearId, $publishLabel) === $activeStudentCount, 'Penerbitan atomik tidak membuat seluruh tagihan siswa aktif.');
     test_assert(du_publish_year_from_active_students($koneksi, $publishYearId, $publishLabel) === $activeStudentCount, 'Penerbitan ulang tidak idempoten.');
     $stmt = $koneksi->prepare('SELECT status FROM tahun_ajaran WHERE id=?'); $stmt->bind_param('i', $publishYearId); $stmt->execute();

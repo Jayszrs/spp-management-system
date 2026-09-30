@@ -20,6 +20,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             throw new RuntimeException('Permintaan tidak valid atau sesi telah kedaluwarsa.');
         }
         $action = (string)($_POST['aksi'] ?? '');
+        if (in_array($action, ['proses_siswa_batch', 'luluskan_siswa', 'naikkan_siswa'], true)
+            && (string)($_POST['target_tahun_ajaran'] ?? '') !== class_next_academic_year_label(du_current_academic_year())) {
+            throw new RuntimeException('Tahun ajaran tujuan sudah berubah. Muat ulang halaman sebelum memproses siswa.');
+        }
         $id = (int)($_POST['id'] ?? 0);
         $flashType = 'success';
         if ($action === 'template_aj') {
@@ -119,8 +123,9 @@ unset($_SESSION['promotion_batch_result']);
 $nextAcademicYear = class_next_academic_year_label(du_current_academic_year());
 $editId = (int)($_GET['edit'] ?? 0);
 $editClass = $editId > 0 ? class_find($koneksi, $editId) : null;
-$currentPromotionLevel = class_highest_active_regular_level($koneksi);
-$promotionStudents = class_students_for_manual_step($koneksi, $currentPromotionLevel);
+$currentPromotionLevel = class_highest_active_regular_level($koneksi, $nextAcademicYear);
+$promotionStudents = class_students_for_manual_step($koneksi, $currentPromotionLevel, $nextAcademicYear);
+$studentsMissingSourceYear = class_students_missing_source_year($koneksi, $nextAcademicYear);
 $promotionTargets = $currentPromotionLevel >= $unitMinLevel && $currentPromotionLevel < $unitMaxLevel
     ? class_target_rombel_options($koneksi, $currentPromotionLevel + 1)
     : [];
@@ -244,6 +249,9 @@ $classFilterQuery = ['q_kelas' => $classSearch, 'tingkat_kelas' => $classLevelFi
       </div>
       <?php endif; ?>
       <div class="master-promotion-actions">
+        <?php if ($studentsMissingSourceYear): ?>
+        <div class="alert alert-warning" style="margin-bottom:1rem"><?= number_format(count($studentsMissingSourceYear)) ?> siswa aktif belum memiliki riwayat kelas TA <?= htmlspecialchars(du_current_academic_year()) ?>. Periksa Data Siswa atau hasil migrasi sebelum menerbitkan tahun berikutnya.</div>
+        <?php endif; ?>
         <?php if($currentPromotionLevel >= $unitMinLevel && $currentPromotionLevel <= $unitMaxLevel): ?>
         <form method="post" id="promotion-batch-form" class="promotion-batch-form" data-promotion-action="<?= $currentPromotionLevel === $unitMaxLevel ? 'Luluskan' : 'Naikkan' ?>">
           <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_master_kelas']) ?>">

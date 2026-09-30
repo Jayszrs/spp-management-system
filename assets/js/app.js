@@ -932,23 +932,20 @@ function totalDaftarUlangForContext(opt) {
 
 function refreshDaftarUlangSelector(opt) {
   const trigger = document.getElementById('du-selector-trigger');
-  const staticLabel = document.getElementById('du-static-label');
   const menu = document.getElementById('du-selector-menu');
   const warningIcon = document.getElementById('du-arrear-warning');
-  if (!trigger || !staticLabel || !menu) return;
+  if (!trigger || !menu) return;
 
   const records = daftarUlangRecords(opt);
   const arrears = records.filter(record => record.is_arrear && parseNumber(record.sisa) > .001);
-  const canChoose = arrears.length > 0;
-  trigger.hidden = !canChoose;
-  staticLabel.hidden = canChoose;
   menu.hidden = true;
   trigger.setAttribute('aria-expanded', 'false');
   if (warningIcon) {
     const message = arrears.length + ' tahun ajaran masih memiliki tunggakan Daftar Ulang';
+    warningIcon.hidden = arrears.length === 0;
     warningIcon.textContent = arrears.length ? '!' : '';
-    warningIcon.setAttribute('aria-label', message);
-    warningIcon.title = message;
+    warningIcon.setAttribute('aria-label', arrears.length ? message : '');
+    warningIcon.title = arrears.length ? message : '';
   }
 
   menu.replaceChildren();
@@ -957,9 +954,16 @@ function refreshDaftarUlangSelector(opt) {
   const menuHeading = document.createElement('strong');
   menuHeading.textContent = 'Pilih tagihan Daftar Ulang';
   const menuHint = document.createElement('span');
-  menuHint.textContent = arrears.length + ' tunggakan perlu diselesaikan';
+  menuHint.textContent = arrears.length ? arrears.length + ' tunggakan perlu diselesaikan' : 'Tidak ada tunggakan';
   menuHeader.append(menuHeading, menuHint);
   menu.appendChild(menuHeader);
+
+  if (records.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'du-selector-empty';
+    empty.textContent = opt ? 'Belum ada tagihan Daftar Ulang yang dapat dipilih.' : 'Pilih siswa untuk melihat tagihan.';
+    menu.appendChild(empty);
+  }
 
   records.forEach(record => {
     const option = document.createElement('button');
@@ -2008,6 +2012,9 @@ document.addEventListener('DOMContentLoaded', function () {
   const siswaSearch = document.getElementById('siswa-search');
   if (siswaSearch && siswaSearch.value.trim() !== '') {
     pilihSiswaDatalist(siswaSearch);
+  }
+  if (document.getElementById('du-selector-trigger') && !document.getElementById('disp-nis')?.value) {
+    refreshDaftarUlangSelector(null);
   }
 
   // Set today's date if empty

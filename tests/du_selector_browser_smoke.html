@@ -2,17 +2,16 @@
 <html lang="id" data-theme="light">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>pending</title><script>var smokeTheme=new URLSearchParams(location.search).get('theme')==='dark'?'dark':'light';document.documentElement.dataset.theme=smokeTheme;localStorage.setItem('spp_theme',smokeTheme)</script><link rel="stylesheet" href="../assets/css/style.css"><style>body{padding:70px;background:var(--bg,#f7fbf8)}.du-smoke-shell{max-width:1120px;margin:auto}.du-smoke-utility{display:none}@media(max-width:720px){body{padding:16px}}</style></head>
 <body>
-  <input class="du-smoke-utility" id="siswa-search" list="siswa-list" value="UJI">
+  <input class="du-smoke-utility" id="siswa-search" list="siswa-list">
   <datalist id="siswa-list"><option value="UJI" data-nis="1" data-nama="UJI" data-kelas="1A" data-is-graduate="0" data-du-bills='[{"id":1,"tahun_ajaran":"2026/2027","kelas":"1","total":1000000,"terbayar":1000000,"sisa":0,"status":"open","is_current":true,"is_arrear":false},{"id":2,"tahun_ajaran":"2025/2026","kelas":"1","total":900000,"terbayar":100000,"sisa":800000,"status":"open","is_current":false,"is_arrear":true}]'></option></datalist>
-  <input class="du-smoke-utility" id="disp-nis" value="1"><input class="du-smoke-utility" id="disp-nama"><input class="du-smoke-utility" id="disp-kelas">
+  <input class="du-smoke-utility" id="disp-nis"><input class="du-smoke-utility" id="disp-nama"><input class="du-smoke-utility" id="disp-kelas">
   <main class="du-smoke-shell">
     <div class="table-container">
       <table class="payment-table form-payment-table">
         <thead><tr><th>Komponen Bayar</th><th>Total Tagihan (Rp)</th><th>Sudah Terbayar (Rp)</th><th>Sisa (Rp)</th><th>Input Bayar (Rp)</th></tr></thead>
         <tbody><tr class="row-highlight">
           <td>
-            <div class="du-bill-selector"><span class="comp-label du-static-label" id="du-static-label">📚 Daftar Ulang</span>
-              <button class="du-selector-trigger" id="du-selector-trigger" aria-controls="du-selector-menu" hidden><span class="du-trigger-label">📚 Daftar Ulang</span><span class="du-arrear-warning" id="du-arrear-warning"></span><span class="du-chevron">⌄</span></button>
+            <div class="du-bill-selector"><button class="du-selector-trigger" id="du-selector-trigger" aria-controls="du-selector-menu"><span class="du-trigger-label">Daftar Ulang</span><span class="du-arrear-warning" id="du-arrear-warning" hidden></span><span class="du-chevron">⌄</span></button>
               <div class="du-selector-menu" id="du-selector-menu" hidden></div>
             </div>
             <small class="du-inline-context du-context-label" id="du-context-label"></small><small id="du-master-warning"></small>
@@ -31,13 +30,19 @@
     window.addEventListener('load', function () {
       try {
         var opt = document.querySelector('#siswa-list option');
+        var trigger = document.getElementById('du-selector-trigger');
+        trigger.click();
+        if (document.getElementById('du-selector-menu').hidden || !document.querySelector('.du-selector-empty')?.textContent.includes('Pilih siswa')) throw new Error('initial-dropdown');
+        trigger.click();
+        document.getElementById('siswa-search').value = 'UJI';
+        document.getElementById('disp-nis').value = '1';
         applyDefaultDaftarUlangClass(opt);
         applyStudentPaymentDetails(opt);
         if (document.getElementById('tagihan-daftar-ulang-id').value !== '2') throw new Error('arrear-default');
         if (document.getElementById('du-input').readOnly) throw new Error('arrear-locked');
         if (document.getElementById('du-total').value !== '900.000') throw new Error('arrear-total');
         if (document.getElementById('du-selector-trigger').hidden) throw new Error('trigger');
-        if (getComputedStyle(document.getElementById('du-static-label')).display !== 'none') throw new Error('duplicate-label');
+        if (document.getElementById('du-arrear-warning').hidden) throw new Error('missing-warning');
         if (document.querySelectorAll('.du-selector-option').length !== 2) throw new Error('options');
         if (new URLSearchParams(location.search).has('visual')) {
           document.getElementById('du-selector-trigger').click();
@@ -58,6 +63,13 @@
         document.getElementById('tagihan-daftar-ulang-id').value = '';
         applyStudentPaymentDetails(opt);
         if (!document.getElementById('du-input').readOnly || !document.getElementById('du-context-label').textContent.includes('Lunas')) throw new Error('all-settled');
+        if (document.getElementById('du-selector-trigger').hidden || !document.getElementById('du-arrear-warning').hidden) throw new Error('dropdown-without-arrears');
+        opt.dataset.duBills = '[]';
+        document.getElementById('tagihan-daftar-ulang-id').value = '';
+        applyStudentPaymentDetails(opt);
+        if (document.getElementById('du-selector-trigger').hidden || !document.querySelector('.du-selector-empty')) throw new Error('empty-bills');
+        refreshDaftarUlangSelector(null);
+        if (!document.querySelector('.du-selector-empty')?.textContent.includes('Pilih siswa')) throw new Error('empty-student');
         document.title = 'DU_SELECTOR_OK';
       } catch (error) {
         document.title = 'DU_SELECTOR_FAILED_' + error.message;

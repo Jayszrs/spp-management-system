@@ -15,12 +15,12 @@ function komite_sync_placement(mysqli $db, int $placementId): int {
     $stmt->bind_param('i', $placementId); $stmt->execute();
     $placement = $stmt->get_result()->fetch_assoc(); $stmt->close();
     [$firstLevel, $lastLevel] = unit_level_bounds();
-    if (!$placement || $placement['status']!=='aktif' || (int)$placement['kelas'] < $firstLevel || (int)$placement['kelas'] > $lastLevel) return 0;
+    if (!$placement || (int)$placement['kelas'] < $firstLevel || (int)$placement['kelas'] > $lastLevel) return 0;
     $periods = spp_academic_periods((string)$placement['label']);
     $start = (string)($placement['komite_mulai_bulan'] ?? '07');
     $startIndex = 0;
     foreach ($periods as $index => $period) if ($period['bulan'] === $start) { $startIndex = $index; break; }
-    $rate = (float)$placement['POMG'];
+    $rate = (float)$placement['komite_snapshot'];
     $insert = $db->prepare("INSERT IGNORE INTO tagihan_komite(tahun_ajaran_id,penempatan_id,no_induk,kelas_rombel_snapshot,bulan,tahun,nominal_tagihan) VALUES(?,?,?,?,?,?,?)");
     $created = 0;
     foreach ($periods as $index => $period) {

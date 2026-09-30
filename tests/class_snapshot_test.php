@@ -57,14 +57,16 @@ try {
     class_test_assert(abs((float)$row['komite_snapshot'] - 125000) < .001, 'Komite yang belum dibayar tidak ikut disinkronkan.');
     class_test_assert(in_array('spp', $sync['locked'], true), 'SPP berbayar tidak dilaporkan terkunci.');
 
-    $oldLabel = '1900/1901';
-    $oldStart = '1900-07-01'; $oldEnd = '1901-06-30';
-    $stmt = $koneksi->prepare("INSERT INTO tahun_ajaran(label,tanggal_mulai,tanggal_selesai,status) VALUES(?,?,?,'closed')");
-    $stmt->bind_param('sss', $oldLabel, $oldStart, $oldEnd); $stmt->execute(); $oldYearId = (int)$koneksi->insert_id; $stmt->close();
+    $oldLabel = class_previous_academic_year_label(du_current_academic_year());
+    $oldYearId = class_ensure_academic_year($koneksi, $oldLabel);
     $repeatNis = class_test_student($koneksi, $classId, true, $spp);
     $classText = '1'; $snapshot = '1' . $code; $status = 'pindah'; $zero = 0.0; $covered = 1; $komite = 100000.0;
     $stmt = $koneksi->prepare('INSERT INTO siswa_tahun_ajaran(tahun_ajaran_id,no_induk,kelas,master_kelas_id,kelas_rombel_snapshot,spp_perbulan_snapshot,spp_covered_by_psb,komite_snapshot,status) VALUES(?,?,?,?,?,?,?,?,?)');
     $stmt->bind_param('issisdids', $oldYearId, $repeatNis, $classText, $classId, $snapshot, $zero, $covered, $komite, $status);
+    $stmt->execute(); $stmt->close();
+    $currentYearId = class_current_academic_year_id($koneksi);
+    $stmt = $koneksi->prepare("INSERT INTO siswa_tahun_ajaran(tahun_ajaran_id,no_induk,kelas,master_kelas_id,kelas_rombel_snapshot,status) VALUES(?,?,?,?,?,'aktif')");
+    $stmt->bind_param('issis', $currentYearId, $repeatNis, $classText, $classId, $snapshot);
     $stmt->execute(); $stmt->close();
     $repeatPlacement = class_sync_student_current_year($koneksi, $repeatNis, $classId, $spp, $komite, true, $sync);
     $row = $koneksi->query('SELECT spp_perbulan_snapshot,spp_covered_by_psb FROM siswa_tahun_ajaran WHERE id=' . (int)$repeatPlacement)->fetch_assoc();

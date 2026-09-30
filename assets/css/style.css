@@ -9448,9 +9448,9 @@ a.btn {
   max-width: 100%;
 }
 .table-container:has(.form-payment-table) { overflow: visible; }
-.du-static-label[hidden],
 .du-selector-trigger[hidden],
-.du-selector-menu[hidden] { display: none !important; }
+.du-selector-menu[hidden],
+.du-arrear-warning[hidden] { display: none !important; }
 
 .du-selector-trigger {
   display: inline-flex;
@@ -9494,6 +9494,12 @@ a.btn {
   font-size: 11px;
   font-weight: 800;
   line-height: 1;
+}
+
+.du-selector-empty {
+  padding: .8rem 1rem;
+  color: var(--text-muted);
+  font-size: .85rem;
 }
 
 .du-chevron {

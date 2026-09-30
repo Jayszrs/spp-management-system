@@ -71,13 +71,17 @@ try {
         $stmt = $koneksi->prepare('INSERT INTO siswa (NO_INDUK,NAMA,KELAS,master_kelas_id) VALUES (?,?,?,?)');
         $stmt->bind_param('sssi', $lastNis, $lastName, $lastText, $lastClassId);
         $stmt->execute(); $stmt->close();
+        $academicYear = du_current_academic_year();
+        $yearId = class_ensure_academic_year($koneksi, $academicYear);
+        $lastSnapshot = $lastText . 'A';
+        $stmt = $koneksi->prepare("INSERT INTO siswa_tahun_ajaran(tahun_ajaran_id,no_induk,kelas,master_kelas_id,kelas_rombel_snapshot,status) VALUES(?,?,?,?,?,'aktif')");
+        $stmt->bind_param('issis', $yearId, $lastNis, $lastText, $lastClassId, $lastSnapshot);
+        $stmt->execute(); $stmt->close();
         $targetYear = class_next_academic_year_label(du_current_academic_year());
         $graduation = class_manual_graduate_student($koneksi, $lastNis, $targetYear);
         assert_unit($graduation['action']==='lulus', "Kelulusan kelas {$lastLevel} gagal.");
         assert_unit((int)$koneksi->query("SELECT is_active FROM siswa WHERE NO_INDUK='{$lastNis}'")->fetch_assoc()['is_active']===0, 'Lulusan tidak diarsipkan.');
 
-        $academicYear = du_current_academic_year();
-        $yearId = class_ensure_academic_year($koneksi, $academicYear);
         foreach (range($level, $lastLevel) as $rateLevel) {
             $classText = (string)$rateLevel;
             $amount = 500000.0;
@@ -85,7 +89,7 @@ try {
             $stmt->bind_param('issd', $yearId, $academicYear, $classText, $amount);
             $stmt->execute(); $stmt->close();
         }
-        assert_unit(du_publish_year_from_active_students($koneksi, $yearId, $academicYear)===1, "Penerbitan Daftar Ulang unit {$unit} gagal.");
+        assert_unit(du_publish_year_from_active_students($koneksi, $yearId, $academicYear)===2, "Penerbitan Daftar Ulang unit {$unit} gagal.");
         $master = spp_master_ensure_year($koneksi, $academicYear);
         $rates = array_fill_keys(range($level, $lastLevel), 250000.0);
         spp_master_save_rates($koneksi, (int)$master['id'], $rates);

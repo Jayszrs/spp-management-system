@@ -318,6 +318,12 @@ function du_apply_current_student_override(mysqli $db, string $noInduk): void {
 function du_reconcile_current_student_override(mysqli $db, string $noInduk): array {
     $label = du_current_academic_year();
     $result = ['tahun_ajaran' => $label, 'status' => 'unchanged', 'label' => 'Daftar Ulang'];
+    $stmt = $db->prepare('SELECT MAX(ta.label) AS latest_year FROM siswa_tahun_ajaran sta JOIN tahun_ajaran ta ON ta.id=sta.tahun_ajaran_id WHERE sta.no_induk=?');
+    $stmt->bind_param('s', $noInduk);
+    $stmt->execute();
+    $latestYear = (string)($stmt->get_result()->fetch_assoc()['latest_year'] ?? '');
+    $stmt->close();
+    if ($latestYear !== '' && strcmp($latestYear, $label) > 0) return $result;
     $stmt = $db->prepare("SELECT tdu.id,tdu.tahun_ajaran_id,tdu.master_daftar_ulang_id,
             tdu.nominal_awal,tdu.nominal_tagihan,tdu.status,ta.status AS year_status,
             COALESCE(du.Jumlah,0) AS class_amount,s.DAFTAR_ULANG,s.potong_du,s.tot_du,
@@ -500,41 +506,47 @@ function du_publish_year_from_active_students(mysqli $db, int $yearId, string $l
     $masterCount = (int)$stmt->get_result()->fetch_assoc()['total']; $stmt->close();
     if ($masterCount !== $unitLast-$unitFirst+1) throw new RuntimeException('Lengkapi nominal Daftar Ulang kelas '.$unitFirst.' sampai '.$unitLast.' sebelum menerbitkan.');
 
-    $activeStudents = $db->query("SELECT NO_INDUK, KELAS FROM siswa WHERE is_active=1 AND KELAS IN {$regularClasses} FOR UPDATE");
-    $activeCount = $activeStudents->num_rows;
-    if ($activeCount === 0) throw new RuntimeException('Tidak ada siswa aktif pada kelas unit ini yang dapat dibuatkan tagihan.');
-    $invalidCount = 0;
-    while ($activeStudent = $activeStudents->fetch_assoc()) {
-        if ((int)$activeStudent['KELAS']<$unitFirst || (int)$activeStudent['KELAS']>$unitLast) $invalidCount++;
+    $currentYear = du_current_academic_year();
+    if ($label === $currentYear) {
+        // Tahun pertama yang diketahui boleh dimulai dari kelas siswa saat ini.
+        $stmt = $db->prepare("INSERT INTO siswa_tahun_ajaran
+            (tahun_ajaran_id,no_induk,kelas,master_kelas_id,kelas_rombel_snapshot,spp_perbulan_snapshot,komite_snapshot,status)
+            SELECT ?,s.NO_INDUK,s.KELAS,s.master_kelas_id,
+                CASE WHEN mk.id IS NULL OR mk.is_placeholder=1
+                    THEN CONCAT('Kelas ',s.KELAS,' (Belum Ditentukan)')
+                    ELSE CONCAT(mk.tingkat,UPPER(mk.kode_rombel)) END,
+                s.SPP_PERBULAN,s.POMG,'aktif'
+            FROM siswa s LEFT JOIN master_kelas mk ON mk.id=s.master_kelas_id
+            WHERE s.is_active=1 AND s.KELAS IN {$regularClasses}
+              AND NOT EXISTS(SELECT 1 FROM siswa_tahun_ajaran prior WHERE prior.no_induk=s.NO_INDUK)");
+        $stmt->bind_param('i', $yearId);
+        $stmt->execute();
+        $stmt->close();
     }
-    if ($invalidCount > 0) { [$firstLevel, $lastLevel] = unit_level_bounds(); throw new RuntimeException($invalidCount . " siswa aktif memiliki kelas tidak valid (harus {$firstLevel}–{$lastLevel}). Perbaiki Data Siswa terlebih dahulu."); }
-
     $stmt = $db->prepare('SELECT COUNT(*) total FROM tagihan_daftar_ulang WHERE tahun_ajaran_id=?');
     $stmt->bind_param('i', $yearId); $stmt->execute();
     $existingBills = (int)$stmt->get_result()->fetch_assoc()['total']; $stmt->close();
     if ($existingBills > 0) throw new RuntimeException('Tahun ajaran draf memiliki tagihan lama yang tidak konsisten. Periksa database sebelum menerbitkan ulang.');
 
-    $stmt = $db->prepare("DELETE sta FROM siswa_tahun_ajaran sta
-        LEFT JOIN siswa s ON s.NO_INDUK=sta.no_induk
-        WHERE sta.tahun_ajaran_id=? AND (s.NO_INDUK IS NULL OR s.is_active<>1)");
-    $stmt->bind_param('i', $yearId); $stmt->execute(); $stmt->close();
-    $stmt = $db->prepare("INSERT INTO siswa_tahun_ajaran
-        (tahun_ajaran_id,no_induk,kelas,master_kelas_id,kelas_rombel_snapshot,spp_perbulan_snapshot,komite_snapshot,status)
-        SELECT ?,s.NO_INDUK,s.KELAS,s.master_kelas_id,
-               CASE WHEN mk.id IS NULL THEN CONCAT('Kelas ',s.KELAS,' (Belum Ditentukan)')
-                    WHEN mk.is_placeholder=1 THEN CONCAT('Kelas ',s.KELAS,' (Belum Ditentukan)')
-                    ELSE CONCAT(mk.tingkat,UPPER(mk.kode_rombel)) END,
-               s.SPP_PERBULAN,s.POMG,'aktif'
-        FROM siswa s
-        LEFT JOIN master_kelas mk ON mk.id=s.master_kelas_id
-        WHERE s.is_active=1 AND s.KELAS IN {$regularClasses}
-        ON DUPLICATE KEY UPDATE kelas=VALUES(kelas),master_kelas_id=VALUES(master_kelas_id),
-          kelas_rombel_snapshot=VALUES(kelas_rombel_snapshot),
-          spp_perbulan_snapshot=VALUES(spp_perbulan_snapshot),komite_snapshot=VALUES(komite_snapshot),status='aktif'");
-    $stmt->bind_param('i', $yearId); $stmt->execute(); $stmt->close();
-
+    if (strcmp($label, $currentYear) >= 0) {
+        $stmt = $db->prepare("SELECT COUNT(*) AS missing FROM siswa s
+            LEFT JOIN siswa_tahun_ajaran sta ON sta.no_induk=s.NO_INDUK AND sta.tahun_ajaran_id=?
+            WHERE s.is_active=1 AND s.KELAS IN {$regularClasses} AND sta.id IS NULL");
+        $stmt->bind_param('i', $yearId);
+        $stmt->execute();
+        $missing = (int)$stmt->get_result()->fetch_assoc()['missing'];
+        $stmt->close();
+        if ($missing > 0) throw new RuntimeException($missing . ' siswa belum memiliki riwayat kelas tahun ajaran ini. Selesaikan kenaikan kelas sebelum menerbitkan tagihan.');
+    }
+    $stmt = $db->prepare("SELECT COUNT(*) AS total FROM siswa_tahun_ajaran
+        WHERE tahun_ajaran_id=? AND kelas IN {$regularClasses}");
+    $stmt->bind_param('i', $yearId);
+    $stmt->execute();
+    $placementCount = (int)$stmt->get_result()->fetch_assoc()['total'];
+    $stmt->close();
+    if ($placementCount === 0) throw new RuntimeException('Belum ada riwayat kelas yang dapat diterbitkan pada tahun ajaran ini.');
     require_once __DIR__ . '/komite_billing.php';
-    $stmtPlacement=$db->prepare("SELECT id FROM siswa_tahun_ajaran WHERE tahun_ajaran_id=? AND status='aktif' AND kelas IN {$regularClasses}");
+    $stmtPlacement=$db->prepare("SELECT id FROM siswa_tahun_ajaran WHERE tahun_ajaran_id=? AND kelas IN {$regularClasses}");
     $stmtPlacement->bind_param('i',$yearId);$stmtPlacement->execute();
     foreach ($stmtPlacement->get_result()->fetch_all(MYSQLI_ASSOC) as $placement) komite_sync_placement($db,(int)$placement['id']);
     $stmtPlacement->close();
@@ -548,10 +560,10 @@ function du_publish_year_from_active_students(mysqli $db, int $yearId, string $l
         FROM siswa_tahun_ajaran sta
         JOIN siswa s ON s.NO_INDUK=sta.no_induk
         JOIN Daftar_ulang du ON du.tahun_ajaran_id=sta.tahun_ajaran_id AND du.kelas=sta.kelas
-        WHERE sta.tahun_ajaran_id=? AND sta.status='aktif'");
+        WHERE sta.tahun_ajaran_id=? AND sta.kelas IN {$regularClasses}");
     $stmt->bind_param('siii', $label, $isCurrentYear, $isCurrentYear, $yearId); $stmt->execute();
     $created = $stmt->affected_rows; $stmt->close();
-    if ($created !== $activeCount) throw new RuntimeException('Jumlah tagihan yang terbentuk tidak sesuai jumlah siswa aktif. Penerbitan dibatalkan.');
+    if ($created !== $placementCount) throw new RuntimeException('Jumlah tagihan tidak sesuai riwayat kelas tahun ajaran. Penerbitan dibatalkan.');
 
     if ($isCurrentYear === 1) {
         $stmt = $db->prepare("UPDATE siswa s
