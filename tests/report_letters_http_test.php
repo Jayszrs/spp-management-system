@@ -45,7 +45,7 @@ try{
         letter_http_assert(str_contains($headers[0]??'','200')&&str_contains($body,'Cetak Surat ke Orang Tua')&&str_contains($body,'Kembali ke pilihan surat')&&str_contains($body,'href="../laporan/surat_laporan.php" class="nav-item active"'),"Halaman surat gagal untuk $role.");
         [$headers,$body]=letter_http_get($base.'laporan/template.php?template=tunggakan-siswa',$id);
         letter_http_assert(str_contains($headers[0]??'','200')&&str_contains($body,'Kembali ke pilihan surat')&&str_contains($body,'href="../laporan/surat_laporan.php" class="nav-item active"'),'URL rekap lama tidak mengarah ke Surat Laporan.');
-        letter_http_assert(str_contains($body,'Seluruh Rombel Kelas')&&str_contains($body,'Total tunggakan per rombel')&&!str_contains($body,$students[0]['nama']),'Pilihan surat kepala sekolah masih menampilkan rincian siswa.');
+        letter_http_assert(str_contains($body,'Seluruh Rombel Kelas')&&str_contains($body,'Rekap Tunggakan per Kelas/Rombel')&&!str_contains($body,$students[0]['nama']),'Pilihan surat kepala sekolah masih menampilkan rincian siswa.');
         if($role!=='kasir'){letter_http_end_session($id);continue;}
         preg_match('/href="([^"]*mode=filtered[^"]*)"[^>]*>Pratinjau Surat Pilihan<\/a>/', $body, $principalLink);
         letter_http_assert(isset($principalLink[1]),'Tautan pratinjau surat pilihan hilang.');
@@ -56,6 +56,16 @@ try{
         $classRows=report_principal_debt_data($koneksi,$classFilters)['rows'];
         [$headers,$classPage]=letter_http_get($base.'laporan/template.php?template=tunggakan-siswa&kelas=rombel:'.$classId.'&siswa_status=active',$id);
         letter_http_assert(str_contains($headers[0]??'','200')&&str_contains($classPage,report_money(array_sum(array_column($classRows,'total_tunggakan'))))&&!str_contains($classPage,$students[0]['nama']),'Total pilihan satu rombel tidak sesuai atau rincian siswa masih muncul.');
+        [$headers,$detail]=letter_http_get($base.'laporan/template.php?template=tunggakan-siswa&kelas=rombel:'.$classId.'&siswa_status=active&view=detail&detail=rombel%3A'.$classId,$id);
+        letter_http_assert(str_contains($headers[0]??'','200')&&str_contains($detail,'Daftar Siswa Menunggak')&&str_contains($detail,htmlspecialchars($students[0]['nama'],ENT_QUOTES,'UTF-8')),'Detail rombel tidak memuat siswa sesuai pilihan.');
+        [$headers,$legacyDetail]=letter_http_get($base.'laporan/template.php?template=tunggakan-siswa&kelas=rombel:'.$classId.'&siswa_status=active&q=nis-lama-tidak-ada&view=detail&detail=rombel%3A'.$classId,$id);
+        letter_http_assert(str_contains($headers[0]??'','200')&&str_contains($legacyDetail,htmlspecialchars($students[0]['nama'],ENT_QUOTES,'UTF-8')),'Parameter pencarian lama menghilangkan detail tunggakan.');
+        preg_match('/href="([^"]*view=detail[^"]*)"[^>]*>Export Excel<\/a>/', $detail, $detailExcelLink);
+        letter_http_assert(isset($detailExcelLink[1]),'Tautan Excel detail rombel tidak ditemukan.');
+        [$headers,$detailExcel]=letter_http_get($base.'laporan/'.html_entity_decode($detailExcelLink[1],ENT_QUOTES|ENT_HTML5,'UTF-8'),$id);
+        letter_http_assert(str_contains(strtolower(letter_http_header($headers,'Content-Disposition')),'attachment')
+            && str_contains($detailExcel,htmlspecialchars($students[0]['nama'],ENT_QUOTES,'UTF-8')),
+            'Excel detail rombel tidak sesuai.');
         [$headers]=letter_http_get($base.'laporan/export_global.php?template=tunggakan-siswa&format=preview&mode=single&nis='.rawurlencode($students[0]['nis']),$id);
         letter_http_assert(str_contains($headers[0]??'','400'),'Tautan surat per siswa lama masih diterima untuk kepala sekolah.');
         $single=$base.'laporan/surat_orang_tua_pdf.php?'.http_build_query(['mode'=>'single','nis'=>$students[0]['nis']]);

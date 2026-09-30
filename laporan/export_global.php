@@ -9,6 +9,32 @@ $excelDownload=$format==='excel'&&($_GET['download']??'')==='1';
 if($format==='pdf'){require_once __DIR__.'/../includes/pdf.php';require_pdf_library();}
 $filters=report_filters($koneksi,$_GET);if($template==='riwayat-tagihan'&&!isset($_GET['siswa_status']))$filters['siswa_status']='all';if(!isset($_GET['kategori'])&&$template==='penerimaan')$filters['kategori']='semua';if($template==='tunggakan-siswa'){$filters['q']='';if(($_GET['mode']??'')==='all')$filters['kelas']='';}
 $report=report_build($koneksi,$template,$filters);$generated=date('d-m-Y H:i:s');$operator=(string)($_SESSION['admin_nama']??$_SESSION['admin_username']??'Pengguna');
+if($template==='tunggakan-siswa'&&$format==='excel'&&($_GET['view']??'')==='detail'){
+    $classId=report_class_filter_rombel_id($filters);
+    $selectedClass=null;
+    foreach($report['rows'] as $row)if((int)$row['master_kelas_id']===$classId){$selectedClass=$row;break;}
+    if($classId<=0||!$selectedClass){http_response_code(404);exit('Rombel tidak ditemukan pada cakupan laporan.');}
+    $students=report_student_debt_groups($koneksi,$filters,'',[],(string)$report['as_of_date']);
+    $safeExcelText=static function($value):string{
+        $text=(string)$value;
+        if(preg_match('/^[=+\-@]/',ltrim($text)))$text="'".$text;
+        return report_e($text);
+    };
+    $total=array_sum(array_column($students,'total_tunggakan'));
+    header('Content-Type: application/vnd.ms-excel; charset=utf-8');
+    header('Content-Disposition: attachment; filename="rincian-tunggakan-rombel-'.$classId.'-'.date('Ymd').'.xls"');
+    header('Cache-Control: no-store, private');
+    echo "\xEF\xBB\xBF";
+    ?>
+    <!doctype html><html lang="id"><head><meta charset="utf-8"><title>Rincian Tunggakan <?= $safeExcelText($selectedClass['kelas']) ?></title><style>body{font-family:Arial,sans-serif;color:#17231d}h1{font-size:16px}p{font-size:11px}table{border-collapse:collapse;width:100%}th,td{border:1px solid #9bb9aa;padding:6px 8px;text-align:left}th{background:#eaf2ed}.money{text-align:right;white-space:nowrap}.nis{mso-number-format:"\@"}tfoot{font-weight:bold}</style></head><body>
+    <h1>Rincian Tunggakan — <?= $safeExcelText($selectedClass['kelas']) ?></h1><p>Dihitung sampai <?= report_e(report_date_label($report['as_of_date'])) ?> · <?= number_format(count($students)) ?> siswa menunggak</p>
+    <table><thead><tr><th>No</th><th>NIS</th><th>Nama Siswa</th><th>Periode Tagihan</th><th class="money">Jumlah Tunggakan</th></tr></thead><tbody>
+    <?php foreach($students as $index=>$student): $periods=[];foreach($student['items'] as $item){$period=trim((string)($item['periode']??''));if($period!=='')$periods[$period]=true;} ?>
+    <tr><td><?= $index+1 ?></td><td class="nis"><?= $safeExcelText($student['nis']) ?></td><td><?= $safeExcelText($student['nama']) ?></td><td><?= $safeExcelText(implode(', ',array_keys($periods))) ?></td><td class="money"><?= report_e(report_money($student['total_tunggakan'])) ?></td></tr>
+    <?php endforeach; ?>
+    </tbody><tfoot><tr><td colspan="4">Total</td><td class="money"><?= report_e(report_money($total)) ?></td></tr></tfoot></table></body></html>
+    <?php exit;
+}
 if($template==='tunggakan-siswa'&&in_array($format,['preview','print','pdf'],true)){
     require_once __DIR__.'/../includes/report_letters.php';
     $today=$report['as_of_date']??report_letter_today();

@@ -25,7 +25,7 @@ try {
     include '../includes/principal_letter_page.php';
     $html = ob_get_clean();
 
-    foreach (['principal-class', 'principal-status', 'Pratinjau Surat Pilihan', 'Total tunggakan per rombel'] as $required) {
+    foreach (['principal-class', 'principal-status', 'Pratinjau Surat Pilihan', 'Rekap Tunggakan per Kelas/Rombel', 'Rata-rata Tunggakan', 'Jumlah dihitung sampai'] as $required) {
         if (!str_contains($html, $required)) throw new RuntimeException('Pilihan rekap tunggakan tidak lengkap: ' . $required);
     }
     if (str_contains($html, 'Cari Siswa') || str_contains($html, 'letter-select-cell')) {
