@@ -36,7 +36,7 @@ function report_registry(): array {
         'tabungan-siswa' => ['label'=>'Rekap Transaksi Tabungan Siswa','description'=>'Daftar transaksi tabungan masuk dan keluar sesuai tanggal, siswa, rombel, dan kasir yang dipilih.','icon'=>'TAB','orientation'=>'portrait'],
         'saldo-tabungan' => ['label'=>'Rekap Saldo Tabungan','description'=>'Menampilkan saldo tabungan terkini setiap siswa agar admin dapat mengecek saldo tanpa membuka riwayat transaksi.','icon'=>'SAL','orientation'=>'portrait'],
         'riwayat-tagihan' => ['label'=>'Riwayat Tagihan Siswa','description'=>'Ringkasan nominal tagihan per komponen untuk setiap siswa pada tanggal pembuatan yang dipilih.','icon'=>'TAG','orientation'=>'landscape'],
-        'tunggakan-siswa' => ['label'=>'Cetak Surat ke Kepala Sekolah','description'=>'Surat resmi dan rekap tunggakan siswa untuk kepala sekolah.','icon'=>'UTG','orientation'=>'portrait'],
+        'tunggakan-siswa' => ['label'=>'Cetak Surat ke Kepala Sekolah','description'=>'Surat resmi berisi total tunggakan per rombel atau seluruh kelas untuk kepala sekolah.','icon'=>'UTG','orientation'=>'portrait'],
         'setoran' => ['label'=>'Rekap Setoran Kas Harian','description'=>'Ringkasan penerimaan pembayaran sekolah berdasarkan komponen dan metode pembayaran untuk penutupan kas harian.','icon'=>'KAS','orientation'=>'portrait'],
         'kas-tabungan' => ['label'=>'Rekap Kas Tabungan Harian','description'=>'Ringkasan tabungan masuk, tabungan keluar, dan mutasi bersih untuk pengecekan kas tabungan harian.','icon'=>'KT','orientation'=>'portrait'],
         'titipan-spp' => ['label'=>'Riwayat Titipan SPP','description'=>'Buku besar penerimaan, penggunaan, dan pengembalian Titipan SPP beserta saldo berjalan setiap siswa.','icon'=>'TS','orientation'=>'landscape'],
@@ -794,6 +794,43 @@ function report_student_debt_data(mysqli $db,array $filters):array{
         'rows'=>report_student_debt_groups($db,$filters,'',[],$today),
     ];
 }
+function report_principal_debt_rows(array $students):array{
+    $groups=[];
+    foreach($students as $student){
+        $classId=(int)($student['master_kelas_id']??0);
+        $level=(int)($student['tingkat']??0);
+        $class=(string)($student['kelas']??'Belum diatur');
+        $key=$classId>0?'id:'.$classId:'level:'.$level.'|'.$class;
+        if(!isset($groups[$key]))$groups[$key]=[
+            'kelas'=>$class,'tingkat'=>$level,'master_kelas_id'=>$classId,
+            'jumlah_siswa'=>0,'total_tunggakan'=>0.0,
+        ];
+        $groups[$key]['jumlah_siswa']++;
+        $groups[$key]['total_tunggakan']+=(float)($student['total_tunggakan']??0);
+    }
+    $rows=array_values($groups);
+    usort($rows,static fn($a,$b)=>[$a['tingkat'],mb_strtolower($a['kelas']),$a['master_kelas_id']]<=>[$b['tingkat'],mb_strtolower($b['kelas']),$b['master_kelas_id']]);
+    return $rows;
+}
+function report_principal_debt_data(mysqli $db,array $filters):array{
+    $today=report_letter_today();
+    $filters['q']='';
+    return [
+        'title'=>'Surat Laporan Tunggakan ke Kepala Sekolah',
+        'subtitle'=>'Tunggakan sampai '.report_date_label($today),
+        'as_of_date'=>$today,
+        'columns'=>[['kelas','Kelas/Rombel'],['jumlah_siswa','Siswa Menunggak'],['total_tunggakan','Total Tunggakan','money']],
+        'rows'=>report_principal_debt_rows(report_student_debt_groups($db,$filters,'',[],$today)),
+    ];
+}
+function report_principal_scope_label(array $filters,array $classes):string{
+    $classFilter=(string)($filters['kelas']??'');
+    if($classFilter==='')return 'Seluruh Kelas/Rombel';
+    if(($level=report_class_filter_level($filters))>0)return 'Seluruh Rombel Kelas '.$level;
+    $rombelId=report_class_filter_rombel_id($filters);
+    foreach($classes as $class)if((int)$class['id']===$rombelId)return 'Rombel '.class_label($class);
+    return 'Rombel dipilih';
+}
 function report_prior_debt_summary(mysqli $db,string $targetAcademicYear,array $studentNis):array{
     $studentNis=array_values(array_unique(array_filter(array_map(static fn($nis)=>trim((string)$nis),$studentNis),static fn($nis)=>$nis!=='')));
     if(!$studentNis){
@@ -942,7 +979,7 @@ function report_spp_deposit_data(mysqli $db,array $f):array{
     return ['title'=>'Riwayat Titipan SPP','subtitle'=>report_date_range_label($f['tanggal_awal'],$f['tanggal_akhir']),'columns'=>[['tanggal','Tanggal'],['nis','NIS','nis'],['nama','Nama Siswa'],['jenis','Mutasi'],['masuk','Masuk','money'],['keluar','Keluar','money'],['saldo','Saldo Berjalan','money'],['operator','Operator'],['referensi','Referensi'],['keterangan','Keterangan']],'rows'=>$rows,'deposit_summary'=>['saldo_awal'=>$saldoAwal,'penerimaan'=>$in,'penggunaan'=>$used,'pengembalian'=>$refund,'saldo_akhir'=>$saldoAkhir],'component_rows'=>[['komponen'=>'Saldo awal periode','nominal'=>$saldoAwal],['komponen'=>'Penerimaan Titipan','nominal'=>$in],['komponen'=>'Dipakai untuk SPP','nominal'=>$used],['komponen'=>'Pengembalian Titipan','nominal'=>$refund],['komponen'=>'Saldo akhir terhitung','nominal'=>$saldoAkhir]],'component_total'=>$saldoAkhir,'period_net'=>$in-$used-$refund,'settlement'=>['payment_count'=>count($rows)]];
 }
 function report_build(mysqli $db,string $template,array $filters):array{
-    return match($template){'status'=>report_status_data($db,$filters),'penerimaan'=>report_receipt_data($db,$filters),'spp-tahunan'=>report_spp_year_data($db,$filters),'per-item'=>report_item_data($db,$filters),'tabungan-siswa'=>report_savings_student_data($db,$filters),'saldo-tabungan'=>report_savings_balance_data($db,$filters),'riwayat-tagihan'=>report_billing_history_data($db,$filters),'tunggakan-siswa'=>report_student_debt_data($db,$filters),'setoran'=>report_settlement_data($db,$filters),'kas-tabungan'=>report_savings_cash_data($db,$filters),'titipan-spp'=>report_spp_deposit_data($db,$filters),default=>throw new InvalidArgumentException('Template laporan tidak dikenali.')};
+    return match($template){'status'=>report_status_data($db,$filters),'penerimaan'=>report_receipt_data($db,$filters),'spp-tahunan'=>report_spp_year_data($db,$filters),'per-item'=>report_item_data($db,$filters),'tabungan-siswa'=>report_savings_student_data($db,$filters),'saldo-tabungan'=>report_savings_balance_data($db,$filters),'riwayat-tagihan'=>report_billing_history_data($db,$filters),'tunggakan-siswa'=>report_principal_debt_data($db,$filters),'setoran'=>report_settlement_data($db,$filters),'kas-tabungan'=>report_savings_cash_data($db,$filters),'titipan-spp'=>report_spp_deposit_data($db,$filters),default=>throw new InvalidArgumentException('Template laporan tidak dikenali.')};
 }
 function report_savings_transaction_totals(array $rows): array {
     $masuk=0;$keluar=0;foreach($rows as $row){$masuk+=(float)($row['masuk']??0);$keluar+=(float)($row['keluar']??0);}return ['total_masuk'=>$masuk,'total_keluar'=>$keluar,'selisih'=>$masuk-$keluar];

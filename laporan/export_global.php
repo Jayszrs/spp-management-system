@@ -7,24 +7,17 @@ $registry=report_registry();$template=(string)($_GET['template']??'');if(!isset(
 $format=(string)($_GET['format']??'preview');if(!in_array($format,['preview','print','pdf','excel'],true))$format='preview';
 $excelDownload=$format==='excel'&&($_GET['download']??'')==='1';
 if($format==='pdf'){require_once __DIR__.'/../includes/pdf.php';require_pdf_library();}
-$filters=report_filters($koneksi,$_GET);if($template==='riwayat-tagihan'&&!isset($_GET['siswa_status']))$filters['siswa_status']='all';if(!isset($_GET['kategori'])&&$template==='penerimaan')$filters['kategori']='semua';
+$filters=report_filters($koneksi,$_GET);if($template==='riwayat-tagihan'&&!isset($_GET['siswa_status']))$filters['siswa_status']='all';if(!isset($_GET['kategori'])&&$template==='penerimaan')$filters['kategori']='semua';if($template==='tunggakan-siswa'){$filters['q']='';if(($_GET['mode']??'')==='all')$filters['kelas']='';}
 $report=report_build($koneksi,$template,$filters);$generated=date('d-m-Y H:i:s');$operator=(string)($_SESSION['admin_nama']??$_SESSION['admin_username']??'Pengguna');
 if($template==='tunggakan-siswa'&&in_array($format,['preview','print','pdf'],true)){
     require_once __DIR__.'/../includes/report_letters.php';
     $today=$report['as_of_date']??report_letter_today();
     $letterRows=$report['rows'];
     $letterMode=(string)($_GET['mode']??'filtered');
-    if($letterMode==='all'){
-        $allFilters=$filters;$allFilters['kelas']='';$allFilters['q']='';
-        $letterRows=report_student_debt_data($koneksi,$allFilters)['rows'];
-    }elseif(in_array($letterMode,['selected','single'],true)){
-        $requested=array_slice(array_values(array_unique(array_filter(array_map('trim',explode(',',(string)($_GET['nis']??'')))))),0,500);
-        if($letterMode==='single')$requested=array_slice($requested,0,1);
-        $allowed=array_fill_keys($requested,true);
-        $letterRows=array_values(array_filter($letterRows,static fn($row)=>isset($allowed[$row['nis']])));
-        if(!$letterRows){http_response_code(404);exit('Siswa dengan tunggakan tidak ditemukan pada filter ini.');}
+    if(!in_array($letterMode,['filtered','class','all','harian'],true)){
+        http_response_code(400);exit('Pilihan surat tidak dikenali.');
     }
-    $letterHtml=report_principal_letter_html($letterRows,$today);
+    $letterHtml=report_principal_letter_html($letterRows,$today,report_principal_scope_label($filters,report_classes($koneksi)));
     if($format!=='pdf'){
         require_once __DIR__.'/../includes/report_preview.php';
         $downloadQuery=$_GET;$downloadQuery['format']='pdf';$downloadQuery['download']='1';unset($downloadQuery['preview_action']);

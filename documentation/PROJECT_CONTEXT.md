@@ -18,6 +18,7 @@ SistemSPP adalah aplikasi administrasi pembayaran sekolah berbasis PHP, JavaScri
 - Daftar Ulang memakai tagihan tahunan. Dropdown tahun muncul hanya jika siswa punya tunggakan tahun ajaran lama. Tagihan tahun berjalan yang masih bersisa menjadi pilihan awal; jika sudah lunas, tunggakan lama tertua yang belum lunas dipilih. Pembayaran dapat dicicil sampai sisa tagihan, sedangkan tahun dan kelas pada transaksi berasal dari snapshot tagihan yang dipilih (bukan bulan SPP pada form). Baseline demo 2026/2027 tidak membuat tagihan Daftar Ulang tahun sebelumnya.
 - Biaya Lain memakai tagihan yang diterbitkan dari master. Tabungan masuk/keluar adalah jurnal terpisah, bukan komponen penerimaan pembayaran sekolah.
 - Riwayat kelas memakai `siswa_tahun_ajaran`; laporan dan struk membaca snapshot/tagihan terkait agar perubahan tarif atau kelas berikutnya tidak menulis ulang histori.
+- Surat Laporan ke Kepala Sekolah menampilkan total tunggakan per rombel dan total pilihan, tanpa nama atau NIS siswa. Cakupan dapat dipilih untuk satu rombel, seluruh rombel dalam satu tingkat kelas, atau seluruh kelas; status siswa Aktif/Arsip/Semua tetap dapat dipilih. PDF dan Excel memakai rekap yang sama.
 
 ## Hak akses
 

@@ -14,6 +14,11 @@ try{
         unit_set_context($koneksi,$unitId);
         letter_assert(str_contains(report_principal_letter_html([],$today),report_e(unit_school_name($unitId))),
             "Identitas sekolah pada surat unit {$unitId} salah.");
+        $unitFilters=report_filters($koneksi,['siswa_status'=>'active']);
+        $unitStudents=report_student_debt_groups($koneksi,$unitFilters,'',[],$today);
+        $unitRombels=report_principal_debt_data($koneksi,$unitFilters)['rows'];
+        letter_assert(array_sum(array_column($unitRombels,'jumlah_siswa'))===count($unitStudents),"Jumlah siswa rekap unit {$unitId} salah.");
+        letter_assert(abs(array_sum(array_column($unitRombels,'total_tunggakan'))-array_sum(array_column($unitStudents,'total_tunggakan')))<.001,"Total rekap unit {$unitId} salah.");
     }
     unit_set_context($koneksi,1);
     $filters=report_filters($koneksi,['siswa_status'=>'active']);
@@ -23,6 +28,22 @@ try{
     $parentTotal=array_sum(array_column($students,'total_tunggakan'));
     $principalTotal=array_sum(array_column($principal,'total_tunggakan'));
     letter_assert(abs($parentTotal-$principalTotal)<.001,'Total kedua surat tidak sama.');
+    $principalRows=report_principal_debt_data($koneksi,$filters)['rows'];
+    letter_assert(array_sum(array_column($principalRows,'jumlah_siswa'))===count($students),'Jumlah siswa pada rekap rombel salah.');
+    letter_assert(abs(array_sum(array_column($principalRows,'total_tunggakan'))-$parentTotal)<.001,'Total rekap rombel salah.');
+    $oldSearchFilters=$filters;$oldSearchFilters['q']=$students[0]['nis']??'tidak-ada';
+    letter_assert(report_principal_debt_data($koneksi,$oldSearchFilters)['rows']===$principalRows,'Parameter pencarian siswa lama memengaruhi total surat kepala sekolah.');
+    if($students){
+        $classFilters=$filters;$classFilters['kelas']='rombel:'.$students[0]['master_kelas_id'];
+        $classRows=report_principal_debt_data($koneksi,$classFilters)['rows'];
+        letter_assert(count($classRows)===1&&$classRows[0]['master_kelas_id']===$students[0]['master_kelas_id'],'Pilihan satu rombel salah.');
+        $regularStudent=null;
+        foreach($students as $candidate)if($candidate['tingkat']>=1&&$candidate['tingkat']<=12){$regularStudent=$candidate;break;}
+        if($regularStudent){
+            $levelFilters=$filters;$levelFilters['kelas']='tingkat:'.$regularStudent['tingkat'];
+            foreach(report_principal_debt_data($koneksi,$levelFilters)['rows'] as $row)letter_assert($row['tingkat']===$regularStudent['tingkat'],'Pilihan seluruh rombel satu kelas salah.');
+        }
+    }
     foreach($students as $student){
         $detailTotal=0.0;
         foreach($student['items'] as $item){
@@ -69,13 +90,17 @@ try{
         $stressPages=$pdf->getCanvas()->get_page_count();
         letter_assert($stressPages===150,'PDF 150 siswa harus terpisah tepat 150 lembar, hasil: '.$stressPages.'.');
         $principalPdf=new \Dompdf\Dompdf(new \Dompdf\Options());
-        $principalPdf->loadHtml(report_principal_letter_html($many,$today),'UTF-8');
+        $manyRombels=[];
+        foreach($many as $index=>$student)$manyRombels[]=['kelas'=>'Rombel Uji '.($index+1),'jumlah_siswa'=>1,'total_tunggakan'=>$student['total_tunggakan']];
+        $principalPdf->loadHtml(report_principal_letter_html($manyRombels,$today),'UTF-8');
         $principalPdf->setPaper('A4','portrait');$principalPdf->render();
         letter_assert($principalPdf->getCanvas()->get_page_count()>=2,'Rekap kepala sekolah 150 siswa tidak terbagi halaman.');
         $stressInfo='INFO: PDF 150 siswa menjadi 150 lembar; '.round(memory_get_peak_usage(true)/1048576).' MB puncak memori.'.PHP_EOL;
     }
-    $principalHtml=report_principal_letter_html($principal,$today);
+    $principalHtml=report_principal_letter_html($principalRows,$today);
     letter_assert(str_contains($principalHtml,report_money($principalTotal)),'Total surat kepala sekolah tidak cocok.');
+    letter_assert(str_contains($principalHtml,'Siswa Menunggak')&&!str_contains($principalHtml,'Nama Siswa / NIS'),'Surat kepala sekolah masih merinci siswa.');
+    if($students)letter_assert(!str_contains($principalHtml,report_e($students[0]['nis'])),'NIS siswa muncul pada surat kepala sekolah.');
     if(is_file(__DIR__.'/../vendor/autoload.php')){
         $pdf=new \Dompdf\Dompdf(new \Dompdf\Options());
         $pdf->loadHtml($principalHtml,'UTF-8');$pdf->setPaper('A4','portrait');$pdf->render();

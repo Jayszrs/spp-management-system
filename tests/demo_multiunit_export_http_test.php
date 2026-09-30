@@ -64,8 +64,8 @@ foreach ([1,2,3,0] as $unitId) {
         if ($template === 'tunggakan-siswa') {
             [$pageHeaders,$page] = export_fixture_get($base.'/laporan/template.php?'.http_build_query($source), $sessionId);
             export_fixture_assert(str_contains($pageHeaders[0] ?? '', '200')
-                && str_contains($page, 'principal-print-selected')
-                && str_contains($page, 'Cetak Semua Rombel')
+                && str_contains($page, 'Pratinjau Surat Pilihan')
+                && str_contains($page, 'Seluruh Rombel Kelas')
                 && str_contains($page, 'Total Tunggakan'),
                 'Daftar surat kepala sekolah '.unit_label($unitId).' tidak lengkap.');
             preg_match('/<iframe[^>]+srcdoc="([^"]*)"/s', $preview, $match);

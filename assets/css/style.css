@@ -12659,10 +12659,11 @@ html body .report-template-shell .report-global-filter-form.report-template-filt
   }
 }
 
-/* Principal letter list follows the parent letter selection pattern. */
+/* Principal letter summarizes debt by class without student details. */
 .principal-list-shell .principal-letter-filters {
-  grid-template-columns: minmax(150px, 1fr) minmax(140px, .8fr) minmax(230px, 1.45fr) auto;
+  grid-template-columns: minmax(240px, 1fr) minmax(160px, .7fr) auto;
 }
+.principal-list-shell .letter-total strong { font-size: clamp(18px, 2vw, 26px); overflow-wrap: anywhere; }
 .principal-list-shell .principal-filter-buttons {
   display: flex;
   gap: 8px;
@@ -12718,9 +12719,13 @@ html body .report-template-shell .report-global-filter-form.report-template-filt
   line-height: 1.25;
 }
 .principal-list-shell .principal-student-table .principal-debt-total { color: var(--accent); }
+.principal-list-shell .principal-summary-table { min-width: 560px; }
+.principal-list-shell .principal-summary-table th:first-child { width: 40%; }
+.principal-list-shell .principal-summary-table :is(th, td):nth-child(2) { width: 25%; text-align: center; }
+.principal-list-shell .principal-summary-table :is(th, td):nth-child(3) { width: 35%; text-align: right; font-variant-numeric: tabular-nums; }
+.principal-list-shell .principal-summary-table tfoot th { font-weight: 800; }
 @media (max-width: 1100px) {
   .principal-list-shell .principal-letter-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .principal-list-shell .principal-letter-filters .letter-search { grid-column: auto; }
   .principal-list-shell .principal-filter-buttons { justify-content: flex-start; }
 }
 @media (max-width: 700px) {

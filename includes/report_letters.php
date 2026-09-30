@@ -46,22 +46,24 @@ function report_parent_letters_html(array $students,string $today): string {
     return $html.'</body></html>';
 }
 
-function report_principal_letter_html(array $students,string $today): string {
-    $logo=report_letter_logo();$total=array_sum(array_map(static fn($student)=>(float)$student['total_tunggakan'],$students));
-    $principalCss='.principal-letter{font-size:12px;line-height:1.65}.principal-letter .kop{margin-bottom:22px}.principal-letter .date{margin:10px 0 26px}.principal-letter .recipient{margin-bottom:24px;line-height:1.7}.principal-letter .subject{margin:18px 0 24px;font-size:14px}.principal-letter p{margin:0 0 14px}.principal-letter .body-copy{margin-bottom:20px}.principal-letter .closing{margin-top:20px}.principal-letter .signature{margin-top:32px}.principal-debt{width:100%!important;table-layout:fixed;border-collapse:collapse;margin:16px 0 20px;font-size:11px;line-height:1.5}.principal-debt th,.principal-debt td{padding:8px 9px;overflow-wrap:anywhere}.principal-debt th:last-child,.principal-debt td:last-child{white-space:nowrap;text-align:right}.principal-debt thead th,.principal-debt thead th.money{text-align:center}.principal-debt tbody td:first-child,.principal-debt tbody td:nth-child(3){text-align:center}@media screen{body{width:100%;max-width:794px;min-height:1122px;margin:0 auto;padding:18mm 17mm 16mm;background:#fff}}@media screen and (max-width:620px){body{min-height:0;padding:24px 18px}.principal-letter{font-size:11px}.principal-debt{font-size:10px}.principal-debt th,.principal-debt td{padding:6px 5px}}';
+function report_principal_letter_html(array $rombels,string $today,string $scopeLabel='Seluruh Kelas/Rombel'): string {
+    $logo=report_letter_logo();
+    $total=array_sum(array_column($rombels,'total_tunggakan'));
+    $studentCount=array_sum(array_column($rombels,'jumlah_siswa'));
+    $principalCss='.principal-letter{font-size:12px;line-height:1.65}.principal-letter .kop{margin-bottom:22px}.principal-letter .date{margin:10px 0 26px}.principal-letter .recipient{margin-bottom:24px;line-height:1.7}.principal-letter .subject{margin:18px 0 24px;font-size:14px}.principal-letter p{margin:0 0 14px}.principal-letter .body-copy{margin-bottom:20px}.principal-letter .closing{margin-top:20px}.principal-letter .signature{margin-top:32px}.principal-debt{width:100%!important;table-layout:fixed;border-collapse:collapse;margin:16px 0 20px;font-size:11px;line-height:1.5}.principal-debt th,.principal-debt td{padding:8px 9px;overflow-wrap:anywhere}.principal-debt th:last-child,.principal-debt td:last-child{white-space:nowrap;text-align:right}.principal-debt thead th,.principal-debt thead th.money{text-align:center}.principal-debt tbody td:first-child,.principal-debt tbody td:nth-child(2){text-align:center}@media screen{body{width:100%;max-width:794px;min-height:1122px;margin:0 auto;padding:18mm 17mm 16mm;background:#fff}}@media screen and (max-width:620px){body{min-height:0;padding:24px 18px}.principal-letter{font-size:11px}.principal-debt{font-size:10px}.principal-debt th,.principal-debt td{padding:6px 5px}}';
     $html='<!doctype html><html lang="id"><head><meta charset="utf-8"><title>Surat Tunggakan Kepala Sekolah</title><style>'.report_letter_css().$principalCss.'</style></head><body><section class="principal-letter">';
     $html.=report_letter_header($logo).'<div class="date">Tambun Selatan, '.report_e(report_date_label($today)).'</div>';
     $schoolName=function_exists('unit_school_name')?unit_school_name(report_letter_unit_id()):"SEKOLAH DASAR AL-QUR'AN (SDA) MUTIARA HIKMAH";
     $html.='<div class="recipient">Yth. Kepala Sekolah<br>'.report_e($schoolName).'<br>di tempat</div>';
     $html.='<div class="subject">Laporan Tunggakan Siswa</div>';
-    $html.='<p>Assalamu’alaikum warahmatullahi wabarakatuh.</p><p class="body-copy">Bersama ini kami sampaikan rekap tunggakan siswa berdasarkan catatan pembayaran sekolah sampai '.report_e(report_date_label($today)).'.</p>';
-    $html.='<table class="debt principal-debt"><colgroup><col style="width:6%"><col style="width:50%"><col style="width:14%"><col style="width:30%"></colgroup><thead><tr><th>No.</th><th>Nama Siswa / NIS</th><th>Kelas</th><th class="money">Total Tunggakan</th></tr></thead><tbody>';
-    foreach($students as $index=>$student){
-        $html.='<tr><td>'.($index+1).'</td><td>'.report_e($student['nama']).'<br><span class="muted">'.report_e($student['nis']).'</span></td><td>'.report_e($student['kelas']).'</td><td class="money">'.report_e(report_money($student['total_tunggakan'])).'</td></tr>';
+    $html.='<p>Assalamu’alaikum warahmatullahi wabarakatuh.</p><p class="body-copy">Bersama ini kami sampaikan total tunggakan untuk '.report_e($scopeLabel).' berdasarkan catatan pembayaran sekolah sampai '.report_e(report_date_label($today)).'.</p>';
+    $html.='<table class="debt principal-debt"><colgroup><col style="width:9%"><col style="width:35%"><col style="width:22%"><col style="width:34%"></colgroup><thead><tr><th>No.</th><th>Kelas/Rombel</th><th>Siswa Menunggak</th><th class="money">Total Tunggakan</th></tr></thead><tbody>';
+    foreach($rombels as $index=>$rombel){
+        $html.='<tr><td>'.($index+1).'</td><td>'.report_e($rombel['kelas']).'</td><td>'.number_format((int)$rombel['jumlah_siswa']).'</td><td class="money">'.report_e(report_money($rombel['total_tunggakan'])).'</td></tr>';
     }
-    if(!$students)$html.='<tr><td colspan="4">Tidak ada tunggakan pada filter ini.</td></tr>';
-    $html.='</tbody><tfoot><tr><td colspan="3">Total '.count($students).' siswa</td><td class="money">'.report_e(report_money($total)).'</td></tr></tfoot></table>';
-    $html.='<p class="closing">Laporan ini kami sampaikan sebagai bahan pemantauan dan tindak lanjut. Rincian tagihan setiap siswa dapat dilihat pada Riwayat Tagihan Siswa.</p>';
+    if(!$rombels)$html.='<tr><td colspan="4">Tidak ada tunggakan pada pilihan ini.</td></tr>';
+    $html.='</tbody><tfoot><tr><td colspan="3">Total '.report_e($scopeLabel).' ('.number_format($studentCount).' siswa menunggak)</td><td class="money">'.report_e(report_money($total)).'</td></tr></tfoot></table>';
+    $html.='<p class="closing">Laporan ini kami sampaikan sebagai bahan pemantauan dan tindak lanjut.</p>';
     $html.='<p>Demikian laporan ini kami sampaikan. Terima kasih atas perhatian Bapak/Ibu.</p><p>Wassalamu’alaikum warahmatullahi wabarakatuh.</p>';
     $html.='<div class="signature">Hormat kami,<div class="space"></div>(________________________)</div></section></body></html>';
     return $html;

@@ -38,7 +38,7 @@ requireRole(['admin','bendahara','kasir']);
           </article>
           <article class="report-template-card">
             <div class="report-template-card-head"><div class="report-template-icon" aria-hidden="true">KS</div><span class="report-template-type">SURAT</span></div>
-            <div class="report-template-copy"><h3>Cetak Surat ke Kepala Sekolah</h3><p>Lihat rekap tunggakan per siswa, atur filter, lalu buka surat PDF atau unduh data Excel.</p></div>
+            <div class="report-template-copy"><h3>Cetak Surat ke Kepala Sekolah</h3><p>Pilih rombel, seluruh rombel pada satu kelas, atau seluruh kelas untuk melihat total tunggakan dan membuka surat PDF atau Excel.</p></div>
             <a class="report-template-link" href="template.php?template=tunggakan-siswa"><span>Buka surat</span><span aria-hidden="true">&rarr;</span></a>
           </article>
         </div>
