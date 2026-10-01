@@ -24,8 +24,18 @@ function mspp_read_year(mysqli $db, string $label): array {
             'label'=>$label, 'status'=>'draft'];
 }
 
-$selectedYear=trim((string)($_GET['tahun']??$_POST['tahun_ajaran']??du_current_academic_year()));
-try{$selectedYear=du_normalize_academic_year($selectedYear);}catch(Throwable $e){$selectedYear=du_current_academic_year();}
+$isPost = $_SERVER['REQUEST_METHOD'] === 'POST';
+$rawYear = $isPost ? ($_POST['tahun_ajaran'] ?? null) : ($_GET['tahun'] ?? du_current_academic_year());
+$selectedYear = is_string($rawYear) ? trim($rawYear) : '';
+try {
+    $selectedYear=du_normalize_academic_year($selectedYear);
+} catch (Throwable $e) {
+    if ($isPost) {
+        $_SESSION['flash']=['type'=>'error','msg'=>'Tahun ajaran pada formulir tidak valid. Muat ulang halaman.'];
+        mspp_redirect(du_current_academic_year());
+    }
+    $selectedYear=du_current_academic_year();
+}
 $master=mspp_read_year($koneksi,$selectedYear);$masterId=(int)$master['id'];
 $flash=$_SESSION['flash']??null;unset($_SESSION['flash']);
 
