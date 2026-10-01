@@ -13,10 +13,20 @@ function mspp_e($value): string { return htmlspecialchars((string)$value,ENT_QUO
 function mspp_money($value): string { return number_format((float)$value,0,',','.'); }
 function mspp_amount($value): float { return (float)str_replace(['.',','],['','.'],trim((string)$value)); }
 function mspp_redirect(string $year): void { header('Location: master_spp.php?tahun='.urlencode($year));exit; }
+function mspp_read_year(mysqli $db, string $label): array {
+    $stmt = $db->prepare('SELECT mst.id,mst.status,ta.id tahun_ajaran_id,ta.label
+        FROM tahun_ajaran ta LEFT JOIN master_spp_tahun mst ON mst.tahun_ajaran_id=ta.id
+        WHERE ta.label=? LIMIT 1');
+    $stmt->bind_param('s', $label); $stmt->execute();
+    $row = $stmt->get_result()->fetch_assoc(); $stmt->close();
+    return $row && (int)($row['id'] ?? 0) > 0
+        ? $row : ['id'=>0, 'tahun_ajaran_id'=>(int)($row['tahun_ajaran_id'] ?? 0),
+            'label'=>$label, 'status'=>'draft'];
+}
 
 $selectedYear=trim((string)($_GET['tahun']??$_POST['tahun_ajaran']??du_current_academic_year()));
 try{$selectedYear=du_normalize_academic_year($selectedYear);}catch(Throwable $e){$selectedYear=du_current_academic_year();}
-$master=spp_master_ensure_year($koneksi,$selectedYear);$masterId=(int)$master['id'];
+$master=mspp_read_year($koneksi,$selectedYear);$masterId=(int)$master['id'];
 $flash=$_SESSION['flash']??null;unset($_SESSION['flash']);
 
 if($_SERVER['REQUEST_METHOD']==='POST'){
@@ -65,7 +75,7 @@ if($_SERVER['REQUEST_METHOD']==='POST'){
     mspp_redirect($selectedYear);
 }
 
-$master=spp_master_ensure_year($koneksi,$selectedYear);$masterId=(int)$master['id'];$rates=spp_master_rates($koneksi,$masterId);[$firstLevel,$lastLevel]=unit_level_bounds();
+$master=mspp_read_year($koneksi,$selectedYear);$masterId=(int)$master['id'];$rates=spp_master_rates($koneksi,$masterId);[$firstLevel,$lastLevel]=unit_level_bounds();
 $years=[];$currentStart=(int)substr(du_current_academic_year(),0,4);for($offset=-2;$offset<=3;$offset++){$start=$currentStart+$offset;$label=$start.'/'.($start+1);$years[$label]=$label;}$res=$koneksi->query('SELECT label FROM tahun_ajaran ORDER BY label DESC');while($r=$res->fetch_assoc())$years[$r['label']]=$r['label'];krsort($years);
 $stmt=$koneksi->prepare("SELECT sta.no_induk,s.NAMA,s.NO_induk_diknas,sta.kelas,sta.master_kelas_id,sta.kelas_rombel_snapshot,sta.komite_mulai_bulan,s.potongan_spp_persen,s.is_active,
  COUNT(ts.id) bill_count,SUM(CASE WHEN ts.status='open' THEN 1 ELSE 0 END) open_count
