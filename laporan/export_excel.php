@@ -24,6 +24,11 @@ if ($filter_tanggal_awal !== '' && $filter_tanggal_akhir !== '' && strtotime($fi
     [$filter_tanggal_awal, $filter_tanggal_akhir] = [$filter_tanggal_akhir, $filter_tanggal_awal];
 }
 $download = isset($_GET['download']) && $_GET['download'] === '1';
+$excelText = static function ($value) use ($download): string {
+    $text = (string)$value;
+    if ($download && preg_match('/^[\p{Z}\x00-\x20]*[=+\-@]/u', $text)) $text = "'" . $text;
+    return htmlspecialchars($text, ENT_QUOTES, 'UTF-8');
+};
 
 $bln_names = ['1'=>'Januari','2'=>'Februari','3'=>'Maret','4'=>'April','5'=>'Mei','6'=>'Juni',
                '7'=>'Juli','8'=>'Agustus','9'=>'September','10'=>'Oktober','11'=>'November','12'=>'Desember'];
@@ -60,7 +65,9 @@ if ($filter_tanggal_awal !== '' && $filter_tanggal_akhir !== '') {
 
 // Ambil data pembayaran
 $stmt = $koneksi->prepare("
-    SELECT s.NO_INDUK, s.NO_induk_diknas, s.NAMA, s.KELAS, b.BULAN, b.TAHUN,
+    SELECT s.NO_INDUK, s.NO_induk_diknas, s.NAMA,
+           COALESCE(NULLIF(b.kelas_rombel_snapshot,''),NULLIF(b.KELAS,''),s.KELAS) AS KELAS,
+           b.BULAN, b.TAHUN,
            b.U_PANGKAL, b.U_PSB, b.U_SPP, b.U_TITIPAN_SPP, b.U_KOMITE,
            b.sistem_pembayaran, b.total_jumlah, b.TGL_BYR
     FROM bayar b JOIN siswa s ON s.NO_INDUK = b.NO_INDUK
@@ -74,7 +81,8 @@ $stmt->close();
 
 $stmtKomponen = $koneksi->prepare("
     SELECT SUM(U_PANGKAL) AS pangkal, SUM(U_PSB) AS psb,
-           SUM(U_SPP) AS spp, SUM(U_TITIPAN_SPP) AS titipan_spp, SUM(U_KOMITE) AS komite
+           SUM(U_SPP) AS spp, SUM(U_TITIPAN_SPP) AS titipan_spp,
+           SUM(U_KOMITE) AS komite, SUM(potong_spp) AS potongan_spp
     FROM bayar b JOIN siswa s ON s.NO_INDUK = b.NO_INDUK
     WHERE b.TGL_BYR >= ? AND b.TGL_BYR < ? $studentWhere
 ");
@@ -106,13 +114,27 @@ $stmtBiayaLain->execute();
 $komponen_rows = array_merge($komponen_rows, $stmtBiayaLain->get_result()->fetch_all(MYSQLI_ASSOC));
 $stmtBiayaLain->close();
 
+$stmtDu = $koneksi->prepare("
+    SELECT COALESCE(SUM(d.jumlah),0) AS total
+    FROM bayar_du d JOIN bayar b ON b.id=d.bayar_id
+    JOIN siswa s ON s.NO_INDUK=b.NO_INDUK
+    WHERE b.TGL_BYR >= ? AND b.TGL_BYR < ? $studentWhere
+");
+$bind($stmtDu, 'ss', [$period_start, $period_end]);
+$stmtDu->execute();
+$totalDu = (float)($stmtDu->get_result()->fetch_assoc()['total'] ?? 0);
+$stmtDu->close();
+if ($totalDu > 0.001) $komponen_rows[] = ['nama'=>'Daftar Ulang','total'=>$totalDu];
+$totalDiscount = (float)($komponenTetap['potongan_spp'] ?? 0);
+if ($totalDiscount > 0.001) $komponen_rows[] = ['nama'=>'Potongan SPP','total'=>-$totalDiscount];
+
 // Ambil data tabungan periode ini
 $stmt2 = $koneksi->prepare("
-    SELECT tm.NO_INDUK, s.NO_induk_diknas, s.NAMA, s.KELAS, tm.TANGGAL, tm.MASUK as nominal, 'masuk' as jenis
+    SELECT tm.NO_INDUK, s.NO_induk_diknas, s.NAMA, s.KELAS, tm.TANGGAL, tm.MASUK as nominal, 'masuk' as jenis, tm.keterangan
     FROM transaksi_m tm JOIN siswa s ON s.NO_INDUK = tm.NO_INDUK
     WHERE tm.TANGGAL >= ? AND tm.TANGGAL < ? $studentWhere
     UNION ALL
-    SELECT tk.NO_INDUK, s.NO_induk_diknas, s.NAMA, s.KELAS, tk.TANGGAL, tk.KELUAR as nominal, 'keluar' as jenis
+    SELECT tk.NO_INDUK, s.NO_induk_diknas, s.NAMA, s.KELAS, tk.TANGGAL, tk.KELUAR as nominal, 'keluar' as jenis, tk.keterangan
     FROM transaksi_k tk JOIN siswa s ON s.NO_INDUK = tk.NO_INDUK
     WHERE tk.TANGGAL >= ? AND tk.TANGGAL < ? $studentWhere
     ORDER BY TANGGAL DESC
@@ -415,10 +437,10 @@ ob_start();
   ?>
   <tr>
     <td><?= $i+1 ?></td>
-    <td><?= htmlspecialchars($r['NO_INDUK']) ?><?= !empty($r['NO_induk_diknas']) ? '<br>Diknas: ' . htmlspecialchars($r['NO_induk_diknas']) : '' ?></td>
-    <td><?= htmlspecialchars($r['NAMA']) ?></td>
-    <td><?= htmlspecialchars($r['KELAS']) ?></td>
-    <td><?= htmlspecialchars($r['BULAN']) ?> <?= htmlspecialchars($r['TAHUN']) ?><br>Sistem: <?= htmlspecialchars($r['sistem_pembayaran'] ?? 'VA') ?></td>
+    <td><?= $excelText($r['NO_INDUK']) ?><?= !empty($r['NO_induk_diknas']) ? '<br>Diknas: ' . $excelText($r['NO_induk_diknas']) : '' ?></td>
+    <td><?= $excelText($r['NAMA']) ?></td>
+    <td><?= $excelText($r['KELAS']) ?></td>
+    <td><?= $excelText($r['BULAN']) ?> <?= $excelText($r['TAHUN']) ?><br>Sistem: <?= $excelText($r['sistem_pembayaran'] ?? 'VA') ?></td>
     <td><?= number_format((float)$r['total_jumlah'],0,',','.') ?></td>
     <td><?= date('d M Y', strtotime($r['TGL_BYR'])) ?></td>
   </tr>
@@ -436,13 +458,13 @@ ob_start();
 <div class="table-card">
 <div class="table-scroll">
 <table>
-  <tr class="header-row"><td colspan="7">REKAP TABUNGAN — <?= strtoupper($period_label) ?></td></tr>
+  <tr class="header-row"><td colspan="8">REKAP TABUNGAN — <?= strtoupper($period_label) ?></td></tr>
   <tr>
     <th>No</th><th>No. Induk</th><th>Nama Siswa</th><th>Kelas</th>
-    <th>Tanggal</th><th>Jenis</th><th>Nominal (Rp)</th>
+    <th>Tanggal</th><th>Jenis</th><th>Nominal (Rp)</th><th>Keterangan</th>
   </tr>
   <?php if (empty($tab_rows)): ?>
-  <tr><td colspan="7" class="empty-row">Belum ada transaksi tabungan pada periode ini.</td></tr>
+  <tr><td colspan="8" class="empty-row">Belum ada transaksi tabungan pada periode ini.</td></tr>
   <?php endif; ?>
   <?php
   $total_masuk_tab = 0;
@@ -453,16 +475,17 @@ ob_start();
   ?>
   <tr>
     <td><?= $i+1 ?></td>
-    <td><?= htmlspecialchars($t['NO_INDUK']) ?><?= !empty($t['NO_induk_diknas']) ? '<br>Diknas: ' . htmlspecialchars($t['NO_induk_diknas']) : '' ?></td>
-    <td><?= htmlspecialchars($t['NAMA']) ?></td>
-    <td><?= htmlspecialchars($t['KELAS']) ?></td>
+    <td><?= $excelText($t['NO_INDUK']) ?><?= !empty($t['NO_induk_diknas']) ? '<br>Diknas: ' . $excelText($t['NO_induk_diknas']) : '' ?></td>
+    <td><?= $excelText($t['NAMA']) ?></td>
+    <td><?= $excelText($t['KELAS']) ?></td>
     <td><?= date('d M Y H:i', strtotime($t['TANGGAL'])) ?></td>
     <td><?= $t['jenis'] === 'masuk' ? '↑ Masuk' : '↓ Keluar' ?></td>
     <td><?= number_format((float)$t['nominal'],0,',','.') ?></td>
+    <td><?= $excelText($t['keterangan'] ?? '') ?></td>
   </tr>
   <?php endforeach; ?>
-  <tr class="total-row"><td colspan="6">Total Masuk</td><td><?= number_format($total_masuk_tab,0,',','.') ?></td></tr>
-  <tr class="total-row"><td colspan="6">Total Keluar</td><td><?= number_format($total_keluar_tab,0,',','.') ?></td></tr>
+  <tr class="total-row"><td colspan="6">Total Masuk</td><td><?= number_format($total_masuk_tab,0,',','.') ?></td><td></td></tr>
+  <tr class="total-row"><td colspan="6">Total Keluar</td><td><?= number_format($total_keluar_tab,0,',','.') ?></td><td></td></tr>
 </table>
 </div>
 </div>

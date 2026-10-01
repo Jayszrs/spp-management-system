@@ -248,12 +248,19 @@ if ($editId > 0) {
 }
 
 $masterList = $koneksi->query("
-    SELECT m.*, COUNT(DISTINCT d.id) AS jumlah_pemakaian, COUNT(DISTINCT t.id) AS jumlah_tagihan,
-           COALESCE(SUM(DISTINCT CASE WHEN t.id IS NOT NULL THEN t.nominal_tagihan ELSE 0 END),0) AS nominal_tagihan
+    SELECT m.*, COALESCE(d.jumlah_pemakaian,0) AS jumlah_pemakaian,
+           COALESCE(t.jumlah_tagihan,0) AS jumlah_tagihan,
+           COALESCE(t.nominal_tagihan,0) AS nominal_tagihan
     FROM master_biaya_lain m
-    LEFT JOIN bayar_biaya_lain d ON d.master_biaya_lain_id = m.id
-    LEFT JOIN tagihan_biaya_lain t ON t.master_biaya_lain_id = m.id
-    GROUP BY m.id
+    LEFT JOIN (
+        SELECT master_biaya_lain_id, COUNT(*) AS jumlah_pemakaian
+        FROM bayar_biaya_lain GROUP BY master_biaya_lain_id
+    ) d ON d.master_biaya_lain_id = m.id
+    LEFT JOIN (
+        SELECT master_biaya_lain_id, COUNT(*) AS jumlah_tagihan,
+               SUM(nominal_tagihan) AS nominal_tagihan
+        FROM tagihan_biaya_lain GROUP BY master_biaya_lain_id
+    ) t ON t.master_biaya_lain_id = m.id
     ORDER BY m.is_active DESC, m.nama ASC
 ");
 $activeMasters = $koneksi->query("SELECT id,nama,nominal FROM master_biaya_lain WHERE is_active=1 ORDER BY nama")->fetch_all(MYSQLI_ASSOC);

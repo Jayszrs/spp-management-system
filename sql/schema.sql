@@ -24,6 +24,18 @@ CREATE TABLE IF NOT EXISTS `admin` (
 -- Akun awal dibuat oleh bootstrap_unit_accounts.php sesudah migrasi multiunit.
 -- Skema ini hanya untuk instalasi baru; jangan jalankan pada database aktif.
 
+-- Kunci idempotensi untuk input pembayaran dan mutasi tabungan.
+CREATE TABLE `keuangan_request` (
+  `request_key` CHAR(32) CHARACTER SET ascii COLLATE ascii_bin NOT NULL PRIMARY KEY,
+  `unit_id` TINYINT UNSIGNED NOT NULL,
+  `aksi` ENUM('pembayaran','tabungan_masuk','tabungan_keluar','titipan_pengembalian') NOT NULL,
+  `operator_id` INT NOT NULL,
+  `referensi_id` BIGINT NULL,
+  `dibuat_pada` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  KEY `idx_keuangan_request_unit_waktu` (`unit_id`,`dibuat_pada`),
+  KEY `idx_keuangan_request_operator` (`operator_id`,`dibuat_pada`)
+) ENGINE=InnoDB;
+
 -- Master kelas/rombel. Data lama menggunakan placeholder per tingkat sampai
 -- admin memindahkan siswa ke rombel sebenarnya (1A, 1B, dan seterusnya).
 DROP TABLE IF EXISTS `master_kelas`;
@@ -535,6 +547,7 @@ CREATE TABLE `transaksi_m` (
   `MASUK`     DOUBLE DEFAULT 0,
   `KELUAR`    DOUBLE DEFAULT 0,
   `user_id`   VARCHAR(100) DEFAULT NULL,
+  `keterangan` VARCHAR(255) DEFAULT NULL,
   UNIQUE KEY `uk_transaksi_m_bayar_id` (`bayar_id`),
   KEY `idx_transaksi_m_tanggal_user` (`TANGGAL`,`user_id`),
   KEY `idx_transaksi_m_siswa_tanggal` (`NO_INDUK`,`TANGGAL`),
@@ -552,6 +565,7 @@ CREATE TABLE `transaksi_k` (
   `MASUK`     DOUBLE DEFAULT 0,
   `KELUAR`    DOUBLE DEFAULT 0,
   `user_id`   VARCHAR(100) DEFAULT NULL,
+  `keterangan` VARCHAR(255) DEFAULT NULL,
   KEY `idx_transaksi_k_tanggal_user` (`TANGGAL`,`user_id`),
   KEY `idx_transaksi_k_siswa_tanggal` (`NO_INDUK`,`TANGGAL`),
   FOREIGN KEY (`NO_INDUK`) REFERENCES `siswa`(`NO_INDUK`) ON DELETE CASCADE ON UPDATE CASCADE

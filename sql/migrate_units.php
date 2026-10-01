@@ -60,6 +60,7 @@ $koneksi->query('ALTER TABLE siswa DROP INDEX uk_siswa_no_induk_diknas, ADD UNIQ
 
 foreach ([
     'master_kelas' => 'chk_master_kelas_tingkat',
+    'master_spp_tarif' => 'chk_master_spp_tingkat',
     'siswa' => 'chk_siswa_kelas_sd',
     'siswa_tahun_ajaran' => 'chk_penempatan_kelas_sd',
     'tagihan_daftar_ulang' => 'chk_tagihan_du_kelas',
@@ -132,6 +133,7 @@ foreach ($tables as $table) {
 
 $gradeColumns = [
     'master_kelas_data' => 'tingkat', 'siswa_data' => 'KELAS',
+    'master_spp_tarif_data' => 'tingkat',
     'siswa_tahun_ajaran_data' => 'kelas',
     'tagihan_daftar_ulang_data' => 'kelas_snapshot',
     'tagihan_tahunan_siswa_data' => 'kelas_snapshot',
@@ -146,7 +148,8 @@ foreach ($tables as $table) {
     }
     if (isset($gradeColumns[$base])) {
         $column = $gradeColumns[$base];
-        $isEntryClass = $base === 'master_kelas_data' ? "NEW.`{$column}`<>0" : "NEW.`{$column}` NOT IN ('0','PSB')";
+        $isEntryClass = in_array($base, ['master_kelas_data', 'master_spp_tarif_data'], true)
+            ? "NEW.`{$column}`<>0" : "NEW.`{$column}` NOT IN ('0','PSB')";
         $conditions[] = "IF {$isEntryClass} AND NOT EXISTS (SELECT 1 FROM unit_sekolah WHERE id=NEW.unit_id AND CAST(NEW.`{$column}` AS UNSIGNED) BETWEEN tingkat_awal AND tingkat_akhir AND CAST(NEW.`{$column}` AS CHAR)=CAST(CAST(NEW.`{$column}` AS UNSIGNED) AS CHAR)) THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Tingkat kelas tidak sesuai unit'; END IF;";
     }
     $checks = implode(' ', $conditions);

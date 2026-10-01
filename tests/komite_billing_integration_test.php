@@ -38,7 +38,7 @@ try {
     $stmt->bind_param('ss',$nis,$level);$stmt->execute();$paymentId=(int)$koneksi->insert_id;$stmt->close();
     komite_save_payment($koneksi,$paymentId,$bill,15000);
     komite_test_assert(komite_pair_gap($koneksi,$nis,'10','2195')==='','Komite pelengkap tidak menutup pasangan SPP.');
-    $rate=komite_sync_student_rate($koneksi,$nis,20000);
+    $rate=komite_sync_student_rate($koneksi,$nis,20000,$placementId);
     komite_test_assert($rate['updated']===8,'Perubahan tarif tidak hanya memperbarui tagihan belum dibayar.');
     komite_test_assert((float)komite_bill($koneksi,$nis,'10','2195')['nominal_tagihan']===15000.0,'Tagihan yang sudah dibayar berubah.');
     komite_test_assert((float)komite_bill($koneksi,$nis,'11','2195')['nominal_tagihan']===20000.0,'Tarif baru tidak diterapkan.');
@@ -49,11 +49,13 @@ try {
     komite_test_reject(fn()=>komite_validate_amount($koneksi,$nis,'11','2195',0,true),'SPP diterima tanpa Komite bulan yang sama.');
     $koneksi->query("UPDATE siswa_tahun_ajaran SET status='lulus' WHERE id=$placementId");
     $koneksi->query("UPDATE siswa SET is_active=0 WHERE NO_INDUK='$nis'");
+    $koneksi->query("DELETE FROM tagihan_komite WHERE no_induk='$nis' AND bulan='12' AND tahun='2195'");
     komite_test_assert(komite_sync_placement($koneksi,$placementId)===0,'Lulusan mendapat tagihan Komite baru.');
+    komite_test_assert(komite_bill($koneksi,$nis,'12','2195')===null,'Tagihan Komite yang tidak terbit dibuat setelah lulus.');
     komite_test_assert((float)komite_bill($koneksi,$nis,'11','2195')['remaining']===20000.0,'Tunggakan Komite lulusan hilang.');
     komite_validate_amount($koneksi,$nis,'11','2195',20000,false);
-    komite_sync_student_rate($koneksi,$nis,0);
-    komite_validate_amount($koneksi,$nis,'11','2195',0,true);
+    komite_test_reject(fn()=>komite_sync_student_rate($koneksi,$nis,0,$placementId),'Tarif penempatan lulusan masih dapat diubah.');
+    komite_test_assert((float)komite_bill($koneksi,$nis,'11','2195')['remaining']===20000.0,'Tarif tunggakan lulusan berubah.');
     $koneksi->rollback();
     echo "OK: Komite bulanan, pindahan, lulusan, tarif snapshot, dan pelengkapan pasangan SPP lama.\n";
 } catch(Throwable $e) {$koneksi->rollback();throw $e;}

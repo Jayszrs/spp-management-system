@@ -278,7 +278,7 @@ $signer = $payment['operator_name'] ?: ($_SESSION['admin_nama'] ?? 'Bagian Keuan
         <tr><td class="label">Nama Siswa</td><td class="separator">:</td><td><?= receipt_e($payment['NAMA']) ?></td></tr>
       </table></td>
       <td><table class="mini">
-        <tr><td class="label">Kelas</td><td class="separator">:</td><td><?= receipt_e($payment['KELAS_SISWA']) ?></td></tr>
+        <tr><td class="label">Kelas</td><td class="separator">:</td><td><?= receipt_e($payment['kelas_rombel_snapshot'] ?: ($payment['KELAS'] ?: $payment['KELAS_SISWA'])) ?></td></tr>
         <tr><td class="label">Periode</td><td class="separator">:</td><td><?= receipt_e(receipt_month($payment['BULAN'])) ?> <?= receipt_e($payment['TAHUN']) ?></td></tr>
       </table></td>
     </tr></table>

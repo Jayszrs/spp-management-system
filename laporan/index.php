@@ -166,7 +166,9 @@ $stmt = $koneksi->prepare("
            COALESCE(SUM(b.U_PANGKAL), 0) AS pangkal,
            COALESCE(SUM(b.U_PSB), 0) AS psb,
            COALESCE(SUM(b.U_SPP), 0) AS spp,
+           COALESCE(SUM(b.U_TITIPAN_SPP), 0) AS titipan_spp,
            COALESCE(SUM(b.U_KOMITE), 0) AS komite,
+           COALESCE(SUM(b.potong_spp), 0) AS potongan_spp,
            COALESCE(SUM(b.total_jumlah), 0) AS total
     FROM bayar b
     JOIN siswa s ON s.NO_INDUK = b.NO_INDUK
@@ -246,7 +248,7 @@ if (!$isUnpaidReport) {
 
     $orderSql = match ($sort) {
         'nama' => 's.NAMA ASC, b.TGL_BYR DESC',
-        'kelas' => 'CAST(s.KELAS AS UNSIGNED) ASC, s.NAMA ASC, b.TGL_BYR DESC',
+        'kelas' => 'CAST(b.KELAS AS UNSIGNED) ASC, b.kelas_rombel_snapshot ASC, s.NAMA ASC, b.TGL_BYR DESC',
         'nominal_terbesar' => 'b.total_jumlah DESC, b.TGL_BYR DESC',
         default => 'b.TGL_BYR DESC, b.id DESC',
     };
@@ -267,7 +269,9 @@ if (!$isUnpaidReport) {
     $offset = ($page - 1) * $perPage;
 
     $stmt4 = $koneksi->prepare("
-        SELECT b.id, s.NO_INDUK, s.NO_induk_diknas, s.NAMA, s.KELAS, b.BULAN, b.TAHUN,
+        SELECT b.id, s.NO_INDUK, s.NO_induk_diknas, s.NAMA,
+               COALESCE(NULLIF(b.kelas_rombel_snapshot,''),NULLIF(b.KELAS,''),s.KELAS) AS KELAS,
+               b.BULAN, b.TAHUN,
                b.U_PANGKAL, b.U_PSB, b.U_SPP, b.U_KOMITE,
                b.sistem_pembayaran, b.total_jumlah, b.TGL_BYR
         FROM bayar b
@@ -297,7 +301,7 @@ if (!$isUnpaidReport) {
         $stmtUnpaid = $koneksi->prepare("
             SELECT *
             FROM (
-                SELECT s.NO_INDUK, s.NO_induk_diknas, s.NAMA, s.KELAS,
+                SELECT s.NO_INDUK, s.NO_induk_diknas, s.NAMA, ts.kelas_rombel_snapshot AS KELAS,
                        ts.nominal_tagihan AS tagihan,
                        COALESCE(SUM(CASE WHEN ab.status='active' THEN a.nominal_dari_bayar+a.nominal_dari_titipan ELSE 0 END),0) AS sudah_bayar,
                        GREATEST(ts.nominal_tagihan-COALESCE(SUM(CASE WHEN ab.status='active' THEN a.nominal_dari_bayar+a.nominal_dari_titipan ELSE 0 END),0),0) AS sisa
@@ -305,7 +309,7 @@ if (!$isUnpaidReport) {
                 LEFT JOIN spp_alokasi a ON a.tagihan_spp_id=ts.id
                 LEFT JOIN spp_alokasi_batch ab ON ab.id=a.batch_id
                 WHERE s.is_active=1 AND ts.status='open' AND ts.tahun=? AND ts.bulan=? AND ts.nominal_tagihan>0 $studentSearchSql
-                GROUP BY ts.id,s.NO_induk_diknas,s.NAMA,s.KELAS
+                GROUP BY ts.id,s.NO_induk_diknas,s.NAMA,ts.kelas_rombel_snapshot
             ) unpaid
             WHERE sisa > 0
             ORDER BY $orderUnpaid
@@ -315,7 +319,7 @@ if (!$isUnpaidReport) {
         $stmtUnpaid = $koneksi->prepare("
             SELECT *
             FROM (
-                SELECT s.NO_INDUK, s.NO_induk_diknas, s.NAMA, s.KELAS,
+                SELECT s.NO_INDUK, s.NO_induk_diknas, s.NAMA, t.kelas_rombel_snapshot AS KELAS,
                        t.nominal_tagihan AS tagihan,
                        COALESCE(SUM(d.nominal), 0) AS sudah_bayar,
                        GREATEST(t.nominal_tagihan - COALESCE(SUM(d.nominal), 0), 0) AS sisa
@@ -327,7 +331,7 @@ if (!$isUnpaidReport) {
                   AND t.tahun = ? AND t.bulan = ?
                   AND t.nominal_tagihan > 0
                   $studentSearchSql
-                GROUP BY t.id,s.NO_induk_diknas,s.NAMA,s.KELAS
+                GROUP BY t.id,s.NO_induk_diknas,s.NAMA,t.kelas_rombel_snapshot
             ) unpaid
             WHERE sisa > 0
             ORDER BY $orderUnpaid
@@ -337,15 +341,16 @@ if (!$isUnpaidReport) {
         $stmtUnpaid = $koneksi->prepare("
             SELECT *
             FROM (
-                SELECT s.NO_INDUK, s.NO_induk_diknas, s.NAMA, s.KELAS,
+                SELECT s.NO_INDUK, s.NO_induk_diknas, s.NAMA, sta.kelas_rombel_snapshot AS KELAS,
                        tdu.nominal_tagihan AS tagihan,
                        COALESCE(SUM(bd.jumlah), 0) AS sudah_bayar,
                        GREATEST(tdu.nominal_tagihan - COALESCE(SUM(bd.jumlah), 0), 0) AS sisa
                 FROM tagihan_daftar_ulang tdu
                 JOIN siswa s ON s.NO_INDUK = tdu.no_induk
+                JOIN siswa_tahun_ajaran sta ON sta.id=tdu.penempatan_id
                 LEFT JOIN bayar_du bd ON bd.tagihan_daftar_ulang_id = tdu.id
-                WHERE s.is_active = 1 AND tdu.tahun_ajaran_snapshot = ? AND tdu.nominal_tagihan > 0 $studentSearchSql
-                GROUP BY s.NO_INDUK, s.NO_induk_diknas, s.NAMA, s.KELAS, tdu.nominal_tagihan
+                WHERE s.is_active = 1 AND tdu.status='open' AND tdu.tahun_ajaran_snapshot = ? AND tdu.nominal_tagihan > 0 $studentSearchSql
+                GROUP BY tdu.id,s.NO_induk_diknas,s.NAMA,sta.kelas_rombel_snapshot
             ) unpaid
             WHERE sisa > 0
             ORDER BY $orderUnpaid
@@ -355,17 +360,16 @@ if (!$isUnpaidReport) {
         $stmtUnpaid = $koneksi->prepare("
             SELECT *
             FROM (
-                SELECT s.NO_INDUK, s.NO_induk_diknas, s.NAMA, s.KELAS,
-                       m.nama AS komponen,
-                       m.nominal AS tagihan,
+                SELECT s.NO_INDUK, s.NO_induk_diknas, s.NAMA,
+                       t.kelas_rombel_snapshot AS KELAS, t.nama_snapshot AS komponen,
+                       t.nominal_tagihan AS tagihan,
                        COALESCE(SUM(d.nominal_snapshot), 0) AS sudah_bayar,
-                       GREATEST(m.nominal - COALESCE(SUM(d.nominal_snapshot), 0), 0) AS sisa
-                FROM siswa s
-                JOIN master_biaya_lain m ON m.is_active = 1
-                LEFT JOIN bayar b ON b.NO_INDUK = s.NO_INDUK
-                LEFT JOIN bayar_biaya_lain d ON d.bayar_id = b.id AND d.master_biaya_lain_id = m.id
-                WHERE s.is_active = 1 $studentSearchSql
-                GROUP BY s.NO_INDUK, s.NO_induk_diknas, s.NAMA, s.KELAS, m.id, m.nama, m.nominal
+                       GREATEST(t.nominal_tagihan - COALESCE(SUM(d.nominal_snapshot), 0), 0) AS sisa
+                FROM tagihan_biaya_lain t
+                JOIN siswa s ON s.NO_INDUK=t.no_induk
+                LEFT JOIN bayar_biaya_lain d ON d.tagihan_biaya_lain_id=t.id
+                WHERE s.is_active = 1 AND t.status='open' $studentSearchSql
+                GROUP BY t.id,s.NO_induk_diknas,s.NAMA,t.kelas_rombel_snapshot,t.nama_snapshot,t.nominal_tagihan
             ) unpaid
             WHERE sisa > 0
             ORDER BY $orderUnpaid
@@ -559,12 +563,14 @@ $exportQuery = http_build_query([
                 'Uang Pangkal' => $bayar_recap['pangkal'],
                 'Uang PSB' => $bayar_recap['psb'],
                 'Uang SPP' => $bayar_recap['spp'],
+                'Titipan SPP' => $bayar_recap['titipan_spp'],
                 'Uang Komite' => $bayar_recap['komite'],
                 'Daftar Ulang' => $total_du_periode,
+                'Potongan SPP' => -(float)$bayar_recap['potongan_spp'],
               ];
               $shownComponents = 0;
               foreach ($komponen_map as $nama => $val):
-                if ((float)$val <= 0) continue;
+                if (abs((float)$val) <= 0.001) continue;
                 $shownComponents++;
               ?>
               <tr><td><?= report_e($nama) ?></td><td class="nominal"><?= report_money($val) ?></td></tr>

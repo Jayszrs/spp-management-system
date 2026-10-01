@@ -45,14 +45,14 @@ $periodEnd = date('Y-m-d H:i:s', strtotime($filter_tanggal_akhir . ' +1 day'));
 
 $sql_masuk = "
     SELECT tm.id, tm.NO_INDUK, s.NAMA, s.KELAS, tm.TANGGAL,
-           tm.MASUK as nominal, 0 as keluar, 'masuk' as jenis, tm.user_id
+           tm.MASUK as nominal, 0 as keluar, 'masuk' as jenis, tm.user_id, tm.keterangan
     FROM transaksi_m tm
     JOIN siswa s ON s.NO_INDUK = tm.NO_INDUK
     WHERE tm.TANGGAL >= ? AND tm.TANGGAL < ?$where_nis_masuk
 ";
 $sql_keluar = "
     SELECT tk.id, tk.NO_INDUK, s.NAMA, s.KELAS, tk.TANGGAL,
-           0 as nominal, tk.KELUAR as keluar, 'keluar' as jenis, tk.user_id
+           0 as nominal, tk.KELUAR as keluar, 'keluar' as jenis, tk.user_id, tk.keterangan
     FROM transaksi_k tk
     JOIN siswa s ON s.NO_INDUK = tk.NO_INDUK
     WHERE tk.TANGGAL >= ? AND tk.TANGGAL < ?$where_nis_keluar
@@ -271,12 +271,12 @@ $periodLabel = $filter_tanggal_awal === $filter_tanggal_akhir
             <thead>
               <tr>
                 <th>No</th><th>No. Induk</th><th>Nama</th><th class="savings-class-col">Kelas</th>
-                <th>Tanggal</th><th>Jenis</th><th>Masuk (Rp)</th><th>Keluar (Rp)</th>
+                <th>Tanggal</th><th>Jenis</th><th>Masuk (Rp)</th><th>Keluar (Rp)</th><th>Keterangan</th>
               </tr>
             </thead>
             <tbody>
               <?php if (empty($rows)): ?>
-              <tr><td colspan="8" style="text-align:center;padding:40px;color:var(--text-muted);">Belum ada transaksi tabungan pada periode ini.</td></tr>
+              <tr><td colspan="9" style="text-align:center;padding:40px;color:var(--text-muted);">Belum ada transaksi tabungan pada periode ini.</td></tr>
               <?php else: ?>
               <?php foreach ($rows as $i => $r): ?>
               <tr class="<?= $i % 2 === 0 ? 'row-highlight' : '' ?>">
@@ -294,6 +294,7 @@ $periodLabel = $filter_tanggal_awal === $filter_tanggal_akhir
                 </td>
                 <td class="nominal"><?= $r['nominal'] > 0 ? 'Rp ' . number_format($r['nominal'],0,',','.') : '—' ?></td>
                 <td class="nominal" style="color:#dc2626;"><?= $r['keluar'] > 0 ? 'Rp ' . number_format($r['keluar'],0,',','.') : '—' ?></td>
+                <td data-label="Keterangan" style="min-width:180px;max-width:320px;overflow-wrap:anywhere;"><?= $r['keterangan'] !== null && $r['keterangan'] !== '' ? htmlspecialchars($r['keterangan'], ENT_QUOTES, 'UTF-8') : '—' ?></td>
               </tr>
               <?php endforeach; ?>
               <?php endif; ?>

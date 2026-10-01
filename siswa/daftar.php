@@ -213,7 +213,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
             }
 
-            $effectiveSpp = spp_current_effective_rate($koneksi, $class, $values['potongan_spp_persen']);
+            $effectiveYear = $oldStudent
+                ? spp_student_effective_year($koneksi, (string)$oldStudent['NO_INDUK'])
+                : du_current_academic_year();
+            $effectiveSpp = spp_current_effective_rate($koneksi, $class, $values['potongan_spp_persen'], $effectiveYear);
             $hasMasterSppRate = $effectiveSpp['year'] !== 'Belum disiapkan';
             $spp = $class === '0' ? 0.0 : ($hasMasterSppRate ? (float)$effectiveSpp['net'] : (float)($oldStudent['SPP_PERBULAN'] ?? 0));
             $sppDiscountPercent = $values['potongan_spp_persen'];
@@ -275,9 +278,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $stmt->close();
                 $stmtClass = $koneksi->prepare('UPDATE siswa SET master_kelas_id = ? WHERE id = ?');
                 $stmtClass->bind_param('ii', $classId, $id); $stmtClass->execute(); $stmtClass->close();
-                $sppDiscountSync = spp_sync_student_discount($koneksi, $noInduk, $sppDiscountPercent);
                 $tariffSync = null;
                 $placementId = class_sync_student_current_year($koneksi, $noInduk, $classId, $spp, $pomg, $active === 1, $tariffSync);
+                $sppDiscountSync = $active === 1
+                    ? spp_sync_student_discount($koneksi, $noInduk, $sppDiscountPercent, $placementId)
+                    : ['updated' => 0, 'locked' => 0];
                 if ($placementId) komite_set_start_month($koneksi,$placementId,$komiteStartMonth);
                 $duBillBefore = du_find_bill($koneksi, $noInduk, (int)date('n'), (int)date('Y'), true);
                 $duBillId = $placementId ? du_create_bill_for_placement($koneksi, $placementId, false) : null;
@@ -475,10 +480,12 @@ $studentPaginationQuery = pagination_query(['per_page' => $perPage]);
 
 $formStudent = $editStudent ?? [];
 $komiteStartMonth = '07';
+$editStudentYear = $editStudent
+    ? spp_student_effective_year($koneksi, (string)$editStudent['NO_INDUK'])
+    : du_current_academic_year();
 if ($editStudent) {
-    $currentYearLabel=du_current_academic_year();
     $stmtKomiteStart=$koneksi->prepare('SELECT sta.komite_mulai_bulan FROM siswa_tahun_ajaran sta JOIN tahun_ajaran ta ON ta.id=sta.tahun_ajaran_id WHERE sta.no_induk=? AND ta.label=? LIMIT 1');
-    $stmtKomiteStart->bind_param('ss',$editStudent['NO_INDUK'],$currentYearLabel);$stmtKomiteStart->execute();
+    $stmtKomiteStart->bind_param('ss',$editStudent['NO_INDUK'],$editStudentYear);$stmtKomiteStart->execute();
     $komiteStartMonth=(string)($stmtKomiteStart->get_result()->fetch_assoc()['komite_mulai_bulan']??'07');$stmtKomiteStart->close();
 }
 $komiteStartMonth=(string)($oldInput['komite_mulai_bulan']??$komiteStartMonth);
@@ -502,7 +509,7 @@ function rupiah_value($value): string {
 $advancedOpen = isset($oldInput['advanced_enabled']) && $oldInput['advanced_enabled'] === '1';
 $previewLevel = (string)($formStudent['KELAS'] ?? '');
 $previewDiscount = (float)form_student_value('potongan_spp_persen', $oldInput, $formStudent, $fieldMap, 0);
-$sppRatePreview = spp_current_effective_rate($koneksi, $previewLevel, $previewDiscount);
+$sppRatePreview = spp_current_effective_rate($koneksi, $previewLevel, $previewDiscount, $editStudentYear);
 ?>
 <!DOCTYPE html>
 <html lang="id" data-palette="<?= unit_palette_for_view(isset($reportUnitId) ? (int)$reportUnitId : null) ?>">

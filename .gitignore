@@ -16,10 +16,10 @@ Thumbs.db
 tmp/
 temp/
 .tmp-session/
+.codex-preview/
 documentation/_sop_preview_*.png
 documentation/_flow_preview_*.png
 sql/backups/*.sql
-!sql/backups/db_spp_before_psb_spp_full_20260831_224523.sql
 
 # Composer dependencies
 vendor/

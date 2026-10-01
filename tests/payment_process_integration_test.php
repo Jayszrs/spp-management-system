@@ -59,6 +59,16 @@ function payment_process_csrf(string $baseUrl, int $paymentId, array &$cookies):
     return $match[1];
 }
 
+function payment_process_input_tokens(string $baseUrl, array &$cookies): array {
+    $page = payment_process_request($baseUrl . '/pembayaran/form.php', [], $cookies);
+    payment_process_assert($page['status'] === 200, 'Form input pembayaran tidak dapat dibuka.');
+    payment_process_assert(preg_match('/name="csrf_token" value="([a-f0-9]{64})"/', $page['body'], $csrf) === 1,
+        'Token CSRF input pembayaran tidak tersedia.');
+    payment_process_assert(preg_match('/name="request_key" value="([a-f0-9]{32})"/', $page['body'], $key) === 1,
+        'Kunci idempotensi input pembayaran tidak tersedia.');
+    return ['csrf_token'=>$csrf[1], 'request_key'=>$key[1]];
+}
+
 function payment_process_unique_nis(mysqli $db): string {
     do {
         $nis = (string)random_int(9900000000, 9999999999);
@@ -71,17 +81,45 @@ function payment_process_unique_nis(mysqli $db): string {
     return $nis;
 }
 
-if (getenv('SPP_TEST_ALLOW_MUTATION') !== '1') {
+function payment_process_cleanup_student(mysqli $db, string $nis): void {
+    // The imported clone may lack FKs. Remove children explicitly so the test
+    // cannot leave dangling allocations after deleting bills or payments.
+    $queries = [
+        "DELETE a FROM spp_alokasi a JOIN spp_alokasi_batch b ON b.id=a.batch_id WHERE b.no_induk=?",
+        "DELETE FROM spp_alokasi_batch WHERE no_induk=?",
+        "DELETE FROM bayar_komite WHERE bayar_id IN (SELECT id FROM bayar WHERE NO_INDUK=?)",
+        "DELETE FROM bayar_du WHERE bayar_id IN (SELECT id FROM bayar WHERE NO_INDUK=?)",
+        "DELETE FROM bayar_biaya_lain WHERE bayar_id IN (SELECT id FROM bayar WHERE NO_INDUK=?)",
+        "DELETE FROM keuangan_request WHERE aksi='pembayaran' AND referensi_id IN (SELECT id FROM bayar WHERE NO_INDUK=?)",
+        "DELETE FROM titipan_spp_mutasi WHERE no_induk=?",
+        "DELETE FROM bayar WHERE NO_INDUK=?",
+        "DELETE FROM tagihan_spp WHERE no_induk=?",
+        "DELETE FROM tagihan_komite WHERE no_induk=?",
+        "DELETE FROM spp_audit_log WHERE no_induk=?",
+        "DELETE FROM siswa_tahun_ajaran WHERE no_induk=?",
+        "DELETE FROM siswa WHERE NO_INDUK=?",
+    ];
+    foreach ($queries as $query) {
+        $stmt = $db->prepare($query);
+        $stmt->bind_param('s', $nis);
+        $stmt->execute();
+        $stmt->close();
+    }
+}
+
+if (getenv('SPP_TEST_ALLOW_MUTATION') !== '1' || !str_starts_with(DB_NAME, 'db_spp_audit_')) {
     fwrite(STDERR, "SKIPPED: set SPP_TEST_ALLOW_MUTATION=1 hanya pada database disposable.\n");
     exit(0);
 }
-if (!(string)getenv('SPP_TEST_ADMIN_PASSWORD')) {
+$testPassword = (string)getenv('SPP_TEST_ADMIN_PASSWORD');
+if ($testPassword === '' && ($passwordFile = (string)getenv('SPP_TEST_ADMIN_PASSWORD_FILE')) !== '') $testPassword = trim(file_get_contents($passwordFile));
+if ($testPassword === '') {
     fwrite(STDERR, "FAILED: SPP_TEST_ADMIN_PASSWORD wajib diisi untuk akun admin database test.\n");
     exit(1);
 }
 
 $baseUrl = getenv('SPP_TEST_BASE_URL') ?: 'http://127.0.0.1/sppaman/spp-management-system';
-$password = (string)getenv('SPP_TEST_ADMIN_PASSWORD');
+$password = $testPassword;
 
 if (spp_billing_schema_ready($koneksi)) {
     $nis = payment_process_unique_nis($koneksi);
@@ -92,7 +130,17 @@ if (spp_billing_schema_ready($koneksi)) {
         $class = $koneksi->query("SELECT id FROM master_kelas WHERE tingkat=1 AND is_placeholder=0 AND is_active=1 ORDER BY id LIMIT 1")->fetch_assoc();
         payment_process_assert((bool)$class, 'Rombel kelas 1 tidak tersedia untuk tes pembayaran SPP terbit.');
         $classId = (int)$class['id'];
-        $start = (int)date('Y') + 8;
+        $start = 0;
+        for ($candidate = (int)date('Y') + 8; $candidate < (int)date('Y') + 30; $candidate++) {
+            $candidateLabel = $candidate . '/' . ($candidate + 1);
+            $stmt = $koneksi->prepare('SELECT COUNT(*) FROM tahun_ajaran WHERE label=?');
+            $stmt->bind_param('s', $candidateLabel);
+            $stmt->execute();
+            $exists = (int)$stmt->get_result()->fetch_row()[0];
+            $stmt->close();
+            if ($exists === 0) { $start = $candidate; break; }
+        }
+        payment_process_assert($start > 0, 'Tidak ada tahun ajaran kosong untuk tes disposable.');
         $label = $start . '/' . ($start + 1);
 
         $koneksi->begin_transaction();
@@ -121,7 +169,7 @@ if (spp_billing_schema_ready($koneksi)) {
                 'bulan_bayar'=>$month, 'tahun_bayar'=>(string)$start,
                 'sistem_pembayaran'=>'Tunai', 'uang_spp'=>$money,'uang_komite'=>$komite,'spp_action'=>$action,
                 'gunakan_titipan_spp'=>$useDeposit ? '1' : '0',
-            ], $cookies);
+            ] + payment_process_input_tokens($baseUrl, $cookies), $cookies);
         };
 
         payment_process_assert($post('08',250000,15000)['status']===302,'Permintaan tunggakan tidak mengembalikan respons.');
@@ -187,13 +235,11 @@ if (spp_billing_schema_ready($koneksi)) {
         $failure = $error;
         try { $koneksi->rollback(); } catch (Throwable $ignored) {}
     } finally {
-        $stmt = $koneksi->prepare('DELETE FROM bayar WHERE NO_INDUK=?'); $stmt->bind_param('s', $nis); $stmt->execute(); $stmt->close();
-        $stmt = $koneksi->prepare('DELETE FROM tagihan_spp WHERE no_induk=?'); $stmt->bind_param('s', $nis); $stmt->execute(); $stmt->close();
-        $stmt = $koneksi->prepare('DELETE FROM tagihan_komite WHERE no_induk=?'); $stmt->bind_param('s', $nis); $stmt->execute(); $stmt->close();
-        $stmt = $koneksi->prepare('DELETE FROM spp_audit_log WHERE no_induk=?'); $stmt->bind_param('s', $nis); $stmt->execute(); $stmt->close();
-        $stmt = $koneksi->prepare('DELETE FROM siswa_tahun_ajaran WHERE no_induk=?'); $stmt->bind_param('s', $nis); $stmt->execute(); $stmt->close();
-        $stmt = $koneksi->prepare('DELETE FROM siswa WHERE NO_INDUK=?'); $stmt->bind_param('s', $nis); $stmt->execute(); $stmt->close();
-        if ($masterId > 0) $koneksi->query('DELETE FROM master_spp_tahun WHERE id=' . $masterId);
+        payment_process_cleanup_student($koneksi, $nis);
+        if ($masterId > 0) {
+            $koneksi->query('DELETE FROM master_spp_tarif WHERE master_spp_tahun_id=' . $masterId);
+            $koneksi->query('DELETE FROM master_spp_tahun WHERE id=' . $masterId);
+        }
         if ($yearId > 0) $koneksi->query('DELETE FROM tahun_ajaran WHERE id=' . $yearId);
     }
     if ($failure) {
@@ -285,7 +331,7 @@ try {
             'aksi' => 'input', 'payment_plan' => 'monthly', 'no_induk' => $nis,
             'bulan_bayar' => $month, 'tahun_bayar' => $year,
             'sistem_pembayaran' => 'Tunai', 'uang_spp' => $amount,
-        ], $cookies);
+        ] + payment_process_input_tokens($baseUrl, $cookies), $cookies);
     };
 
     $blockedJuly = $payment($testNis[0], '07', (string)$startYear, 275000);
@@ -349,16 +395,7 @@ try {
 } catch (Throwable $error) {
     $failure = $error;
 } finally {
-    if ($testNis) {
-        $placeholders = implode(',', array_fill(0, count($testNis), '?'));
-        $types = str_repeat('s', count($testNis));
-        $stmt = $koneksi->prepare("DELETE FROM bayar WHERE NO_INDUK IN ($placeholders)");
-        $stmt->bind_param($types, ...$testNis); $stmt->execute(); $stmt->close();
-        $stmt = $koneksi->prepare("DELETE FROM siswa_tahun_ajaran WHERE no_induk IN ($placeholders)");
-        $stmt->bind_param($types, ...$testNis); $stmt->execute(); $stmt->close();
-        $stmt = $koneksi->prepare("DELETE FROM siswa WHERE NO_INDUK IN ($placeholders)");
-        $stmt->bind_param($types, ...$testNis); $stmt->execute(); $stmt->close();
-    }
+    foreach ($testNis as $nis) payment_process_cleanup_student($koneksi, $nis);
     if ($createdYearIds) {
         $yearIds = array_values($createdYearIds);
         $placeholders = implode(',', array_fill(0, count($yearIds), '?'));

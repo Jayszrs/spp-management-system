@@ -1,5 +1,7 @@
 # Audit dan Baseline SistemSPP
 
+> **Pembaruan 2026-10-01:** Dokumen ini menyimpan baseline dan temuan **historis 9 September**, termasuk daftar risiko sebagaimana ditemukan saat itu. Status kesiapan, baseline `db_spp` terkini, bukti tes baru, temuan yang sudah diperbaiki pada working tree, serta prasyarat migrasi ada pada [audit kesiapan 1 Oktober](documentation/READINESS_AUDIT_20261001.md). Jangan memakai daftar risiko di bawah sebagai daftar masalah yang semuanya masih terbuka hari ini, atau menganggap perbaikan working tree sudah terpasang pada database utama.
+
 > **Perbaikan 2026-09-30:** Tiga temuan rekap historis dan urutan SPP dari [audit alur operasional](documentation/OPERATIONAL_FLOW_AUDIT_20260930.md) telah diperbaiki dan diuji pada database disposable. Rincian hasil, termasuk satu siklus HTTP dari kelas 1 sampai lulus, ada di dokumen tersebut.
 
 > **Pembaruan 2026-09-19:** Bagian audit di bawah adalah baseline historis 2026-09-09, bukan kontrak fitur terbaru. SPP sekarang dibayar tepat satu tagihan terbit yang dipilih melalui bulan/tahun; tunggakan lebih tua tetap menghalangi. Dana lebih atau belum cukup dicatat lewat tindakan terpisah **Catat Titipan SPP**. Komite berasal dari `siswa.POMG` per bulan, mengikuti penempatan siswa, wajib lunas pada bulan yang sama ketika SPP dibayar, dan dapat dibayar sendiri. Rincian implementasi dan migrasi ada di [PROJECT_CONTEXT.md](documentation/PROJECT_CONTEXT.md) serta [AI_CHANGELOG.md](documentation/AI_CHANGELOG.md).
@@ -74,7 +76,9 @@ Kontrak implementasi yang harus dipertahankan pada perubahan berikutnya:
 - SPP diurutkan memakai periode numerik `YYYY-MM` dalam urutan kalender tahun ajaran; pengelompokan hanya mengubah presentasi dan tidak menjadi sumber perhitungan baru.
 - Pagination web menghitung siswa pada mode kelompok. Cetak, PDF, dan Excel menggunakan pengelompokan yang sama tanpa membatasi hasil ke halaman web aktif.
 
-## Risiko dan utang teknis yang masih terbuka
+## Risiko dan utang teknis yang tercatat pada 9 September
+
+Daftar ini dipertahankan untuk jejak audit. Per 1 Oktober, beberapa butir telah direproduksi dan diperbaiki pada working tree: agregasi Master Biaya Lain, pembayaran total nol, GET Master Daftar Ulang, role API saldo, perlindungan CSRF/idempotensi pada jalur keuangan yang diuji, serta pengeluaran dump/sesi dari indeks Git. Catatan tabungan dan pemulihan constraint lulus pada clone tetapi memerlukan migrasi utama. Status serta batas bukti setiap butir ada di [audit kesiapan terbaru](documentation/READINESS_AUDIT_20261001.md).
 
 Prioritas tinggi:
 

@@ -75,12 +75,15 @@ function du_http_student(mysqli $db, string $nis, string $name, int $classId, ar
     return $bills;
 }
 
-if (getenv('SPP_TEST_ALLOW_MUTATION') !== '1') {
+if (getenv('SPP_TEST_ALLOW_MUTATION') !== '1' || !str_starts_with(DB_NAME, 'db_spp_audit_')) {
     fwrite(STDERR, "SKIPPED: jalankan hanya pada database disposable.\n");
     exit(0);
 }
 
 $baseUrl = getenv('SPP_TEST_BASE_URL') ?: 'http://127.0.0.1:8097';
+$testPassword = (string)getenv('SPP_TEST_ADMIN_PASSWORD');
+if ($testPassword === '' && ($passwordFile = (string)getenv('SPP_TEST_ADMIN_PASSWORD_FILE')) !== '') $testPassword = trim(file_get_contents($passwordFile));
+if ($testPassword === '') throw new RuntimeException('Password admin tes belum disiapkan.');
 $students = [(string)random_int(9500000000, 9599999999), (string)random_int(9500000000, 9599999999), (string)random_int(9500000000, 9599999999)];
 $failure = null;
 try {
@@ -104,7 +107,7 @@ try {
     $stmtSpp->execute();$stmtSpp->close();
 
     $cookies = [];
-    $login = du_http_request($baseUrl . '/login.php', ['username'=>'admin','password'=>'admin123'], $cookies);
+    $login = du_http_request($baseUrl . '/login.php', ['username'=>'admin','password'=>$testPassword], $cookies);
     du_http_assert($login['status'] === 302 && isset($cookies['PHPSESSID']), 'Login administrator gagal.');
     $form = du_http_request($baseUrl . '/pembayaran/form.php', [], $cookies);
     du_http_assert($form['status'] === 200 && str_contains($form['body'], 'name="tagihan_daftar_ulang_id"'), 'Kontrak ID tagihan belum tersedia pada form.');
@@ -112,10 +115,16 @@ try {
 
     $month = '07'; $calendarYear = (string)$currentStart;
     $submit = static function (string $nis, int $billId, float $du, float $spp = 0, float $komite=0) use ($baseUrl, &$cookies, $month, $calendarYear): array {
+        $form = du_http_request($baseUrl . '/pembayaran/form.php', [], $cookies);
+        du_http_assert($form['status'] === 200
+            && preg_match('/name="csrf_token" value="([a-f0-9]{64})"/', $form['body'], $csrf) === 1
+            && preg_match('/name="request_key" value="([a-f0-9]{32})"/', $form['body'], $key) === 1,
+            'Token input pembayaran tidak tersedia.');
         return du_http_request($baseUrl . '/pembayaran/proses.php', [
             'aksi'=>'input', 'payment_plan'=>'monthly', 'no_induk'=>$nis,
             'bulan_bayar'=>$month, 'tahun_bayar'=>$calendarYear, 'sistem_pembayaran'=>'Tunai',
             'uang_spp'=>$spp, 'uang_komite'=>$komite, 'uang_du'=>$du, 'tagihan_daftar_ulang_id'=>$billId,
+            'csrf_token'=>$csrf[1], 'request_key'=>$key[1],
         ], $cookies);
     };
 

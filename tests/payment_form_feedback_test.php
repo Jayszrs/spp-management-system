@@ -44,6 +44,9 @@ $generic = payment_failure_flash(new RuntimeException('Kesalahan lain.'), 'Gagal
 feedback_assert($generic['msg'] === 'Gagal menyimpan: Kesalahan lain.' && !isset($generic['spp_status']), 'Fallback error berubah.');
 $concurrent = payment_failure_flash(new mysqli_sql_exception('Deadlock', 1213), 'Gagal: ');
 feedback_assert(($concurrent['spp_status']['code'] ?? null) === 'billing_changed', 'Konflik kasir tidak ditangani.');
+$databaseFailure = payment_failure_flash(new mysqli_sql_exception('Unknown column internal_secret', 1054), 'Gagal: ');
+feedback_assert(($databaseFailure['spp_status']['code'] ?? null) === 'database_error'
+    && !str_contains($databaseFailure['msg'], 'internal_secret'), 'Detail skema bocor ke kasir.');
 
 foreach (['missing', 'not_found', 'wrong_student', 'cancelled', 'future', 'settled', 'changed', 'over_limit', 'overpaid'] as $reason) {
     $du = payment_failure_flash(new DaftarUlangSelectionException($reason, 'Pesan Daftar Ulang'), 'Gagal: ');

@@ -46,6 +46,12 @@ if($isCashRecap){
         : ($isSavingsCashRecap
             ? array_map(static fn($item)=>['label'=>$item['label'],'value'=>$item['value'],'type'=>'count'],$report['transaction_summary']??[])
             : array_map(static fn($item)=>['label'=>$item['metode'],'value'=>$item['nominal'],'type'=>'money'],$methodSummary));
+    if($isSppDepositRecap){
+        foreach(['koreksi_masuk'=>'Koreksi Masuk','koreksi_keluar'=>'Koreksi Keluar','mutasi_operator_lain'=>'Mutasi Operator Lain'] as $key=>$label){
+            $amount=(float)($report['deposit_summary'][$key]??0);
+            if(abs($amount)>.001)$cashSummaryItems[]=['label'=>$label,'value'=>$amount,'type'=>'money'];
+        }
+    }
     $componentTitle=$isSppDepositRecap?'Ringkasan Titipan SPP':($isSavingsCashRecap?'Arus Tabungan':'Komponen Pembayaran');
     $componentTotalLabel=$isSppDepositRecap?'Saldo Akhir':($isSavingsCashRecap?'Mutasi Bersih':'Total Pembayaran');
     $summaryTitle=$isSppDepositRecap?'Rangkuman Titipan':($isSavingsCashRecap?'Jumlah Transaksi':'Metode Pembayaran');

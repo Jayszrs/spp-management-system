@@ -26,7 +26,9 @@ foreach ([1, 2, 3] as $unitId) {
     $payments = fixture_count($koneksi, 'bayar');
     $savings = fixture_count($koneksi, 'tabungan');
     fixture_assert($unitId === 1 ? $students >= 150 : $students === 36, "Jumlah siswa {$label} salah.");
-    fixture_assert($unitId === 1 ? $payments >= 1002 : $payments === 17, "Jumlah pembayaran {$label} salah.");
+    // An imported disposable snapshot can contain later legitimate payments
+    // in addition to the 17 transactions created by the demo fixture.
+    fixture_assert($unitId === 1 ? $payments >= 1002 : $payments >= 17, "Jumlah pembayaran {$label} salah.");
     fixture_assert($savings === 6 && fixture_count($koneksi, 'transaksi_m') === 6 && fixture_count($koneksi, 'transaksi_k') === 3,
         "Contoh tabungan {$label} tidak lengkap.");
     $balance = $koneksi->query('SELECT MIN(SALDO) minimum, SUM(SALDO) total FROM tabungan')->fetch_assoc();
@@ -39,7 +41,7 @@ foreach ([1, 2, 3] as $unitId) {
             "Relasi pembayaran SPP/Komite {$label} salah.");
         fixture_assert(fixture_count($koneksi, 'bayar_du') === 3 && fixture_count($koneksi, 'bayar_biaya_lain') === 2,
             "Relasi pembayaran Daftar Ulang/Biaya Lain {$label} salah.");
-        fixture_assert(fixture_count($koneksi, 'titipan_spp_mutasi') === 3, "Mutasi Titipan SPP {$label} salah.");
+        fixture_assert(fixture_count($koneksi, 'titipan_spp_mutasi') >= 3, "Mutasi Titipan SPP {$label} tidak lengkap.");
         fixture_assert((int)$koneksi->query("SELECT COUNT(*) n FROM siswa WHERE KELAS='PSB'")->fetch_assoc()['n'] === 3,
             "Siswa PSB {$label} salah.");
         $year = $koneksi->query("SELECT status FROM tahun_ajaran WHERE label='2026/2027'")->fetch_assoc();

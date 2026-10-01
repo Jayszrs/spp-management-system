@@ -158,24 +158,22 @@ $stmt = $koneksi->prepare("
         s.tot_du,
         COALESCE(du_current.jumlah, 0) AS uang_du,
         du_current.th_ajaran AS du_tahun_ajaran,
+        du_bill.id AS du_bill_id,
+        du_bill.nominal_tagihan AS du_nominal_tagihan,
+        COALESCE((SELECT SUM(bd.jumlah) FROM bayar_du bd WHERE bd.tagihan_daftar_ulang_id=du_bill.id),0) AS du_paid_this_bill,
         COALESCE(one_paid.total_pangkal_bayar, 0) AS total_pangkal_bayar,
         COALESCE(one_paid.total_psb_bayar, 0) AS total_psb_bayar,
-        COALESCE(du_paid.total_du_bayar, 0) AS total_du_bayar,
         COALESCE(op.nama, NULLIF(b.user_id, '')) AS operator_name
     FROM bayar b
     JOIN siswa s ON s.NO_INDUK = b.NO_INDUK
     LEFT JOIN admin op ON op.id = CAST(b.user_id AS UNSIGNED)
     LEFT JOIN bayar_du du_current ON du_current.bayar_id=b.id
+    LEFT JOIN tagihan_daftar_ulang du_bill ON du_bill.id=du_current.tagihan_daftar_ulang_id
     LEFT JOIN (
         SELECT NO_INDUK, SUM(U_PANGKAL) AS total_pangkal_bayar, SUM(U_PSB) AS total_psb_bayar
         FROM bayar
         GROUP BY NO_INDUK
     ) one_paid ON one_paid.NO_INDUK = b.NO_INDUK
-    LEFT JOIN (
-        SELECT no_induk, SUM(jumlah) AS total_du_bayar
-        FROM bayar_du
-        GROUP BY no_induk
-    ) du_paid ON du_paid.no_induk = b.NO_INDUK
     $where_sql
     ORDER BY b.TGL_BYR DESC, b.id DESC
 ");
@@ -335,19 +333,11 @@ function other_lines(array $row, array $details, ?array $sppAllocation=null): ar
 }
 
 function total_pangkal_bill(array $row): float {
-    $derived = (float)$row['tot_pangkal'];
-    if ($derived > 0) return $derived;
     return max(0, (float)$row['PANGKAL'] - (float)$row['potong_pangkal']);
 }
 
 function total_psb_bill(array $row): float {
     return max(0, (float)($row['PSB'] ?? 0));
-}
-
-function total_du_bill(array $row): float {
-    $derived = (float)$row['tot_du'];
-    if ($derived > 0) return $derived;
-    return max(0, (float)$row['DAFTAR_ULANG'] - (float)$row['potong_du']);
 }
 
 ob_start();
@@ -543,7 +533,9 @@ ob_start();
     $others = other_lines($row, $details,$sppAllocation);
     $sisa_pangkal = max(0, total_pangkal_bill($row) - (float)$row['total_pangkal_bayar']);
     $sisa_psb = max(0, total_psb_bill($row) - (float)$row['total_psb_bayar']);
-    $sisa_du = max(0, total_du_bill($row) - (float)$row['total_du_bayar']);
+    $sisa_du = (float)$row['uang_du'] > 0.001 && (int)($row['du_bill_id'] ?? 0) > 0
+        ? max(0, (float)$row['du_nominal_tagihan'] - (float)$row['du_paid_this_bill'])
+        : null;
     $month_name = month_name_from_value($row['BULAN'], $bln_names);
     $signer = $row['operator_name'] ?: ($_SESSION['admin_nama'] ?? 'Bagian Keuangan');
   ?>
@@ -581,7 +573,7 @@ ob_start();
             <tr>
               <td class="label">Kelas</td>
               <td class="sep">:</td>
-              <td><?= e($row['KELAS_SISWA']) ?></td>
+              <td><?= e($row['kelas_rombel_snapshot'] ?: ($row['KELAS'] ?: $row['KELAS_SISWA'])) ?></td>
             </tr>
             <tr>
               <td class="label">Untuk Pembayaran Bulan</td>

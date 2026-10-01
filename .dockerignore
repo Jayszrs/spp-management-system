@@ -2,6 +2,8 @@
 .github
 .idea
 .vscode
+.codex-preview
+.tmp-session
 documentation
 sql/*
 !sql/bootstrap_production.php

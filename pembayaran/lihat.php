@@ -96,7 +96,8 @@ $totalPages = total_pages($totalPayments, $perPage);
 $page = min($page, $totalPages);
 $offset = ($page - 1) * $perPage;
 
-$sql = "SELECT p.*, s.NO_INDUK, s.NO_induk_diknas, s.NAMA, s.KELAS FROM bayar p
+$sql = "SELECT p.*, s.NO_INDUK, s.NO_induk_diknas, s.NAMA,
+        COALESCE(NULLIF(p.kelas_rombel_snapshot,''),NULLIF(p.KELAS,''),s.KELAS) AS kelas_transaksi FROM bayar p
         JOIN siswa s ON s.NO_INDUK = p.NO_INDUK
         $where ORDER BY p.created_at DESC
         LIMIT ? OFFSET ?";
@@ -291,7 +292,7 @@ foreach ($studentOptions as $studentOption) {
                 <td data-label="No"><?= $no++ ?></td>
                 <td data-label="NIS"><span class="badge-nis"><?= htmlspecialchars($row['NO_INDUK']) ?></span><?php if (!empty($row['NO_induk_diknas'])): ?><small class="du-history-nis">Diknas <?= htmlspecialchars($row['NO_induk_diknas']) ?></small><?php endif; ?></td>
                 <td data-label="Nama Siswa"><?= htmlspecialchars($row['NAMA']) ?></td>
-                <td data-label="Kelas" class="kelas-col"><span class="kelas-badge">Kelas <?= htmlspecialchars($row['KELAS']) ?></span></td>
+                <td data-label="Kelas" class="kelas-col"><span class="kelas-badge">Kelas <?= htmlspecialchars($row['kelas_transaksi']) ?></span></td>
                 <td data-label="Bulan / Tahun">
                   <?= htmlspecialchars(month_code($row['BULAN'])) ?> <?= $row['TAHUN'] ?>
                   <?php if ((int)($row['payment_batch_count'] ?? 1) === 12): ?>

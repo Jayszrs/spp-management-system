@@ -62,14 +62,21 @@ function spp_net_tariff(float $base, float $discountPercent): array {
     return ['base'=>$base, 'discount_percent'=>$discountPercent, 'discount'=>$discount, 'net'=>max(0, round($base-$discount, 0))];
 }
 
-/** Tarif informasi untuk Master Siswa. Tagihan baru tetap hanya berasal dari proses penerbitan. */
-function spp_current_effective_rate(mysqli $db, string $level, float $discountPercent): array {
+function spp_student_effective_year(mysqli $db, string $noInduk): string {
+    $stmt=$db->prepare('SELECT ta.label FROM siswa_tahun_ajaran sta JOIN tahun_ajaran ta ON ta.id=sta.tahun_ajaran_id WHERE sta.no_induk=? ORDER BY ta.label DESC LIMIT 1');
+    $stmt->bind_param('s',$noInduk);$stmt->execute();
+    $label=(string)($stmt->get_result()->fetch_assoc()['label']??'');$stmt->close();
+    return $label!==''?$label:du_current_academic_year();
+}
+
+/** Tarif informasi untuk Master Siswa sesuai tahun penempatan yang diedit. */
+function spp_current_effective_rate(mysqli $db, string $level, float $discountPercent, ?string $academicYear = null): array {
     $empty = ['base'=>0.0, 'discount_percent'=>$discountPercent, 'discount'=>0.0, 'net'=>0.0, 'year'=>'Belum disiapkan'];
     [$firstLevel, $lastLevel] = unit_level_bounds();
     if (!spp_billing_schema_ready($db) || !ctype_digit($level) || (int)$level < $firstLevel || (int)$level > $lastLevel) return $empty;
-    $currentYear = du_current_academic_year();
-    $stmt = $db->prepare("SELECT ta.label,mst.id FROM master_spp_tahun mst JOIN tahun_ajaran ta ON ta.id=mst.tahun_ajaran_id WHERE mst.status IN ('published','draft') ORDER BY (ta.label=?) DESC,(mst.status='published') DESC,ta.tanggal_mulai DESC,mst.id DESC LIMIT 1");
-    $stmt->bind_param('s', $currentYear); $stmt->execute(); $master=$stmt->get_result()->fetch_assoc(); $stmt->close();
+    $year = $academicYear ?? du_current_academic_year();
+    $stmt = $db->prepare("SELECT ta.label,mst.id FROM master_spp_tahun mst JOIN tahun_ajaran ta ON ta.id=mst.tahun_ajaran_id WHERE ta.label=? AND mst.status IN ('published','draft') LIMIT 1");
+    $stmt->bind_param('s', $year); $stmt->execute(); $master=$stmt->get_result()->fetch_assoc(); $stmt->close();
     if (!$master) return $empty;
     $stmt=$db->prepare('SELECT nominal_dasar FROM master_spp_tarif WHERE master_spp_tahun_id=? AND tingkat=? LIMIT 1');
     $masterId=(int)$master['id'];$levelInt=(int)$level;$stmt->bind_param('ii',$masterId,$levelInt);$stmt->execute();
@@ -77,15 +84,18 @@ function spp_current_effective_rate(mysqli $db, string $level, float $discountPe
     $result=spp_net_tariff($base,$discountPercent);$result['year']=(string)$master['label'];return $result;
 }
 
-/** Menyelaraskan potongan siswa hanya ke tagihan yang belum pernah menerima alokasi. */
-function spp_sync_student_discount(mysqli $db, string $noInduk, float $discountPercent): array {
-    if (!spp_billing_schema_ready($db)) return ['updated'=>0,'locked'=>0];
+/** Menyelaraskan potongan hanya pada penempatan yang sedang diedit. */
+function spp_sync_student_discount(mysqli $db, string $noInduk, float $discountPercent, ?int $placementId): array {
+    if (!spp_billing_schema_ready($db) || !$placementId) return ['updated'=>0,'locked'=>0];
+    $stmt=$db->prepare("SELECT id FROM siswa_tahun_ajaran WHERE id=? AND no_induk=? AND status='aktif' LIMIT 1 FOR UPDATE");
+    $stmt->bind_param('is',$placementId,$noInduk);$stmt->execute();$placement=$stmt->get_result()->fetch_assoc();$stmt->close();
+    if(!$placement)throw new RuntimeException('Penempatan aktif siswa untuk perubahan potongan SPP tidak ditemukan.');
     $discountPercent=min(100,max(0,$discountPercent));$updated=0;$locked=0;
     $stmt=$db->prepare("SELECT ts.id,ts.master_spp_tahun_id,ts.tarif_dasar_snapshot,ts.status,
       EXISTS(SELECT 1 FROM spp_alokasi a JOIN spp_alokasi_batch ab ON ab.id=a.batch_id AND ab.status='active' WHERE a.tagihan_spp_id=ts.id) allocated
       FROM tagihan_spp ts JOIN master_spp_tahun mst ON mst.id=ts.master_spp_tahun_id
-      WHERE ts.no_induk=? AND mst.status<>'closed' AND ts.status IN ('open','waived') FOR UPDATE");
-    $stmt->bind_param('s',$noInduk);$stmt->execute();$bills=$stmt->get_result()->fetch_all(MYSQLI_ASSOC);$stmt->close();
+      WHERE ts.no_induk=? AND ts.penempatan_id=? AND mst.status<>'closed' AND ts.status IN ('open','waived') FOR UPDATE");
+    $stmt->bind_param('si',$noInduk,$placementId);$stmt->execute();$bills=$stmt->get_result()->fetch_all(MYSQLI_ASSOC);$stmt->close();
     $update=$db->prepare('UPDATE tagihan_spp SET potongan_persen_snapshot=?,potongan_nominal_snapshot=?,nominal_tagihan=?,status=? WHERE id=?');
     foreach($bills as $bill){
         if((int)$bill['allocated']===1){$locked++;continue;}
@@ -93,7 +103,7 @@ function spp_sync_student_discount(mysqli $db, string $noInduk, float $discountP
         $update->bind_param('dddsi',$discountPercent,$net['discount'],$net['net'],$status,$id);$update->execute();$updated++;
     }
     $update->close();
-    if($updated||$locked)spp_write_audit($db,null,$noInduk,'ubah_potongan_siswa',null,['potongan_persen'=>$discountPercent,'tagihan_diubah'=>$updated,'tagihan_terkunci'=>$locked],$updated+$locked);
+    if($updated||$locked)spp_write_audit($db,null,$noInduk,'ubah_potongan_siswa',null,['penempatan_id'=>$placementId,'potongan_persen'=>$discountPercent,'tagihan_diubah'=>$updated,'tagihan_terkunci'=>$locked],$updated+$locked);
     return ['updated'=>$updated,'locked'=>$locked];
 }
 
@@ -206,9 +216,22 @@ function spp_publish_students(mysqli $db, int $masterYearId, array $students, ar
 }
 
 function spp_deposit_balance(mysqli $db, string $noInduk, bool $forUpdate=false, int $excludeBatch=0): float {
+    if ($forUpdate) {
+        $sql='SELECT jenis,nominal FROM titipan_spp_mutasi WHERE no_induk=?';
+        if ($excludeBatch>0) $sql.=' AND (batch_id IS NULL OR batch_id<>?)';
+        $sql.=' FOR UPDATE';
+        $stmt=$db->prepare($sql);
+        if ($excludeBatch>0) $stmt->bind_param('si',$noInduk,$excludeBatch); else $stmt->bind_param('s',$noInduk);
+        $stmt->execute();
+        $balance=0.0;
+        foreach ($stmt->get_result()->fetch_all(MYSQLI_ASSOC) as $line) {
+            $balance += in_array($line['jenis'],['masuk','koreksi_masuk'],true) ? (float)$line['nominal'] : -(float)$line['nominal'];
+        }
+        $stmt->close();
+        return $balance;
+    }
     $sql="SELECT COALESCE(SUM(CASE WHEN jenis IN ('masuk','koreksi_masuk') THEN nominal ELSE -nominal END),0) saldo FROM titipan_spp_mutasi WHERE no_induk=?";
     if($excludeBatch>0)$sql.=' AND (batch_id IS NULL OR batch_id<>?)';
-    if($forUpdate)$sql.=' FOR UPDATE';
     $stmt=$db->prepare($sql);
     if($excludeBatch>0)$stmt->bind_param('si',$noInduk,$excludeBatch);else$stmt->bind_param('s',$noInduk);
     $stmt->execute();$balance=(float)($stmt->get_result()->fetch_assoc()['saldo']??0);$stmt->close();

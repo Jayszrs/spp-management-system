@@ -5,6 +5,9 @@ require_once __DIR__ . '/koneksi.php';
 try {
     $admin = $koneksi->query('SELECT id FROM admin LIMIT 1');
     $koneksi->query('SELECT id FROM tagihan_komite LIMIT 1');
+    $koneksi->query('SELECT request_key FROM keuangan_request LIMIT 0');
+    $koneksi->query('SELECT keterangan FROM transaksi_m LIMIT 0');
+    $koneksi->query('SELECT keterangan FROM transaksi_k LIMIT 0');
     if ($admin->num_rows === 0) {
         throw new RuntimeException('Administrator awal belum tersedia.');
     }

@@ -33,6 +33,13 @@ function payment_failure_flash(Throwable $error, string $fallbackPrefix): array 
             'message' => 'Tagihan sedang diperbarui oleh kasir lain. Perbarui tagihan, lalu periksa kembali sebelum menyimpan.',
             'target' => 'spp-input',
         ]);
+    } elseif ($error instanceof mysqli_sql_exception) {
+        error_log('Pembayaran gagal di database (kode ' . $error->getCode() . ').');
+        $error = new SppPaymentException([
+            'code' => 'database_error', 'severity' => 'error', 'title' => 'Pembayaran belum tersimpan',
+            'message' => 'Pembayaran belum dapat diproses. Hubungi administrator sistem dan periksa riwayat sebelum mencoba lagi.',
+            'target' => 'spp-input',
+        ]);
     }
 
     if ($error instanceof DaftarUlangSelectionException) {

@@ -13,6 +13,8 @@ require_once '../includes/tagihan_sekali.php';
 require_once '../includes/spp_billing.php';
 require_once '../includes/komite_billing.php';
 requireRole(['admin', 'kasir']);
+if (empty($_SESSION['csrf_payment'])) $_SESSION['csrf_payment'] = bin2hex(random_bytes(32));
+$paymentRequestKey = bin2hex(random_bytes(16));
 $activeAcademicYear = du_current_academic_year();
 $activeAcademicYearSql = $koneksi->real_escape_string($activeAcademicYear);
 
@@ -190,6 +192,8 @@ unset($_SESSION['payment_draft']);
 
         <form method="POST" action="../pembayaran/proses.php" id="form-bayar">
           <input type="hidden" name="aksi" value="input" />
+          <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_payment'], ENT_QUOTES, 'UTF-8') ?>" />
+          <input type="hidden" name="request_key" value="<?= $paymentRequestKey ?>" />
 
           <!-- Pengaturan transaksi + ringkasan tagihan -->
           <div class="top-info-row payment-input-top">

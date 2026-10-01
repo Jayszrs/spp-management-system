@@ -1,4 +1,9 @@
 <?php
+if (PHP_SAPI !== 'cli' || getenv('SPP_TEST_ALLOW_MUTATION') !== '1'
+    || !preg_match('/^db_spp_audit_[a-z0-9_]+$/i', (string)getenv('SPP_DB_NAME'))) {
+    fwrite(STDERR, "SKIPPED: gunakan database disposable db_spp_audit_* dengan SPP_TEST_ALLOW_MUTATION=1.\n");
+    exit(0);
+}
 require_once __DIR__ . '/../koneksi.php';
 
 function role_test_assert(bool $condition, string $message): void {
@@ -45,15 +50,47 @@ function role_test_flash(string $baseUrl, array &$cookies): string {
     return '';
 }
 
-if (getenv('SPP_TEST_ALLOW_MUTATION') !== '1') {
-    fwrite(STDERR, "SKIPPED: jalankan hanya pada database disposable.\n");
-    exit(0);
+$selectedDatabase = (string)$koneksi->query('SELECT DATABASE()')->fetch_row()[0];
+role_test_assert($selectedDatabase === DB_NAME, 'Koneksi tes tidak menuju database disposable yang diminta.');
+$passwordSeed = (string)getenv('SPP_TEST_ADMIN_PASSWORD');
+if ($passwordSeed === '' && ($passwordFile = (string)getenv('SPP_TEST_ADMIN_PASSWORD_FILE')) !== '') {
+    $passwordSeed = trim((string)file_get_contents($passwordFile));
 }
-
-$baseUrl = getenv('SPP_TEST_BASE_URL') ?: 'http://127.0.0.1:8097';
+role_test_assert($passwordSeed !== '', 'SPP_TEST_ADMIN_PASSWORD atau SPP_TEST_ADMIN_PASSWORD_FILE wajib diisi.');
+// Password per-run memastikan server HTTP memakai clone yang akun-akunnya diatur di bawah ini.
+$testPassword = hash_hmac('sha256', bin2hex(random_bytes(16)), $passwordSeed);
+$baseUrl = rtrim((string)(getenv('SPP_TEST_BASE_URL') ?: 'http://127.0.0.1:8766'), '/');
+$urlParts = parse_url($baseUrl);
+role_test_assert(($urlParts['scheme'] ?? '') === 'http'
+    && in_array($urlParts['host'] ?? '', ['127.0.0.1', 'localhost'], true),
+    'SPP_TEST_BASE_URL harus menunjuk server HTTP lokal untuk database latihan.');
 $nis = (string)random_int(9800000000, 9899999999);
 $paymentId = 0;
+$originalHashes = [];
+$changedAccountIds = [];
+$failure = null;
 try {
+    $accounts = ['admin'=>'admin', 'kasir1'=>'kasir', 'kasir2'=>'kasir',
+        'kasir3'=>'kasir', 'kasir4'=>'kasir', 'bendahara'=>'bendahara'];
+    $findAccount = $koneksi->prepare('SELECT id,password,role,is_active FROM admin WHERE username=?');
+    foreach ($accounts as $username => $expectedRole) {
+        $findAccount->bind_param('s', $username);
+        $findAccount->execute();
+        $account = $findAccount->get_result()->fetch_assoc();
+        role_test_assert($account && $account['role'] === $expectedRole && (int)$account['is_active'] === 1,
+            'Akun uji ' . $username . ' tidak tersedia dengan role aktif yang sesuai.');
+        $originalHashes[(int)$account['id']] = (string)$account['password'];
+    }
+    $findAccount->close();
+    $hash = password_hash($testPassword, PASSWORD_DEFAULT);
+    $setPassword = $koneksi->prepare('UPDATE admin SET password=? WHERE id=?');
+    foreach (array_keys($originalHashes) as $accountId) {
+        $setPassword->bind_param('si', $hash, $accountId);
+        $setPassword->execute();
+        $changedAccountIds[] = $accountId;
+    }
+    $setPassword->close();
+
     $class = $koneksi->query("SELECT id,kode_rombel FROM master_kelas WHERE tingkat=1 AND is_placeholder=0 AND is_active=1 ORDER BY id LIMIT 1")->fetch_assoc();
     role_test_assert((bool)$class, 'Rombel kelas 1 tidak tersedia.');
     $name = 'UJI AKSES MUTASI'; $level = '1'; $classId = (int)$class['id']; $pangkal = 1000.0;
@@ -65,8 +102,8 @@ try {
     $stmt->bind_param('ssidssssd', $nis, $level, $classId, $amount, $date, $month, $year, $method, $amount);
     $stmt->execute(); $paymentId = (int)$koneksi->insert_id; $stmt->close();
 
-    foreach ([['kasir1','kasir123'], ['kasir2','kasir123'], ['kasir3','kasir123'], ['kasir4','kasir123'], ['bendahara','bendahara123']] as [$username,$password]) {
-        $cookies = role_test_login($baseUrl, $username, $password);
+    foreach (['kasir1', 'kasir2', 'kasir3', 'kasir4', 'bendahara'] as $username) {
+        $cookies = role_test_login($baseUrl, $username, $testPassword);
         $edit = role_test_request($baseUrl . '/pembayaran/edit.php?id=' . $paymentId, [], $cookies);
         $isCashier = str_starts_with($username, 'kasir');
         role_test_assert($edit['status'] === ($isCashier ? 200 : 302), ucfirst($username) . ' memiliki akses edit pembayaran yang salah.');
@@ -97,7 +134,7 @@ try {
         }
     }
 
-    $adminCookies = role_test_login($baseUrl, 'admin', 'admin123');
+    $adminCookies = role_test_login($baseUrl, 'admin', $testPassword);
     role_test_assert(role_test_request($baseUrl . '/master_spp.php', [], $adminCookies)['status'] === 200, 'Administrator tidak dapat membuka Master Penerbitan SPP.');
     $edit = role_test_request($baseUrl . '/pembayaran/edit.php?id=' . $paymentId, [], $adminCookies);
     role_test_assert($edit['status'] === 200, 'Administrator tidak dapat membuka edit pembayaran.');
@@ -114,7 +151,7 @@ try {
     role_test_assert($stored && abs((float)$stored['U_PANGKAL'] - $updatedAmount) < .001, 'Perubahan administrator tidak langsung diterapkan.');
     role_test_assert((int)$koneksi->query("SELECT COUNT(*) total FROM transaksi_otorisasi WHERE bayar_id={$paymentId}")->fetch_assoc()['total'] === 0, 'Perubahan administrator masuk antrean.');
 
-    $cashier1 = role_test_login($baseUrl, 'kasir1', 'kasir123');
+    $cashier1 = role_test_login($baseUrl, 'kasir1', $testPassword);
     $cashierEdit = role_test_request($baseUrl . '/pembayaran/edit.php?id=' . $paymentId, [], $cashier1);
     role_test_assert((bool)preg_match('/name="csrf_token" value="([a-f0-9]+)"/', $cashierEdit['body'], $cashierMatch), 'Token CSRF kasir tidak ditemukan.');
     $cashierToken = $cashierMatch[1];
@@ -143,24 +180,28 @@ try {
     $authorizationToken = $authorizationMatch[1];
     $cashierQueue = role_test_request($baseUrl . '/otorisasi_transaksi.php', [], $cashier1);
     role_test_assert(str_contains($cashierQueue['body'], 'Koreksi nominal oleh kasir satu.') && !str_contains($cashierQueue['body'], 'Setujui dan Terapkan'), 'Kasir harus melihat pengajuannya tanpa hak persetujuan.');
-    $cashier2 = role_test_login($baseUrl, 'kasir2', 'kasir123');
+    $cashier2 = role_test_login($baseUrl, 'kasir2', $testPassword);
     $otherQueue = role_test_request($baseUrl . '/otorisasi_transaksi.php', [], $cashier2);
     role_test_assert(!str_contains($otherQueue['body'], 'Koreksi nominal oleh kasir satu.'), 'Kasir melihat pengajuan kasir lain.');
     $cashierApprove = role_test_request($baseUrl . '/pembayaran/proses.php', [
         'aksi'=>'otorisasi_setujui', 'request_id'=>(int)$pending['id'], 'csrf_token'=>$authorizationToken,
     ], $cashier2);
     role_test_assert($cashierApprove['status'] === 302, 'Percobaan persetujuan kasir tidak ditolak.');
-    $treasurerCookies = role_test_login($baseUrl, 'bendahara', 'bendahara123');
+    $treasurerCookies = role_test_login($baseUrl, 'bendahara', $testPassword);
     $treasurerQueue = role_test_request($baseUrl . '/otorisasi_transaksi.php', [], $treasurerCookies);
     role_test_assert($treasurerQueue['status'] === 200 && !str_contains($treasurerQueue['body'], 'Setujui dan Terapkan'), 'Bendahara harus dapat memeriksa tanpa tombol otorisasi.');
-    role_test_assert((bool)preg_match('/name="csrf_token" value="([a-f0-9]+)"/', $treasurerQueue['body'], $treasurerMatch), 'Token CSRF antrean bendahara tidak ditemukan.');
+    role_test_assert(!str_contains($treasurerQueue['body'], 'name="csrf_token"'), 'Halaman baca bendahara tidak boleh memuat formulir keputusan.');
     role_test_request($baseUrl . '/pembayaran/proses.php', [
-        'aksi'=>'otorisasi_setujui', 'request_id'=>(int)$pending['id'], 'csrf_token'=>$treasurerMatch[1],
+        'aksi'=>'otorisasi_setujui', 'request_id'=>(int)$pending['id'], 'csrf_token'=>'invalid',
     ], $treasurerCookies);
-    role_test_request($baseUrl . '/otorisasi_transaksi.php', [
+    $treasurerReject = role_test_request($baseUrl . '/otorisasi_transaksi.php', [
         'request_id'=>(int)$pending['id'], 'action'=>'reject', 'decision_note'=>'Percobaan bendahara.',
-        'csrf_token'=>$treasurerMatch[1],
+        'csrf_token'=>'invalid',
     ], $treasurerCookies);
+    role_test_assert($treasurerReject['status'] === 302, 'Penolakan bendahara tidak dialihkan.');
+    $treasurerAfter = role_test_request($baseUrl . '/otorisasi_transaksi.php', [], $treasurerCookies);
+    role_test_assert(str_contains($treasurerAfter['body'], 'Bendahara hanya dapat memeriksa data otorisasi.'),
+        'Bendahara tidak ditolak oleh aturan role sebelum validasi token.');
     role_test_assert((int)$koneksi->query('SELECT COUNT(*) total FROM transaksi_otorisasi WHERE id='.(int)$pending['id']." AND status='pending'")->fetch_assoc()['total'] === 1, 'Bendahara atau kasir dapat memutuskan pengajuan.');
     $approveEdit = role_test_request($baseUrl . '/pembayaran/proses.php', [
         'aksi'=>'otorisasi_setujui', 'request_id'=>(int)$pending['id'],
@@ -188,7 +229,7 @@ try {
     ], $cashier2);
     role_test_assert((int)$koneksi->query('SELECT COUNT(*) total FROM transaksi_otorisasi WHERE id='.(int)$cancelPending['id']." AND status='cancelled'")->fetch_assoc()['total'] === 1, 'Kasir tidak dapat membatalkan pengajuannya.');
 
-    $cashier3 = role_test_login($baseUrl, 'kasir3', 'kasir123');
+    $cashier3 = role_test_login($baseUrl, 'kasir3', $testPassword);
     $cashier3Edit = role_test_request($baseUrl . '/pembayaran/edit.php?id=' . $paymentId, [], $cashier3);
     role_test_assert((bool)preg_match('/name="csrf_token" value="([a-f0-9]+)"/', $cashier3Edit['body'], $cashier3Match), 'Token kasir tiga tidak ditemukan.');
     role_test_request($baseUrl . '/pembayaran/proses.php', [
@@ -210,7 +251,7 @@ try {
     ], $adminCookies);
     role_test_assert((int)$koneksi->query('SELECT COUNT(*) total FROM transaksi_otorisasi WHERE id='.(int)$rejectPending['id']." AND status='rejected'")->fetch_assoc()['total'] === 1, 'Admin gagal menolak pengajuan dengan catatan.');
 
-    $cashier4 = role_test_login($baseUrl, 'kasir4', 'kasir123');
+    $cashier4 = role_test_login($baseUrl, 'kasir4', $testPassword);
     $cashier4Edit = role_test_request($baseUrl . '/pembayaran/edit.php?id=' . $paymentId, [], $cashier4);
     role_test_assert((bool)preg_match('/name="csrf_token" value="([a-f0-9]+)"/', $cashier4Edit['body'], $cashier4Match), 'Token kasir empat tidak ditemukan.');
     role_test_request($baseUrl . '/pembayaran/proses.php', [
@@ -258,13 +299,31 @@ try {
     role_test_assert($directDelete['status'] === 302, 'Penghapusan langsung administrator gagal.');
     role_test_assert((int)$koneksi->query('SELECT COUNT(*) total FROM bayar WHERE id=' . $paymentId)->fetch_assoc()['total'] === 0, 'Administrator tidak langsung menghapus transaksi.');
     $paymentId = 0;
-    echo "OK: admin menyetujui pengajuan kasir dan dapat mengubah langsung; bendahara hanya memeriksa.\n";
 } catch (Throwable $error) {
-    fwrite(STDERR, 'FAILED: ' . $error->getMessage() . PHP_EOL);
-    exit(1);
+    $failure = $error;
 } finally {
-    if ($paymentId > 0) $koneksi->query('DELETE FROM bayar WHERE id=' . $paymentId);
-    $koneksi->query("DELETE FROM transaksi_otorisasi WHERE no_induk_snapshot='" . $koneksi->real_escape_string($nis) . "'");
-    $stmt = $koneksi->prepare('DELETE FROM siswa WHERE NO_INDUK=?');
-    $stmt->bind_param('s', $nis); $stmt->execute(); $stmt->close();
+    try {
+        if ($paymentId > 0) $koneksi->query('DELETE FROM bayar WHERE id=' . $paymentId);
+        $koneksi->query("DELETE FROM transaksi_otorisasi WHERE no_induk_snapshot='" . $koneksi->real_escape_string($nis) . "'");
+        $stmt = $koneksi->prepare('DELETE FROM siswa WHERE NO_INDUK=?');
+        $stmt->bind_param('s', $nis); $stmt->execute(); $stmt->close();
+    } catch (Throwable $cleanupError) {
+        $failure ??= $cleanupError;
+    }
+    try {
+        $restorePassword = $koneksi->prepare('UPDATE admin SET password=? WHERE id=?');
+        foreach ($changedAccountIds as $accountId) {
+            $originalHash = $originalHashes[$accountId];
+            $restorePassword->bind_param('si', $originalHash, $accountId);
+            $restorePassword->execute();
+        }
+        $restorePassword->close();
+    } catch (Throwable $cleanupError) {
+        $failure ??= $cleanupError;
+    }
 }
+if ($failure !== null) {
+    fwrite(STDERR, 'FAILED: ' . $failure->getMessage() . PHP_EOL);
+    exit(1);
+}
+echo "OK: admin menyetujui pengajuan kasir dan dapat mengubah langsung; bendahara hanya memeriksa.\n";

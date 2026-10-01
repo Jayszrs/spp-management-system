@@ -9,6 +9,7 @@ if (getenv('SPP_TEST_ALLOW_MUTATION') !== '1' || !str_starts_with(DB_NAME, 'db_s
     exit(0);
 }
 $password = (string)getenv('SPP_TEST_ADMIN_PASSWORD');
+if ($password === '' && ($file = (string)getenv('SPP_TEST_ADMIN_PASSWORD_FILE')) !== '') $password = trim(file_get_contents($file));
 if ($password === '') throw new RuntimeException('SPP_TEST_ADMIN_PASSWORD is required.');
 $base = rtrim((string)(getenv('SPP_TEST_BASE_URL') ?: 'http://127.0.0.1:8098'), '/');
 
@@ -110,8 +111,13 @@ try {
     lifecycle_assert($publish['status'] === 302, 'First SPP publication request failed.');
     $billCount = (int)$koneksi->query("SELECT COUNT(*) n FROM tagihan_spp WHERE no_induk='" . $koneksi->real_escape_string($nis) . "'")->fetch_assoc()['n'];
     lifecycle_assert($billCount === 12, 'First SPP publication did not create 12 months.');
+    $paymentForm = lifecycle_request($base . '/pembayaran/form.php', null, $cookies, $firstYear);
+    lifecycle_assert($paymentForm['status'] === 200
+        && preg_match('/name="request_key" value="([a-f0-9]{32})"/', $paymentForm['body'], $paymentKey) === 1,
+        'Payment form request key is missing.');
     $payment = lifecycle_request($base . '/pembayaran/proses.php', [
         'aksi' => 'input', 'payment_plan' => 'monthly', 'no_induk' => $nis,
+        'csrf_token' => lifecycle_token($paymentForm['body']), 'request_key' => $paymentKey[1],
         'bulan_bayar' => '07', 'tahun_bayar' => '2030',
         'sistem_pembayaran' => 'Tunai', 'uang_spp' => 250000, 'uang_komite' => 0,
         'spp_action' => 'bayar',

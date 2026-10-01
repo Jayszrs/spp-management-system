@@ -2,13 +2,28 @@
 // tabungan/get_saldo.php — AJAX: ambil saldo tabungan siswa
 session_start();
 require_once '../koneksi.php';
+require_once '../includes/auth.php';
 
+header('Content-Type: application/json; charset=UTF-8');
+header('Cache-Control: private, no-store');
 if (!isset($_SESSION['admin_id'])) {
-    echo json_encode(['saldo' => 0]);
+    http_response_code(401);
+    echo json_encode(['error' => 'Silakan masuk kembali.']);
+    exit;
+}
+if (!hasRole(['admin', 'kasir'])) {
+    http_response_code(403);
+    echo json_encode(['error' => 'Akses saldo tabungan tidak diizinkan.']);
     exit;
 }
 
-$nis  = trim($_GET['nis'] ?? '');
+$nisParam = $_GET['nis'] ?? '';
+if (!is_string($nisParam) || strlen($nisParam) > 10) {
+    http_response_code(400);
+    echo json_encode(['error' => 'NIS siswa tidak valid.']);
+    exit;
+}
+$nis  = trim($nisParam);
 $saldo = 0;
 $rawSaldo = 0;
 $saldoMinus = false;
@@ -24,7 +39,6 @@ if ($nis) {
     $stmt->close();
 }
 
-header('Content-Type: application/json');
 echo json_encode([
     'saldo' => $saldo,
     'raw_saldo' => $rawSaldo,

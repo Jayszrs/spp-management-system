@@ -30,6 +30,11 @@ $originalStudents = (int)$koneksi->query('SELECT COUNT(*) n FROM siswa')->fetch_
 $originalPayments = (float)$koneksi->query('SELECT COALESCE(SUM(total_jumlah),0) n FROM bayar')->fetch_assoc()['n'];
 $originalSavings = (float)$koneksi->query('SELECT COALESCE(SUM(SALDO),0) n FROM tabungan')->fetch_assoc()['n'];
 $sameDiknas = (string)($sdStudent['NO_induk_diknas'] ?: '9876543210');
+unit_set_context($koneksi, 0);
+$allStudentsBefore = (int)$koneksi->query('SELECT COUNT(*) n FROM siswa')->fetch_assoc()['n'];
+$allPaymentsBefore = (float)$koneksi->query('SELECT COALESCE(SUM(total_jumlah),0) n FROM bayar')->fetch_assoc()['n'];
+$allSavingsBefore = (float)$koneksi->query('SELECT COALESCE(SUM(SALDO),0) n FROM tabungan')->fetch_assoc()['n'];
+unit_set_context($koneksi, 1);
 
 $koneksi->begin_transaction();
 try {
@@ -43,6 +48,10 @@ try {
         }
         $class = $koneksi->query("SELECT id FROM master_kelas WHERE tingkat={$level} AND kode_rombel='A' LIMIT 1")->fetch_assoc();
         assert_unit((bool)$class, "Kelas awal unit {$unit} hilang.");
+        $unitPaymentsBefore = (float)$koneksi->query('SELECT COALESCE(SUM(total_jumlah),0) n FROM bayar')->fetch_assoc()['n'];
+        $unitPaymentCountBefore = (int)$koneksi->query('SELECT COUNT(*) n FROM bayar')->fetch_assoc()['n'];
+        $unitSppBillsBefore = (int)$koneksi->query('SELECT COUNT(*) n FROM tagihan_spp')->fetch_assoc()['n'];
+        $unitSavingsBefore = (float)$koneksi->query('SELECT COALESCE(SUM(SALDO),0) n FROM tabungan')->fetch_assoc()['n'];
         $nis = 'TESTUNIT' . $unit;
         $name = 'Uji Unit ' . $unit;
         $classId = (int)$class['id'];
@@ -59,7 +68,7 @@ try {
         $stmt = $koneksi->prepare("INSERT INTO bayar (NO_INDUK,KELAS,TGL_BYR,BULAN,TAHUN,user_id,sistem_pembayaran,U_PANGKAL,total_jumlah) VALUES (?,?,?,?,?,?,'Tunai',?,?)");
         $stmt->bind_param('ssssssdd', $nis, $levelText, $date, $month, $year, $operator, $paid, $paid);
         $stmt->execute(); $stmt->close();
-        assert_unit((float)$koneksi->query('SELECT COALESCE(SUM(total_jumlah),0) n FROM bayar')->fetch_assoc()['n']===$paid, 'Total pembayaran unit salah.');
+        assert_unit((float)$koneksi->query('SELECT COALESCE(SUM(total_jumlah),0) n FROM bayar')->fetch_assoc()['n']===$unitPaymentsBefore+$paid, 'Total pembayaran unit salah.');
 
         $lastLevel = $unit===2 ? 9 : 12;
         $lastClass = $koneksi->query("SELECT id FROM master_kelas WHERE tingkat={$lastLevel} AND kode_rombel='A' LIMIT 1")->fetch_assoc();
@@ -71,13 +80,13 @@ try {
         $stmt = $koneksi->prepare('INSERT INTO siswa (NO_INDUK,NAMA,KELAS,master_kelas_id) VALUES (?,?,?,?)');
         $stmt->bind_param('sssi', $lastNis, $lastName, $lastText, $lastClassId);
         $stmt->execute(); $stmt->close();
-        $academicYear = du_current_academic_year();
+        $academicYear = '2196/2197';
         $yearId = class_ensure_academic_year($koneksi, $academicYear);
         $lastSnapshot = $lastText . 'A';
         $stmt = $koneksi->prepare("INSERT INTO siswa_tahun_ajaran(tahun_ajaran_id,no_induk,kelas,master_kelas_id,kelas_rombel_snapshot,status) VALUES(?,?,?,?,?,'aktif')");
         $stmt->bind_param('issis', $yearId, $lastNis, $lastText, $lastClassId, $lastSnapshot);
         $stmt->execute(); $stmt->close();
-        $targetYear = class_next_academic_year_label(du_current_academic_year());
+        $targetYear = class_next_academic_year_label($academicYear);
         $graduation = class_manual_graduate_student($koneksi, $lastNis, $targetYear);
         assert_unit($graduation['action']==='lulus', "Kelulusan kelas {$lastLevel} gagal.");
         assert_unit((int)$koneksi->query("SELECT is_active FROM siswa WHERE NO_INDUK='{$lastNis}'")->fetch_assoc()['is_active']===0, 'Lulusan tidak diarsipkan.');
@@ -89,13 +98,31 @@ try {
             $stmt->bind_param('issd', $yearId, $academicYear, $classText, $amount);
             $stmt->execute(); $stmt->close();
         }
-        assert_unit(du_publish_year_from_active_students($koneksi, $yearId, $academicYear)===2, "Penerbitan Daftar Ulang unit {$unit} gagal.");
+        // The copied database already contains active students. Complete this
+        // disposable future-year fixture before testing the bulk publisher.
+        $regularClasses = unit_level_in_sql();
+        $koneksi->query("INSERT INTO siswa_tahun_ajaran
+            (tahun_ajaran_id,no_induk,kelas,master_kelas_id,kelas_rombel_snapshot,
+             spp_perbulan_snapshot,komite_snapshot,status)
+            SELECT {$yearId},s.NO_INDUK,s.KELAS,s.master_kelas_id,
+                CASE WHEN mk.id IS NULL OR mk.is_placeholder=1
+                    THEN CONCAT('Kelas ',s.KELAS,' (Belum Ditentukan)')
+                    ELSE CONCAT(mk.tingkat,UPPER(mk.kode_rombel)) END,
+                s.SPP_PERBULAN,s.POMG,'aktif'
+            FROM siswa s LEFT JOIN master_kelas mk ON mk.id=s.master_kelas_id
+            WHERE s.is_active=1 AND s.KELAS IN {$regularClasses}
+              AND NOT EXISTS(SELECT 1 FROM siswa_tahun_ajaran p
+                WHERE p.no_induk=s.NO_INDUK AND p.tahun_ajaran_id={$yearId})");
+        $expectedPublished = (int)$koneksi->query("SELECT COUNT(*) n FROM siswa_tahun_ajaran
+            WHERE tahun_ajaran_id={$yearId} AND kelas IN {$regularClasses}")->fetch_assoc()['n'];
+        assert_unit(du_publish_year_from_active_students($koneksi, $yearId, $academicYear)===$expectedPublished,
+            "Penerbitan Daftar Ulang unit {$unit} gagal.");
         $master = spp_master_ensure_year($koneksi, $academicYear);
         $rates = array_fill_keys(range($level, $lastLevel), 250000.0);
         spp_master_save_rates($koneksi, (int)$master['id'], $rates);
         $published = spp_publish_students($koneksi, (int)$master['id'], [$nis]);
         assert_unit((int)$published['created']===12, "Penerbitan SPP unit {$unit} gagal.");
-        assert_unit((int)$koneksi->query('SELECT COUNT(*) n FROM tagihan_spp')->fetch_assoc()['n']===12, 'Tagihan SPP unit lain terlihat.');
+        assert_unit((int)$koneksi->query('SELECT COUNT(*) n FROM tagihan_spp')->fetch_assoc()['n']===$unitSppBillsBefore+12, 'Tagihan SPP unit lain terlihat.');
         $sppAmount = 250000.0;
         $sppMonth = '07';
         $sppYear = substr($academicYear, 0, 4);
@@ -117,14 +144,14 @@ try {
         $koneksi->query("UPDATE tabungan SET SALDO=7000 WHERE NO_INDUK='{$nis}'");
         $stmt = $koneksi->prepare('INSERT INTO transaksi_k (NO_INDUK,TANGGAL,KELUAR,user_id) VALUES (?,?,3000,?)');
         $stmt->bind_param('sss', $nis, $date, $operator); $stmt->execute(); $stmt->close();
-        assert_unit((float)$koneksi->query('SELECT COALESCE(SUM(SALDO),0) n FROM tabungan')->fetch_assoc()['n']===7000.0, 'Saldo tabungan unit salah.');
+        assert_unit((float)$koneksi->query('SELECT COALESCE(SUM(SALDO),0) n FROM tabungan')->fetch_assoc()['n']===$unitSavingsBefore+7000.0, 'Saldo tabungan unit salah.');
 
         $foreignId = (int)$sdStudent['id'];
         $stmt = $koneksi->prepare('UPDATE siswa SET NAMA=? WHERE id=?');
         $stmt->bind_param('si', $name, $foreignId); $stmt->execute();
         assert_unit($stmt->affected_rows===0, 'ID siswa SD dapat diubah oleh unit lain.');
         $stmt->close();
-        assert_unit((int)$koneksi->query("SELECT COUNT(*) n FROM bayar")->fetch_assoc()['n']===2, 'Transaksi unit lain terlihat.');
+        assert_unit((int)$koneksi->query("SELECT COUNT(*) n FROM bayar")->fetch_assoc()['n']===$unitPaymentCountBefore+2, 'Transaksi unit lain terlihat.');
     }
 
     unit_set_context($koneksi, 2);
@@ -141,9 +168,9 @@ try {
     assert_unit($rejected, 'Relasi kelas lintas unit diterima.');
 
     unit_set_context($koneksi, 0);
-    assert_unit((int)$koneksi->query('SELECT COUNT(*) n FROM siswa')->fetch_assoc()['n']===$originalStudents+4, 'Rekap Semua Unit tidak mencakup semua siswa.');
-    assert_unit((float)$koneksi->query('SELECT COALESCE(SUM(total_jumlah),0) n FROM bayar')->fetch_assoc()['n']===$originalPayments+505000, 'Total Semua Unit tidak sama dengan jumlah SD, SMP, dan SMA.');
-    assert_unit((float)$koneksi->query('SELECT COALESCE(SUM(SALDO),0) n FROM tabungan')->fetch_assoc()['n']===$originalSavings+14000, 'Saldo Semua Unit tidak sama dengan jumlah per unit.');
+    assert_unit((int)$koneksi->query('SELECT COUNT(*) n FROM siswa')->fetch_assoc()['n']===$allStudentsBefore+4, 'Rekap Semua Unit tidak mencakup semua siswa.');
+    assert_unit((float)$koneksi->query('SELECT COALESCE(SUM(total_jumlah),0) n FROM bayar')->fetch_assoc()['n']===$allPaymentsBefore+505000, 'Total Semua Unit tidak sama dengan jumlah SD, SMP, dan SMA.');
+    assert_unit((float)$koneksi->query('SELECT COALESCE(SUM(SALDO),0) n FROM tabungan')->fetch_assoc()['n']===$allSavingsBefore+14000, 'Saldo Semua Unit tidak sama dengan jumlah per unit.');
     $rejected = false;
     try { $koneksi->query("UPDATE siswa SET NAMA='Tidak boleh' WHERE id=".(int)$sdStudent['id']); }
     catch (mysqli_sql_exception $error) { $rejected=$error->getSqlState()==='45000'; }

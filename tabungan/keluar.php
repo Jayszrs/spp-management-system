@@ -6,6 +6,8 @@ session_start();
 require_once '../koneksi.php';
 require_once '../includes/auth.php';
 requireRole(['admin', 'kasir']);
+if (empty($_SESSION['csrf_savings'])) $_SESSION['csrf_savings'] = bin2hex(random_bytes(32));
+$savingsRequestKey = bin2hex(random_bytes(16));
 
 $flash = $_SESSION['flash'] ?? null;
 unset($_SESSION['flash']);
@@ -72,6 +74,8 @@ $siswa_list = $koneksi->query("SELECT id, NO_INDUK, NO_induk_diknas, NAMA, KELAS
 
           <form method="POST" action="proses.php" id="form-tabungan" class="savings-entry-form">
             <input type="hidden" name="aksi" value="keluar" />
+            <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_savings'], ENT_QUOTES, 'UTF-8') ?>" />
+            <input type="hidden" name="request_key" value="<?= $savingsRequestKey ?>" />
 
             <div class="section-divider"><span>Data Siswa</span></div>
             <div class="fields-grid savings-student-grid">
@@ -129,7 +133,7 @@ $siswa_list = $koneksi->query("SELECT id, NO_INDUK, NO_induk_diknas, NAMA, KELAS
               </div>
               <div class="field-row full-span">
                 <label class="field-label" for="ket-keluar">Keterangan (opsional)</label>
-                <input class="field-input" type="text" id="ket-keluar" name="keterangan" placeholder="Misal: Penarikan tunai, dll." />
+                <input class="field-input" type="text" id="ket-keluar" name="keterangan" maxlength="255" placeholder="Misal: Penarikan tunai, dll." />
               </div>
             </div>
 

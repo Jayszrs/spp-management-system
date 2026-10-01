@@ -1,5 +1,7 @@
 # Audit alur operasional SistemSPP — 30 September 2026
 
+> **Catatan lanjutan 1 Oktober:** Dokumen ini mempertahankan bukti pada tanggal auditnya. Audit kesiapan yang lebih baru menemukan dan memperbaiki tambahan masalah tarif historis, rekap keuangan, konkurensi pembayaran, agregasi Biaya Lain, dan perlindungan endpoint pada database latihan. Database utama masih memerlukan migrasi sebelum kode baru layak diterapkan. Lihat [audit kesiapan 1 Oktober](READINESS_AUDIT_20261001.md) untuk status serta batas bukti terbaru; angka dan batas pengujian di bawah berlaku untuk sesi 30 September.
+
 ## Hasil perbaikan pada 30 September 2026
 
 Tiga temuan aplikasi pada audit awal telah diperbaiki. Filter Aktif, Arsip/Lulus, dan Semua pada Status Pembayaran SPP/Komite/Daftar Ulang serta SPP Tahun Ajaran kini mengikuti `siswa.is_active`; kelas dan nominal tetap berasal dari penempatan serta tagihan tahun yang dilaporkan. Per Item SPP/Komite memakai penempatan dan ID penempatan tagihan, memisahkan baris siswa per tahun ajaran, memberi tanda `—` pada bulan di luar tahun baris, serta menyediakan filter status siswa. Jalur kompatibilitas SPP tetap membaca penempatan `pindah` dan `lulus`; pesan penolakan pembayaran menyebut bulan dan tahun tunggakan tertua pada input maupun edit.

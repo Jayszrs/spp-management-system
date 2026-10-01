@@ -43,12 +43,14 @@ function student_psb_flash(string $html): string {
     return trim(html_entity_decode(strip_tags($m[1])));
 }
 
-if (getenv('SPP_TEST_ALLOW_MUTATION') !== '1') {
-    fwrite(STDERR, "SKIPPED: jalankan hanya pada database disposable.\n");
+if (getenv('SPP_TEST_ALLOW_MUTATION') !== '1' || !str_starts_with(DB_NAME, 'db_spp_audit_')) {
+    fwrite(STDERR, "SKIPPED: gunakan SPP_TEST_ALLOW_MUTATION=1 dan database db_spp_audit_*.\n");
     exit(0);
 }
 
 $baseUrl = getenv('SPP_TEST_BASE_URL') ?: 'http://127.0.0.1:8097';
+$password = (string)getenv('SPP_TEST_ADMIN_PASSWORD');
+if ($password === '') throw new RuntimeException('SPP_TEST_ADMIN_PASSWORD wajib untuk tes HTTP.');
 $created = [];
 try {
     $psbClass = (int)$koneksi->query("SELECT id FROM master_kelas WHERE tingkat=0 AND kode_rombel='PSB' AND is_active=1 LIMIT 1")->fetch_assoc()['id'];
@@ -56,7 +58,7 @@ try {
     student_psb_assert($psbClass > 0 && $regularClass > 0, 'Master kelas untuk tes tidak lengkap.');
 
     $cookies=[];
-    $login=student_psb_request($baseUrl . '/login.php',['username'=>'admin','password'=>'admin123'],$cookies);
+    $login=student_psb_request($baseUrl . '/login.php',['username'=>'admin','password'=>$password],$cookies);
     student_psb_assert($login['status']===302 && isset($cookies['PHPSESSID']), 'Login admin gagal.');
     $page=student_psb_page($baseUrl,$cookies);
     student_psb_assert($page['status']===200,'Master Siswa tidak dapat dibuka.');

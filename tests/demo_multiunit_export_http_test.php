@@ -56,8 +56,10 @@ foreach ([1,2,3,0] as $unitId) {
         $expectedCount = $template === 'riwayat-tagihan'
             ? count(report_billing_history_group_students($expected['rows']))
             : (int)($expected['total'] ?? count($expected['rows']));
+        preg_match('/([0-9.,]+) data/', $preview, $previewCountMatch);
         export_fixture_assert(str_contains($preview, number_format($expectedCount).' data'),
-            "Jumlah baris pratinjau {$template} ".unit_label($unitId).' berbeda.');
+            "Jumlah baris pratinjau {$template} ".unit_label($unitId)
+            ." berbeda: sumber={$expectedCount}, pratinjau=".($previewCountMatch[1] ?? '?').'.');
         [$headers,$excel] = export_fixture_get($path.'&format=excel', $sessionId);
         export_fixture_assert(str_contains($headers[0] ?? '', '200') && str_contains($excel, 'Download EXCEL'),
             "Pratinjau Excel {$template} ".unit_label($unitId).' gagal.');
@@ -80,16 +82,20 @@ foreach ([1,2,3,0] as $unitId) {
                 'PDF surat '.unit_label($unitId).' gagal.');
             export_fixture_assert(str_contains(strtolower(export_fixture_header($headers,'Content-Disposition')), 'attachment'),
                 'Unduhan PDF surat '.unit_label($unitId).' bukan lampiran.');
-            if (count($expected['rows']) >= 2) {
-                $ids = [$expected['rows'][0]['nis'], $expected['rows'][1]['nis']];
-                [$selectedHeaders,$selectedPreview] = export_fixture_get($path.'&format=preview&mode=selected&nis='.rawurlencode(implode(',',$ids)), $sessionId);
-                export_fixture_assert(str_contains($selectedHeaders[0] ?? '', '200')
-                    && str_contains($selectedPreview, '2 data')
-                    && str_contains($selectedPreview, 'mode=selected'),
-                    'Pratinjau dua siswa terpilih '.unit_label($unitId).' salah.');
-                [$singleHeaders,$singlePreview] = export_fixture_get($path.'&format=preview&mode=single&nis='.rawurlencode($ids[0]), $sessionId);
-                export_fixture_assert(str_contains($singleHeaders[0] ?? '', '200') && str_contains($singlePreview, '1 data'),
-                    'Pratinjau satu siswa '.unit_label($unitId).' salah.');
+            if ($expected['rows'] && (int)($expected['rows'][0]['master_kelas_id'] ?? 0) > 0) {
+                $classId = (int)$expected['rows'][0]['master_kelas_id'];
+                $classSource = array_replace($source, ['kelas'=>'rombel:'.$classId]);
+                $classExpected = report_build($koneksi, $template, report_filters($koneksi, $classSource));
+                [$classHeaders,$classPreview] = export_fixture_get(
+                    $base.'/laporan/export_global.php?'.http_build_query($classSource).'&format=preview&mode=class',
+                    $sessionId
+                );
+                export_fixture_assert(str_contains($classHeaders[0] ?? '', '200')
+                    && str_contains($classPreview, number_format(count($classExpected['rows'])).' data'),
+                    'Pratinjau surat satu rombel '.unit_label($unitId).' salah.');
+                [$oldHeaders] = export_fixture_get($path.'&format=preview&mode=single&nis=tidak-berlaku', $sessionId);
+                export_fixture_assert(str_contains($oldHeaders[0] ?? '', '400'),
+                    'Mode surat kepala sekolah per siswa masih diterima.');
             }
         }
         $checked++;

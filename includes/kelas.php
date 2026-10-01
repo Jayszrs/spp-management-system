@@ -588,7 +588,7 @@ function class_sync_student_current_year(
     }
     if ($placementId > 0 && $status === 'aktif') {
         komite_sync_placement($db, $placementId);
-        $rateResult=komite_sync_student_rate($db,$noInduk,$komite);
+        $rateResult=komite_sync_student_rate($db,$noInduk,$komite,$placementId);
         $syncResult[$rateResult['updated']>0?'synced':'unchanged'][]='komite';
     }
 

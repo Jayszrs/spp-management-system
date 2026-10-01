@@ -15,6 +15,7 @@ require_once '../includes/spp_billing.php';
 require_once '../includes/komite_billing.php';
 require_once '../includes/payment_form_feedback.php';
 require_once '../includes/transaction_authorization.php';
+require_once '../includes/financial_request.php';
 
 $aksi = $_POST['aksi'] ?? $_GET['aksi'] ?? '';
 $authorizationRequest = null;
@@ -458,9 +459,7 @@ function collect_biaya_lain(mysqli $koneksi, string $noInduk, int $bayarId = 0):
                 'target'=>'biaya-lain-list']);
         }
         $masterTotal = (float)$bill['nominal_tagihan'];
-        $stmtPaid = $koneksi->prepare('SELECT COALESCE(SUM(d.nominal_snapshot),0) paid FROM bayar_biaya_lain d WHERE d.tagihan_biaya_lain_id=? AND d.bayar_id<>?');
-        $stmtPaid->bind_param('ii', $billId, $bayarId); $stmtPaid->execute();
-        $paidBefore = (float)($stmtPaid->get_result()->fetch_assoc()['paid'] ?? 0); $stmtPaid->close();
+        $paidBefore = other_fee_paid_for_bill($koneksi, $billId, $bayarId, true);
         if ($paidBefore > $masterTotal + 0.001) {
             throw new RuntimeException($bill['nama_snapshot'] . ' sudah melebihi total tagihan. Periksa transaksi sebelumnya.');
         }
@@ -553,7 +552,14 @@ function find_linked_payment(mysqli $db, int $bayarId): array {
 
 // ── INSERT ──────────────────────────────────
 if ($aksi === 'input') {
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST' || empty($_SESSION['csrf_payment'])
+        || !hash_equals($_SESSION['csrf_payment'], (string)($_POST['csrf_token'] ?? ''))) {
+        $_SESSION['flash'] = ['type'=>'error', 'msg'=>'Permintaan pembayaran tidak valid atau sesi telah kedaluwarsa. Muat ulang formulir.'];
+        header('Location: form.php');
+        exit;
+    }
     $_SESSION['payment_draft']=payment_capture_draft($_POST);
+    $requestKey = (string)($_POST['request_key'] ?? '');
     $no_induk        = trim($_POST['no_induk'] ?? '');
     // Transaksi baru selalu memakai waktu server Asia/Jakarta.
     $tanggal_bayar   = date('Y-m-d H:i:s');
@@ -596,6 +602,7 @@ if ($aksi === 'input') {
     $koneksi->begin_transaction();
 
     try {
+        financial_request_reserve($koneksi, $requestKey, 'pembayaran', (int)$_SESSION['admin_id']);
         $usePublishedSpp = spp_billing_schema_ready($koneksi);
         if ($payment_plan !== 'monthly') throw new RuntimeException('Pembayaran banyak bulan sedang ditangguhkan. Gunakan transaksi bulanan.');
         if (!in_array($spp_action, ['bayar','titipan'], true)) throw new RuntimeException('Tindakan SPP tidak dikenal.');
@@ -751,6 +758,7 @@ if ($aksi === 'input') {
         }
         $stmt->close();
 
+        financial_request_complete($koneksi, $requestKey, (int)$receipt_ids[0]);
         $koneksi->commit();
         unset($_SESSION['payment_draft']);
         $_SESSION['flash'] = [

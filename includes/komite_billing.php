@@ -15,7 +15,8 @@ function komite_sync_placement(mysqli $db, int $placementId): int {
     $stmt->bind_param('i', $placementId); $stmt->execute();
     $placement = $stmt->get_result()->fetch_assoc(); $stmt->close();
     [$firstLevel, $lastLevel] = unit_level_bounds();
-    if (!$placement || (int)$placement['kelas'] < $firstLevel || (int)$placement['kelas'] > $lastLevel) return 0;
+    if (!$placement || $placement['status'] === 'lulus'
+        || (int)$placement['kelas'] < $firstLevel || (int)$placement['kelas'] > $lastLevel) return 0;
     $periods = spp_academic_periods((string)$placement['label']);
     $start = (string)($placement['komite_mulai_bulan'] ?? '07');
     $startIndex = 0;
@@ -56,12 +57,16 @@ function komite_set_start_month(mysqli $db, int $placementId, string $month): vo
     komite_sync_placement($db,$placementId);
 }
 
-function komite_sync_student_rate(mysqli $db, string $noInduk, float $rate): array {
+function komite_sync_student_rate(mysqli $db, string $noInduk, float $rate, int $placementId): array {
     if ($rate < 0 || !is_finite($rate)) throw new RuntimeException('Tarif Komite tidak valid.');
-    $stmt = $db->prepare("UPDATE tagihan_komite tk SET tk.nominal_tagihan=? WHERE tk.no_induk=? AND tk.status='open' AND NOT EXISTS(SELECT 1 FROM bayar_komite bk WHERE bk.tagihan_komite_id=tk.id)");
-    $stmt->bind_param('ds', $rate, $noInduk); $stmt->execute(); $changed=$stmt->affected_rows; $stmt->close();
-    $stmt = $db->prepare('UPDATE siswa_tahun_ajaran SET komite_snapshot=? WHERE no_induk=? AND status=\'aktif\'');
-    $stmt->bind_param('ds', $rate, $noInduk); $stmt->execute(); $stmt->close();
+    $stmt = $db->prepare("SELECT id FROM siswa_tahun_ajaran WHERE id=? AND no_induk=? AND status='aktif' LIMIT 1 FOR UPDATE");
+    $stmt->bind_param('is', $placementId, $noInduk); $stmt->execute();
+    $placement = $stmt->get_result()->fetch_assoc(); $stmt->close();
+    if (!$placement) throw new RuntimeException('Penempatan aktif siswa untuk perubahan tarif Komite tidak ditemukan.');
+    $stmt = $db->prepare("UPDATE tagihan_komite tk SET tk.nominal_tagihan=? WHERE tk.penempatan_id=? AND tk.no_induk=? AND tk.status='open' AND NOT EXISTS(SELECT 1 FROM bayar_komite bk WHERE bk.tagihan_komite_id=tk.id)");
+    $stmt->bind_param('dis', $rate, $placementId, $noInduk); $stmt->execute(); $changed=$stmt->affected_rows; $stmt->close();
+    $stmt = $db->prepare("UPDATE siswa_tahun_ajaran SET komite_snapshot=? WHERE id=? AND no_induk=? AND status='aktif'");
+    $stmt->bind_param('dis', $rate, $placementId, $noInduk); $stmt->execute(); $stmt->close();
     return ['updated'=>$changed];
 }
 

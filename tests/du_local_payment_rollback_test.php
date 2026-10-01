@@ -1,15 +1,16 @@
 <?php
 
-/** Smoke test pada db_spp demo lokal: semua INSERT dibatalkan sebelum selesai. */
+/** Semua INSERT dibatalkan, tetapi tes tetap wajib memakai database disposable. */
+if (PHP_SAPI !== 'cli'
+    || !preg_match('/^db_spp_(?:test|audit)_[a-z0-9_]+$/i', (string)getenv('SPP_DB_NAME'))
+    || getenv('SPP_TEST_ALLOW_MUTATION') !== '1') {
+    fwrite(STDERR, "SKIPPED: gunakan salinan db_spp_test_* atau db_spp_audit_* dengan SPP_TEST_ALLOW_MUTATION=1.\n");
+    exit(0);
+}
 require_once __DIR__ . '/../koneksi.php';
 require_once __DIR__ . '/../includes/daftar_ulang.php';
 require_once __DIR__ . '/../includes/spp_billing.php';
 require_once __DIR__ . '/../includes/komite_billing.php';
-
-if (getenv('SPP_TEST_ALLOW_LOCAL_ROLLBACK') !== '1' || $koneksi->query('SELECT DATABASE()')->fetch_row()[0] !== 'db_spp') {
-    fwrite(STDERR, "SKIPPED: hanya untuk db_spp lokal dengan SPP_TEST_ALLOW_LOCAL_ROLLBACK=1.\n");
-    exit(0);
-}
 
 function du_local_assert(bool $condition, string $message): void {
     if (!$condition) throw new RuntimeException($message);
@@ -42,7 +43,7 @@ function du_local_insert_header(mysqli $db, string $nis, string $kelas, string $
 }
 
 function du_local_run_case(mysqli $db, array $candidate, bool $withMonthly,
-    string $month = '07', string $year = '2026'): void {
+    string $month = '07', string $year = '2026', bool $simulateGraduate = false): void {
     $billId = (int)$candidate['id'];
     $nis = (string)$candidate['no_induk'];
     $kelas = (string)$candidate['kelas_snapshot'];
@@ -52,6 +53,18 @@ function du_local_run_case(mysqli $db, array $candidate, bool $withMonthly,
 
     $db->begin_transaction();
     try {
+        if ($simulateGraduate) {
+            $stmt = $db->prepare('UPDATE siswa SET is_active=0 WHERE NO_INDUK=?');
+            $stmt->bind_param('s', $nis);
+            $stmt->execute();
+            $stmt->close();
+            $stmt = $db->prepare("UPDATE siswa_tahun_ajaran p
+                JOIN tagihan_daftar_ulang t ON t.penempatan_id=p.id
+                SET p.status='lulus' WHERE t.id=?");
+            $stmt->bind_param('i', $billId);
+            $stmt->execute();
+            $stmt->close();
+        }
         $bill = du_require_selectable_bill($db, $billId, $nis, 0, true);
         du_assert_bill_snapshot($bill, $previous['nominal_tagihan'], $previous['terbayar']);
         $du = $withMonthly ? 2000.0 : 1000.0;
@@ -119,8 +132,14 @@ $graduate = $koneksi->query("SELECT t.id,t.no_induk,t.kelas_snapshot
     WHERE t.status='open' AND t.tahun_ajaran_snapshot='2026/2027'
       AND t.kelas_snapshot='6' AND t.nominal_tagihan-COALESCE(p.paid,0)>=2000
     ORDER BY t.id LIMIT 1")->fetch_assoc();
-du_local_assert($graduate !== null, 'Tidak ada lulusan kelas 6 dengan Daftar Ulang terbuka.');
-du_local_run_case($koneksi, $graduate, false);
+if ($graduate) {
+    du_local_run_case($koneksi, $graduate, false);
+} else {
+    $classSixCandidate = array_values(array_filter($candidates,
+        static fn(array $row): bool => $row['kelas_snapshot'] === '6'))[0] ?? null;
+    du_local_assert($classSixCandidate !== null, 'Tidak ada tagihan kelas 6 terbuka untuk simulasi lulusan.');
+    du_local_run_case($koneksi, $classSixCandidate, false, '07', '2026', true);
+}
 
 $combined = null;
 $combinedMonth = '';

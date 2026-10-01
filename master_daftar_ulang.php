@@ -13,10 +13,14 @@ if (empty($_SESSION['csrf_prior_debt'])) $_SESSION['csrf_prior_debt'] = bin2hex(
 function master_du_e($value): string { return htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8'); }
 function master_du_amount($value): float { return (float)str_replace(['.', ','], ['', '.'], trim((string)$value)); }
 function master_du_redirect(string $year): void { header('Location: master_daftar_ulang.php?tahun=' . urlencode($year)); exit; }
-function master_du_year(mysqli $db, string $label, bool $lock = false): array {
+function master_du_find_year(mysqli $db, string $label, bool $lock = false): ?array {
     $stmt = $db->prepare('SELECT * FROM tahun_ajaran WHERE label = ? LIMIT 1' . ($lock ? ' FOR UPDATE' : ''));
     $stmt->bind_param('s', $label); $stmt->execute();
     $row = $stmt->get_result()->fetch_assoc(); $stmt->close();
+    return $row ?: null;
+}
+function master_du_year(mysqli $db, string $label, bool $lock = false): array {
+    $row = master_du_find_year($db, $label, $lock);
     if (!$row) throw new RuntimeException('Tahun ajaran tidak ditemukan.');
     return $row;
 }
@@ -30,7 +34,6 @@ function master_du_ensure_year(mysqli $db, string $label): array {
 $selectedYear = trim((string)($_GET['tahun'] ?? $_POST['tahun_ajaran'] ?? du_current_academic_year()));
 try { $selectedYear = du_normalize_academic_year($selectedYear); }
 catch (Throwable $e) { $selectedYear = du_current_academic_year(); }
-master_du_ensure_year($koneksi, $selectedYear);
 
 $flash = $_SESSION['flash'] ?? null;
 unset($_SESSION['flash']);
@@ -44,7 +47,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = (string)($_POST['aksi'] ?? '');
     try {
         $koneksi->begin_transaction();
+        if (in_array($action, ['simpan_dan_terbitkan', 'terbitkan'], true)) {
+            master_du_ensure_year($koneksi, $selectedYear);
+        }
         $year = master_du_year($koneksi, $selectedYear, true);
+        if ($action === 'simpan_dan_terbitkan' && $year['status'] !== 'draft') {
+            throw new RuntimeException('Tahun ajaran sudah berubah sejak formulir dibuka. Muat ulang halaman.');
+        }
         $yearId = (int)$year['id'];
 
         if(in_array($action,['simpan_dan_terbitkan','terbitkan'],true)){
@@ -142,8 +151,10 @@ for ($offset=-2; $offset<=3; $offset++) {
     $start=$currentStart+$offset; $label=$start.'/'.($start+1);
     if (!isset($yearRowsByLabel[$label])) $yearRowsByLabel[$label]=['label'=>$label,'status'=>'draft'];
 }
+if (!isset($yearRowsByLabel[$selectedYear])) $yearRowsByLabel[$selectedYear]=['label'=>$selectedYear,'status'=>'draft'];
 krsort($yearRowsByLabel); $yearRows=array_values($yearRowsByLabel);
-$year=master_du_year($koneksi,$selectedYear); $yearId=(int)$year['id'];
+$year=master_du_find_year($koneksi,$selectedYear) ?? ['id'=>0,'label'=>$selectedYear,'status'=>'draft'];
+$yearId=(int)$year['id'];
 
 [$firstLevel, $lastLevel] = unit_level_bounds();
 $masters=array_fill($firstLevel,$lastLevel-$firstLevel+1,0.0);

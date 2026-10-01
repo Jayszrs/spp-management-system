@@ -39,11 +39,25 @@ function one_time_fee_status(mysqli $db, string $noInduk, int $excludePaymentId 
     $stmt->close();
     if (!$student) throw new RuntimeException('Data siswa tidak ditemukan.');
 
-    $stmt = $db->prepare('SELECT COALESCE(SUM(U_PANGKAL),0) pangkal,COALESCE(SUM(U_PSB),0) psb FROM bayar WHERE NO_INDUK=? AND id<>?');
-    $stmt->bind_param('si', $noInduk, $excludePaymentId);
-    $stmt->execute();
-    $paid = $stmt->get_result()->fetch_assoc() ?: [];
-    $stmt->close();
+    if ($forUpdate) {
+        // Locking read melihat pembayaran yang baru di-commit saat transaksi
+        // ini menunggu kunci siswa. SUM biasa dapat membaca snapshot lama.
+        $stmt = $db->prepare('SELECT U_PANGKAL,U_PSB FROM bayar WHERE NO_INDUK=? AND id<>? FOR UPDATE');
+        $stmt->bind_param('si', $noInduk, $excludePaymentId);
+        $stmt->execute();
+        $paid = ['pangkal'=>0.0, 'psb'=>0.0];
+        foreach ($stmt->get_result()->fetch_all(MYSQLI_ASSOC) as $payment) {
+            $paid['pangkal'] += (float)$payment['U_PANGKAL'];
+            $paid['psb'] += (float)$payment['U_PSB'];
+        }
+        $stmt->close();
+    } else {
+        $stmt = $db->prepare('SELECT COALESCE(SUM(U_PANGKAL),0) pangkal,COALESCE(SUM(U_PSB),0) psb FROM bayar WHERE NO_INDUK=? AND id<>?');
+        $stmt->bind_param('si', $noInduk, $excludePaymentId);
+        $stmt->execute();
+        $paid = $stmt->get_result()->fetch_assoc() ?: [];
+        $stmt->close();
+    }
 
     $totals = one_time_fee_totals_from_student($student);
     $result = [];
