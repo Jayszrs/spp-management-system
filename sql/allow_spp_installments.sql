@@ -1,14 +1,2 @@
--- =========================================================
--- SUPERSEDED
--- =========================================================
--- Migrasi ini dulu dipakai untuk mengizinkan cicilan SPP pada bulan yang sama.
--- Aturan terbaru: SPP wajib dibayar penuh dan satu siswa hanya boleh memiliki
--- satu transaksi SPP untuk bulan/tahun yang sama.
---
--- Struktur dan rekonsiliasi aturan terbaru ditangani oleh:
--- sql/add_psb_and_spp_full_rules.sql
---
--- File ini sengaja dibuat no-op agar runner migrasi lama tidak membalik aturan
--- SPP kembali menjadi cicilan.
-
-USE `db_spp`;
+-- Direct import disabled. Use the reviewed CLI runner and an explicit target.
+SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Direct import disabled; use php sql/run_legacy_sql.php --script=allow_spp_installments.sql';

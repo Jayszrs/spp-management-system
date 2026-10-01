@@ -9,7 +9,7 @@ function transaction_authorization_schema_ready(mysqli $db): bool
 function transaction_authorization_assert_ready(mysqli $db): void
 {
     if (!transaction_authorization_schema_ready($db)) {
-        throw new RuntimeException('Schema otorisasi transaksi belum tersedia. Jalankan sql/add_transaction_authorization.sql.');
+        throw new RuntimeException('Schema otorisasi transaksi belum tersedia. Hubungi operator untuk migrasi skema.');
     }
 }
 

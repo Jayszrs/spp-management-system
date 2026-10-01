@@ -23,6 +23,27 @@ function receipt_discount_http(string $url, string $sessionId): string {
         'Laporan HTTP tidak menghasilkan status 200: ' . $url);
     return $body === false ? '' : $body;
 }
+function receipt_discount_pdf_text(string $pdf): string {
+    $binary = getenv('SPP_PDFTOTEXT') ?: 'pdftotext';
+    $pdfFile = tempnam(sys_get_temp_dir(), 'spp_report_pdf_');
+    $textFile = tempnam(sys_get_temp_dir(), 'spp_report_text_');
+    receipt_discount_assert($pdfFile !== false && $textFile !== false, 'Berkas sementara PDF tidak dapat dibuat.');
+    try {
+        receipt_discount_assert(file_put_contents($pdfFile, $pdf) === strlen($pdf), 'PDF biner tidak dapat ditulis untuk pemeriksaan.');
+        $process = proc_open([$binary, '-layout', $pdfFile, $textFile],
+            [['pipe', 'r'], ['pipe', 'w'], ['pipe', 'w']], $pipes, null, null,
+            ['bypass_shell' => true]);
+        receipt_discount_assert(is_resource($process), 'pdftotext tidak tersedia untuk memeriksa PDF biner.');
+        fclose($pipes[0]);
+        stream_get_contents($pipes[1]); fclose($pipes[1]);
+        $error = stream_get_contents($pipes[2]); fclose($pipes[2]);
+        receipt_discount_assert(proc_close($process) === 0, 'Ekstraksi PDF gagal: ' . trim($error));
+        return (string)file_get_contents($textFile);
+    } finally {
+        if ($pdfFile !== false) unlink($pdfFile);
+        if ($textFile !== false) unlink($textFile);
+    }
+}
 function receipt_discount_audit(): void {
     $process = proc_open([PHP_BINARY, __DIR__ . '/readiness_integrity_audit.php'],
         [['pipe', 'r'], ['pipe', 'w'], ['pipe', 'w']], $pipes, dirname(__DIR__), null,
@@ -128,6 +149,15 @@ try {
             receipt_discount_assert(in_array($amount, $cells, true), $label . ' tidak memuat ' . $amount . ' pada baris siswa.');
         }
     }
+    $pdf = receipt_discount_http($base . 'laporan/export_global.php?' . $query . '&format=pdf&download=1', $sessionId);
+    receipt_discount_assert(str_starts_with($pdf, '%PDF-'), 'Ekspor Penerimaan Harian tidak menghasilkan PDF biner.');
+    $pdfText = receipt_discount_pdf_text($pdf);
+    receipt_discount_assert(str_contains($pdfText, 'TOTAL POTONGAN SPP'),
+        'PDF biner tidak memuat total kolom Potongan SPP.');
+    receipt_discount_assert(preg_match('/^\s*1\s+' . preg_quote($nis, '/') . '\b([^\r\n]*)/m', $pdfText, $pdfRow) === 1,
+        'PDF biner tidak memuat baris siswa.');
+    receipt_discount_assert(preg_match('/Rp 300\b.*?Rp 70\b.*?Rp -50\b.*?Rp 320\b/', $pdfRow[1]) === 1,
+        'Nominal baris PDF biner tidak sama dengan SPP 300 + Komite 70 - Potongan 50 = kas 320.');
 } catch (Throwable $error) {
     $failure = $error;
 } finally {
@@ -144,4 +174,4 @@ try {
     }
 }
 if ($failure) { fwrite(STDERR, 'FAILED: ' . $failure->getMessage() . PHP_EOL); exit(1); }
-echo "PASS: Penerimaan Harian cocok dengan bayar.total_jumlah pada data, layar, Excel, pratinjau PDF, dan audit integritas penuh.\n";
+echo "PASS: Penerimaan Harian cocok dengan bayar.total_jumlah pada data, layar, Excel, PDF biner, dan audit integritas penuh.\n";

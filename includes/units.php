@@ -68,8 +68,12 @@ function unit_bootstrap_context(mysqli $db): void {
     $stmt = $db->prepare('SELECT id,nama,role,unit_id,is_active FROM admin WHERE id=? LIMIT 1');
     $stmt->bind_param('i', $id); $stmt->execute();
     $account = $stmt->get_result()->fetch_assoc(); $stmt->close();
-    if (!$account || (int)$account['is_active'] !== 1) {
-        unset($_SESSION['admin_id'], $_SESSION['admin_role'], $_SESSION['admin_unit_id'], $_SESSION['active_unit_id']);
+    // A non-super account without a valid unit must never inherit unit 0:
+    // current_unit_id()=0 intentionally exposes every unit for global reports.
+    if (!$account || (int)$account['is_active'] !== 1
+        || ($account['role'] !== 'super_admin' && !in_array((int)$account['unit_id'], [1, 2, 3], true))) {
+        unset($_SESSION['admin_id'], $_SESSION['admin_nama'], $_SESSION['admin_role'],
+            $_SESSION['admin_unit_id'], $_SESSION['active_unit_id']);
         unit_set_context($db, 4);
         return;
     }

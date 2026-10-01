@@ -5,7 +5,7 @@ require_once 'includes/auth.php';
 require_once 'includes/spp_billing.php';
 require_once 'includes/reports.php';
 requireRole(['admin', 'kasir']);
-if (!spp_billing_schema_ready($koneksi)) die('Schema Master SPP belum tersedia. Jalankan sql/add_spp_billing_and_deposit.sql.');
+if (!spp_billing_schema_ready($koneksi)) die('Schema Master SPP belum tersedia. Hubungi operator untuk migrasi skema.');
 if (empty($_SESSION['csrf_master_spp'])) $_SESSION['csrf_master_spp']=bin2hex(random_bytes(32));
 if (empty($_SESSION['csrf_prior_debt'])) $_SESSION['csrf_prior_debt']=bin2hex(random_bytes(32));
 

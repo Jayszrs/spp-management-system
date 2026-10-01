@@ -7,6 +7,8 @@
 documentation
 sql/*
 !sql/bootstrap_production.php
+!sql/schema_source.php
+!sql/schema.payload
 tests
 tmp
 temp

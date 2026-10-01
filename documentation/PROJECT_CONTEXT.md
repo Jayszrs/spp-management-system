@@ -8,7 +8,7 @@ SistemSPP adalah aplikasi administrasi pembayaran sekolah berbasis PHP, JavaScri
 
 - Pengembangan lokal saat ini memakai Laragon di `C:\laragon\www\spp-management-system` dan database `db_spp`.
 - Konfigurasi koneksi berada di `koneksi.php`. Di Railway, koneksi memakai variabel `SPP_DB_*`; lihat [panduan deployment](./RAILWAY_DEPLOYMENT.md).
-- `sql/schema.sql` adalah referensi instalasi baru dan menolak impor biasa pada database berisi tabel; gunakan `sql/bootstrap_production.php` untuk database kosong. Berkas itu bukan migrasi data lama dan tidak boleh dipakai pada database aktif.
+- Skema instalasi baru berada pada payload non-SQL `sql/schema.payload`, dibaca oleh `sql/schema_source.php`. `sql/schema.sql` hanya menolak impor langsung, termasuk ketika klien memakai `mysql --force`. Gunakan `sql/bootstrap_production.php` untuk database kosong; jangan pakai payload ini sebagai migrasi data lama.
 - Untuk reset dan pengisian data **demo**, ikuti [DEMO_DATA_RESET.md](./DEMO_DATA_RESET.md). Jangan terapkan reset pada data sekolah sungguhan.
 
 ## Alur pembayaran aktif
@@ -44,7 +44,8 @@ Guard backend berada di `includes/auth.php`. Hak akses harus diperiksa pada endp
 - `siswa/`: Data Siswa dan riwayat kelas.
 - `master_spp.php`, `master_kelas.php`, `master_biaya_lain.php`, `master_daftar_ulang.php`: pengelolaan master.
 - `includes/reports.php`, `laporan/`: query, tampilan, cetak/PDF, dan ekspor laporan.
-- `sql/schema.sql`, `sql/verify_schema.sql`: schema referensi dan pemeriksaannya.
+- `sql/schema.payload`, `sql/schema_source.php`, `sql/bootstrap_production.php`: sumber skema dan installer; `sql/schema.sql` menolak impor langsung. `sql/verify_schema.sql`: pemeriksaan skema.
+- `sql/run_legacy_sql.php`: gate CLI untuk skrip SQL mutatif lama; lihat [operasi SQL legacy](LEGACY_SQL_OPERATIONS.md). Impor langsung `sql/*.sql` lama ditolak.
 - `tests/`: pengujian regresi dan integrasi.
 
 Sebelum mengubah data atau menjalankan SQL destruktif, periksa database target, buat backup, dan baca hasil verifikasi. Jangan memasukkan dump data siswa, kredensial, atau secret ke Git.

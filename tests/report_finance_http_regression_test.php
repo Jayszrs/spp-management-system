@@ -22,6 +22,25 @@ function finance_http_ok(array $response, string $label): string {
     finance_http_assert(str_contains($response[0][0] ?? '', '200'), $label.' tidak menghasilkan HTTP 200.');
     return $response[1];
 }
+function finance_http_pdf_text(string $pdf): string {
+    $pdfFile = tempnam(sys_get_temp_dir(), 'spp_du_pdf_');
+    $textFile = tempnam(sys_get_temp_dir(), 'spp_du_text_');
+    finance_http_assert($pdfFile !== false && $textFile !== false, 'Berkas sementara PDF tidak dapat dibuat.');
+    try {
+        finance_http_assert(file_put_contents($pdfFile, $pdf) === strlen($pdf), 'PDF tidak dapat disimpan untuk pemeriksaan.');
+        $process = proc_open([getenv('SPP_PDFTOTEXT') ?: 'pdftotext', '-layout', $pdfFile, $textFile],
+            [['pipe', 'r'], ['pipe', 'w'], ['pipe', 'w']], $pipes, null, null, ['bypass_shell' => true]);
+        finance_http_assert(is_resource($process), 'pdftotext tidak tersedia untuk memeriksa PDF biner.');
+        fclose($pipes[0]);
+        stream_get_contents($pipes[1]); fclose($pipes[1]);
+        $error = stream_get_contents($pipes[2]); fclose($pipes[2]);
+        finance_http_assert(proc_close($process) === 0, 'Ekstraksi PDF gagal: '.trim($error));
+        return (string)file_get_contents($textFile);
+    } finally {
+        if ($pdfFile !== false) unlink($pdfFile);
+        if ($textFile !== false) unlink($textFile);
+    }
+}
 
 $failure = null;
 $sessionId = 'financereport'.bin2hex(random_bytes(8));
@@ -150,6 +169,16 @@ try {
             $stmt->execute();$stmt->close();
         }
         foreach ([['2026/2027','1A','Rp 1.000','Rp 400','Rp 600'],['2027/2028','2A','Rp 2.000','Rp 500','Rp 1.500']] as [$yearLabel,$classLabel,$billText,$paidText,$dueText]) {
+            $sourceStmt = $koneksi->prepare('SELECT t.nominal_tagihan tagihan,sta.kelas_rombel_snapshot kelas,t.tahun_ajaran_snapshot tahun,COALESCE(SUM(d.jumlah),0) terbayar FROM tagihan_daftar_ulang t JOIN siswa_tahun_ajaran sta ON sta.id=t.penempatan_id LEFT JOIN bayar_du d ON d.tagihan_daftar_ulang_id=t.id WHERE t.no_induk=? AND t.tahun_ajaran_snapshot=? GROUP BY t.id,t.nominal_tagihan,sta.kelas_rombel_snapshot,t.tahun_ajaran_snapshot');
+            $sourceStmt->bind_param('ss',$duFixtureNis,$yearLabel);$sourceStmt->execute();
+            $sourceRows=$sourceStmt->get_result()->fetch_all(MYSQLI_ASSOC);$sourceStmt->close();
+            finance_http_assert(count($sourceRows)===1,'Sumber tagihan DU '.$yearLabel.' harus tepat satu baris.');
+            $source=$sourceRows[0];$sourceDue=max(0,(float)$source['tagihan']-(float)$source['terbayar']);
+            finance_http_assert($source['kelas']===$classLabel && $source['tahun']===$yearLabel
+                && ('Rp '.number_format((float)$source['tagihan'],0,',','.'))===$billText
+                && ('Rp '.number_format((float)$source['terbayar'],0,',','.'))===$paidText
+                && ('Rp '.number_format($sourceDue,0,',','.'))===$dueText,
+                'Fixture sumber DU '.$yearLabel.' tidak cocok dengan nominal/kelas yang diuji.');
             $itemQuery = http_build_query(['template'=>'per-item','kategori'=>'daftar_ulang',
                 'tahun_ajaran'=>$yearLabel,'siswa_status'=>'all','q'=>$duFixtureNis,
                 'tanggal_awal'=>'2099-12-30','tanggal_akhir'=>'2099-12-30']);
@@ -164,6 +193,21 @@ try {
                     && str_contains($body,$dueText),
                     'Layar/Excel/pratinjau Per Item DU tidak cocok dengan tagihan '.$yearLabel.'.');
             }
+            $pdfResponse = finance_http_get($base.'laporan/export_global.php?'.$itemQuery.'&format=pdf&download=1',$sessionId);
+            $pdfItem = finance_http_ok($pdfResponse,'PDF Per Item DU '.$yearLabel);
+            finance_http_assert(str_contains(strtolower(implode("\n",$pdfResponse[0])), 'application/pdf')
+                && str_starts_with($pdfItem,'%PDF-'),
+                'Unduhan Per Item DU '.$yearLabel.' bukan PDF biner.');
+            $pdfText = finance_http_pdf_text($pdfItem);
+            foreach (['UJI STRUK DU HISTORIS',$duFixtureNis,$yearLabel,$classLabel,$billText,$paidText,$dueText] as $expected) {
+                finance_http_assert(str_contains($pdfText,$expected),
+                    'Teks PDF Per Item DU '.$yearLabel.' tidak memuat '.$expected.'.');
+            }
+            $otherYear=$yearLabel==='2026/2027'?'2027/2028':'2026/2027';
+            $otherClass=$yearLabel==='2026/2027'?'2A':'1A';
+            finance_http_assert(!str_contains($pdfText,$otherYear)
+                && preg_match('/\b'.preg_quote($otherClass,'/').'\b/',$pdfText)!==1,
+                'PDF Per Item DU '.$yearLabel.' mencampur tahun/kelas tagihan lain.');
         }
         $oldReceipt = finance_http_ok(finance_http_get($base.'laporan/export_pdf.php?'.http_build_query(['output'=>'preview','mode'=>'selected','ids'=>[$duFixturePaymentIds[0]],'tanggal_awal'=>'2026-08-01','tanggal_akhir'=>'2026-08-01']),$sessionId),'Struk DU tahun asal');
         $oldReceipt=html_entity_decode($oldReceipt,ENT_QUOTES|ENT_HTML5,'UTF-8');
@@ -197,4 +241,4 @@ try {
 }
 if ($failure) {fwrite(STDERR,'FAILED: '.$failure->getMessage().PHP_EOL);exit(1);}
 echo "OK: komponen Laporan Umum/Excel, tagihan Biaya Lain, kelas historis detail, riwayat, dan struk PDF"
-    .(getenv('SPP_TEST_ALLOW_MUTATION')==='1'?', termasuk potongan SPP, DU lintas tahun, dan Per Item DU pada layar/Excel/pratinjau':'').".\n";
+    .(getenv('SPP_TEST_ALLOW_MUTATION')==='1'?', termasuk potongan SPP, DU lintas tahun, dan Per Item DU pada layar/Excel/PDF biner':'').".\n";

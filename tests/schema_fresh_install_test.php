@@ -10,7 +10,10 @@ $database = 'db_spp_audit_schema_install_' . bin2hex(random_bytes(6));
 $host = getenv('SPP_DB_HOST') ?: 'localhost';
 $user = getenv('SPP_DB_USER') ?: 'root';
 $pass = getenv('SPP_DB_PASS') !== false ? getenv('SPP_DB_PASS') : '';
-$db = new mysqli($host, $user, $pass);
+$port = filter_var(getenv('SPP_DB_PORT') ?: '3306', FILTER_VALIDATE_INT,
+    ['options' => ['min_range' => 1, 'max_range' => 65535]]);
+if ($port === false) throw new RuntimeException('Port database latihan tidak valid.');
+$db = new mysqli($host, $user, $pass, '', $port);
 $db->set_charset('utf8mb4');
 $created = false;
 $credentialsFile = sys_get_temp_dir() . DIRECTORY_SEPARATOR
@@ -22,8 +25,8 @@ try {
     $db->query("CREATE DATABASE `{$database}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
     $created = true;
     $db->select_db($database);
-    $sql = file_get_contents(__DIR__ . '/../sql/schema.sql');
-    if ($sql === false) throw new RuntimeException('sql/schema.sql tidak dapat dibaca.');
+    require_once __DIR__ . '/../sql/schema_source.php';
+    $sql = spp_schema_source();
     $sql = str_replace(
         ['CREATE DATABASE IF NOT EXISTS `db_spp`', 'USE `db_spp`'],
         ["CREATE DATABASE IF NOT EXISTS `{$database}`", "USE `{$database}`"],

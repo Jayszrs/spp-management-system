@@ -2122,10 +2122,13 @@ document.addEventListener('DOMContentLoaded', function () {
       const status=sppStatusState.payload;
       if (status && status.status !== 'payable') showSppWarning(status,this);
     });
-    sppInput.addEventListener('blur', function () {
+    sppInput.addEventListener('blur', function (event) {
       if (window.sppPublishedBilling) {
         const amount = parseNumber(this.value || 0);
         if (document.getElementById('spp-action')?.value === 'titipan' || amount <= .001) return;
+        // A partial cash amount is valid when the cashier is about to add Titipan SPP.
+        // The combined amount is checked after the deposit choice and on submit.
+        if (event.relatedTarget?.id === 'spp-use-deposit-button') return;
         const status=sppStatusState.payload;
         const due=parseNumber(status?.selected?.remaining || 0);
         const useDeposit=document.getElementById('gunakan-titipan-spp')?.value === '1';

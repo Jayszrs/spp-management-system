@@ -11,6 +11,7 @@ if (PHP_SAPI !== 'cli') {
 require_once __DIR__ . '/../koneksi.php';
 require_once __DIR__ . '/../includes/financial_request.php';
 require_once __DIR__ . '/readiness_migration_guard.php';
+require_once __DIR__ . '/legacy_sql_definition.php';
 
 $apply = in_array('--apply', $argv, true);
 $table = $koneksi->query("SELECT TABLE_TYPE,ENGINE FROM information_schema.TABLES
@@ -33,8 +34,7 @@ if (!$apply) {
 
 readiness_migration_assert_apply_allowed($argv, DB_NAME);
 
-$sql = file_get_contents(__DIR__ . '/add_financial_request_guard.sql');
-if ($sql === false) throw new RuntimeException('Definisi migrasi keuangan_request tidak dapat dibaca.');
+$sql = legacy_sql_definition('add_financial_request_guard.sql');
 $sql = preg_replace('/^DELIMITER\s+\/\/\s*$/mi', '', $sql);
 $sql = preg_replace('/^DELIMITER\s+;\s*$/mi', '', $sql);
 $statements = array_values(array_filter(array_map('trim', explode('//', $sql)),

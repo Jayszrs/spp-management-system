@@ -1,7 +1,7 @@
 <?php
 
 /**
- * Buat schema kosong dari schema.sql tanpa akun, siswa, atau transaksi demo.
+ * Buat schema kosong dari payload schema tanpa akun, siswa, atau transaksi demo.
  * Jalankan satu kali pada database BARU yang masih kosong.
  */
 if (PHP_SAPI !== 'cli' || !in_array('--execute', $argv, true)) {
@@ -22,13 +22,17 @@ if ($username === '' || strlen($username) > 50 || strlen($password) < 12) {
     fwrite(STDERR, "Isi username admin dan password bootstrap minimal 12 karakter.\n");
     exit(1);
 }
-if ($koneksi->query('SHOW TABLES')->num_rows !== 0) {
+$existingObjects = $koneksi->query("SELECT
+    (SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE())
+  + (SELECT COUNT(*) FROM information_schema.ROUTINES WHERE ROUTINE_SCHEMA=DATABASE())
+  + (SELECT COUNT(*) FROM information_schema.EVENTS WHERE EVENT_SCHEMA=DATABASE()) AS total")->fetch_assoc();
+if ((int)$existingObjects['total'] !== 0) {
     fwrite(STDERR, "Database target tidak kosong; bootstrap dibatalkan tanpa perubahan.\n");
     exit(1);
 }
 
-$schema = file_get_contents(__DIR__ . '/schema.sql');
-if ($schema === false) throw new RuntimeException('schema.sql tidak dapat dibaca.');
+require_once __DIR__ . '/schema_source.php';
+$schema = spp_schema_source();
 $schema = preg_replace('/^[ \t]*--[^\r\n]*(?:\r?\n|$)/m', '', $schema);
 $statements = preg_split('/;\s*(?:\r?\n|$)/', $schema);
 $ddl = [];
@@ -49,7 +53,7 @@ foreach ($statements as $statement) {
     }
 }
 if (count($ddl) < 30 || $masterClasses === null) {
-    throw new RuntimeException('Struktur schema.sql tidak sesuai harapan; bootstrap dibatalkan.');
+    throw new RuntimeException('Struktur payload schema tidak sesuai harapan; bootstrap dibatalkan.');
 }
 
 $koneksi->query('SET FOREIGN_KEY_CHECKS = 0');

@@ -25,7 +25,10 @@ function demo_seed_run(mysqli $db, string $sql): void {
 $host = getenv('SPP_DB_HOST') ?: 'localhost';
 $user = getenv('SPP_DB_USER') ?: 'root';
 $pass = getenv('SPP_DB_PASS') !== false ? getenv('SPP_DB_PASS') : '';
-$db = new mysqli($host, $user, $pass);
+$port = filter_var(getenv('SPP_DB_PORT') ?: '3306', FILTER_VALIDATE_INT,
+    ['options' => ['min_range' => 1, 'max_range' => 65535]]);
+if ($port === false) throw new RuntimeException('Port database latihan tidak valid.');
+$db = new mysqli($host, $user, $pass, '', $port);
 $db->set_charset('utf8mb4');
 $createdDatabase = false;
 
@@ -33,8 +36,8 @@ try {
     // CREATE without IF NOT EXISTS refuses to overwrite a previous or unrelated clone.
     $db->query("CREATE DATABASE `{$database}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
     $createdDatabase = true;
-    $schema = file_get_contents(__DIR__ . '/../sql/schema.sql');
-    if ($schema === false) throw new RuntimeException('sql/schema.sql tidak dapat dibaca.');
+    require_once __DIR__ . '/../sql/schema_source.php';
+    $schema = spp_schema_source();
     $schema = str_replace(
         ['CREATE DATABASE IF NOT EXISTS `db_spp`', 'USE `db_spp`'],
         ["CREATE DATABASE IF NOT EXISTS `{$database}`", "USE `{$database}`"],
@@ -45,16 +48,10 @@ try {
     demo_seed_run($db, $schema);
     $db->select_db($database);
 
-    $reset = file_get_contents(__DIR__ . '/../sql/reset_demo_students_and_finance.sql');
-    if ($reset === false) throw new RuntimeException('Script reset demo tidak dapat dibaca.');
-    $reset = str_replace("SET @spp_reset_confirmation := '';", "SET @spp_reset_confirmation := 'RESET_DEMO_2026';", $reset, $replacementCount);
-    demo_seed_assert($replacementCount === 1, 'Token konfirmasi reset tidak ditemukan.');
-    demo_seed_run($db, $reset);
+    demo_seed_runner($database, 'reset_demo_students_and_finance.sql');
 
-    $seed = file_get_contents(__DIR__ . '/../sql/seed_students_psb.sql');
-    if ($seed === false) throw new RuntimeException('Seeder standar tidak dapat dibaca.');
-    demo_seed_run($db, $seed);
-    demo_seed_run($db, $seed);
+    demo_seed_runner($database, 'seed_students_psb.sql');
+    demo_seed_runner($database, 'seed_students_psb.sql');
 
     $counts = $db->query("SELECT
         (SELECT COUNT(*) FROM siswa WHERE is_active=1) siswa,
@@ -81,4 +78,17 @@ try {
 } finally {
     if ($createdDatabase) $db->query("DROP DATABASE `{$database}`");
     $db->close();
+}
+
+function demo_seed_runner(string $database, string $script): void {
+    $command = [PHP_BINARY, __DIR__ . '/../sql/run_legacy_sql.php',
+        '--script=' . $script, '--apply', '--confirm-script=' . $script];
+    $environment = array_merge(getenv(), ['SPP_DB_NAME' => $database]);
+    $process = proc_open($command, [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes,
+        dirname(__DIR__), $environment);
+    if (!is_resource($process)) throw new RuntimeException('Runner SQL legacy tidak dapat dimulai.');
+    $output = stream_get_contents($pipes[1]) . stream_get_contents($pipes[2]);
+    fclose($pipes[1]);
+    fclose($pipes[2]);
+    if (proc_close($process) !== 0) throw new RuntimeException("Runner $script gagal: $output");
 }

@@ -25,7 +25,10 @@ function demo_payment_seed_run(mysqli $db, string $sql): void {
 $host = getenv('SPP_DB_HOST') ?: 'localhost';
 $user = getenv('SPP_DB_USER') ?: 'root';
 $pass = getenv('SPP_DB_PASS') !== false ? getenv('SPP_DB_PASS') : '';
-$db = new mysqli($host, $user, $pass);
+$port = filter_var(getenv('SPP_DB_PORT') ?: '3306', FILTER_VALIDATE_INT,
+    ['options' => ['min_range' => 1, 'max_range' => 65535]]);
+if ($port === false) throw new RuntimeException('Port database latihan tidak valid.');
+$db = new mysqli($host, $user, $pass, '', $port);
 $db->set_charset('utf8mb4');
 $createdDatabase = false;
 
@@ -33,8 +36,8 @@ try {
     // CREATE without IF NOT EXISTS refuses to overwrite a previous or unrelated clone.
     $db->query("CREATE DATABASE `{$database}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
     $createdDatabase = true;
-    $schema = file_get_contents(__DIR__ . '/../sql/schema.sql');
-    if ($schema === false) throw new RuntimeException('sql/schema.sql tidak dapat dibaca.');
+    require_once __DIR__ . '/../sql/schema_source.php';
+    $schema = spp_schema_source();
     $schema = str_replace(
         ['CREATE DATABASE IF NOT EXISTS `db_spp`', 'USE `db_spp`'],
         ["CREATE DATABASE IF NOT EXISTS `{$database}`", "USE `{$database}`"],
@@ -45,19 +48,9 @@ try {
     demo_payment_seed_run($db, $schema);
     $db->select_db($database);
 
-    $reset = file_get_contents(__DIR__ . '/../sql/reset_demo_students_and_finance.sql');
-    $baseSeed = file_get_contents(__DIR__ . '/../sql/seed_students_psb.sql');
-    $paymentSeed = file_get_contents(__DIR__ . '/../sql/seed_demo_payments.sql');
-    demo_payment_seed_assert($reset !== false && $baseSeed !== false && $paymentSeed !== false, 'Salah satu script demo tidak dapat dibaca.');
-
-    $reset = str_replace("SET @spp_reset_confirmation := '';", "SET @spp_reset_confirmation := 'RESET_DEMO_2026';", $reset, $replacementCount);
-    demo_payment_seed_assert($replacementCount === 1, 'Token reset demo tidak ditemukan.');
-    $paymentSeed = str_replace("SET @seed_demo_payment_confirmation := '';", "SET @seed_demo_payment_confirmation := 'SEED_PAYMENT_DEMO_2026';", $paymentSeed, $replacementCount);
-    demo_payment_seed_assert($replacementCount === 1, 'Token seeder pembayaran tidak ditemukan.');
-
-    demo_payment_seed_run($db, $reset);
-    demo_payment_seed_run($db, $baseSeed);
-    demo_payment_seed_run($db, $paymentSeed);
+    demo_payment_seed_runner($database, 'reset_demo_students_and_finance.sql');
+    demo_payment_seed_runner($database, 'seed_students_psb.sql');
+    demo_payment_seed_runner($database, 'seed_demo_payments.sql');
 
     $counts = $db->query("SELECT
         (SELECT COUNT(*) FROM bayar) pembayaran,
@@ -79,7 +72,7 @@ try {
     demo_payment_seed_assert((int)$counts['mutasi_tabungan'] === 0, 'Seeder pembayaran tidak boleh membuat mutasi tabungan.');
 
     // Pemanggilan ulang harus ditolak oleh guard, tanpa menambah transaksi.
-    demo_payment_seed_run($db, $paymentSeed);
+    demo_payment_seed_runner($database, 'seed_demo_payments.sql');
     demo_payment_seed_assert((int)$db->query('SELECT COUNT(*) total FROM bayar')->fetch_assoc()['total'] === 1000, 'Seeder pembayaran tidak boleh menambah transaksi saat dijalankan ulang.');
 
     $invalid = $db->query("SELECT
@@ -104,4 +97,17 @@ try {
 } finally {
     if ($createdDatabase) $db->query("DROP DATABASE `{$database}`");
     $db->close();
+}
+
+function demo_payment_seed_runner(string $database, string $script): void {
+    $command = [PHP_BINARY, __DIR__ . '/../sql/run_legacy_sql.php',
+        '--script=' . $script, '--apply', '--confirm-script=' . $script];
+    $environment = array_merge(getenv(), ['SPP_DB_NAME' => $database]);
+    $process = proc_open($command, [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes,
+        dirname(__DIR__), $environment);
+    if (!is_resource($process)) throw new RuntimeException('Runner SQL legacy tidak dapat dimulai.');
+    $output = stream_get_contents($pipes[1]) . stream_get_contents($pipes[2]);
+    fclose($pipes[1]);
+    fclose($pipes[2]);
+    if (proc_close($process) !== 0) throw new RuntimeException("Runner $script gagal: $output");
 }

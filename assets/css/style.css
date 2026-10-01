@@ -672,6 +672,10 @@ h1, h2, h3, h4, h5, h6, .card-title, .topbar-title h2, .sidebar-brand-name {
 }
 .logout-btn {
   color: var(--text-muted);
+  border: 0;
+  background: none;
+  font: inherit;
+  cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;

@@ -1,8 +1,9 @@
 <?php
 
-/** Read-only comparison of schema.sql relationships with physical multiunit tables. */
+/** Read-only comparison of canonical schema relationships with physical multiunit tables. */
 if (PHP_SAPI !== 'cli') { http_response_code(404); exit; }
 require_once __DIR__ . '/../koneksi.php';
+require_once __DIR__ . '/schema_source.php';
 
 function fk_audit_identifier(string $value): string {
     if (!preg_match('/^[A-Za-z][A-Za-z0-9_]*$/', $value)) {
@@ -12,8 +13,7 @@ function fk_audit_identifier(string $value): string {
 }
 
 function fk_audit_expected(): array {
-    $schema = file_get_contents(__DIR__ . '/schema.sql');
-    if ($schema === false) throw new RuntimeException('sql/schema.sql tidak dapat dibaca.');
+    $schema = spp_schema_source();
     preg_match_all('/CREATE TABLE(?: IF NOT EXISTS)?\s+`([^`]+)`\s*\((.*?)\)\s*ENGINE=InnoDB;/is', $schema, $tables, PREG_SET_ORDER);
     $expected = [];
     foreach ($tables as $table) {

@@ -39,7 +39,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
 
-        if ($admin && $passwordValid && (int)$admin['is_active'] === 1) {
+        $validAccountUnit = $admin && ($admin['role'] === 'super_admin'
+            || in_array((int)$admin['unit_id'], [1, 2, 3], true));
+        if ($admin && $passwordValid && (int)$admin['is_active'] === 1 && $validAccountUnit) {
             if ($legacyMd5 || password_needs_rehash($admin['password'], PASSWORD_DEFAULT)) {
                 $newHash = password_hash($password, PASSWORD_DEFAULT);
                 $update  = $koneksi->prepare("UPDATE admin SET password = ? WHERE id = ?");

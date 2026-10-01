@@ -15,7 +15,7 @@ Pada clone `db_spp_audit_migration_20261001` yang diimpor dari backup pra-audit,
 
 ## Urutan penerapan setelah persetujuan eksplisit
 
-Set `SPP_DB_NAME=db_spp` dan `SPP_ALLOW_MAIN_MIGRATION=1` setelah verifikasi koneksi dan persetujuan pemilik. Jalankan keempat perintah PHP berikut dengan **path backup baru yang sama**. File `.sql` adalah definisi internal untuk perintah pertama; jangan menjalankannya langsung melalui klien MySQL karena jalur itu tidak memakai pengaman target PHP.
+Set `SPP_DB_NAME=db_spp` dan `SPP_ALLOW_MAIN_MIGRATION=1` setelah verifikasi koneksi dan persetujuan pemilik. Jalankan keempat perintah PHP berikut dengan **path backup baru yang sama**. Definisi untuk perintah pertama berada sebagai payload base64 non-SQL di `sql/definitions/`; jalur `sql/add_financial_request_guard.sql` menolak impor langsung. Jangan menjalankan file definisi melalui klien MySQL; hanya wrapper PHP yang memeriksa target dan mendekodenya.
 
 ```text
 php sql/add_financial_request_guard.php --apply --confirm-main=db_spp --backup-file=<path-backup>

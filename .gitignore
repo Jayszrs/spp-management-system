@@ -19,7 +19,7 @@ temp/
 .codex-preview/
 documentation/_sop_preview_*.png
 documentation/_flow_preview_*.png
-sql/backups/*.sql
+sql/backups/
 
 # Composer dependencies
 vendor/

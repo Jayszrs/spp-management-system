@@ -1,25 +1,20 @@
 # Reset Baseline Demo
 
-Gunakan reset ini hanya untuk database demo lokal atau Railway yang sudah dipastikan tidak berisi data sekolah sebenarnya.
+Reset ini hanya untuk **clone disposable** bernama `db_spp_audit_*` atau `db_spp_test_*`. Skrip menghapus siswa, pembayaran, tagihan, tabungan, titipan SPP, dan audit terkait. Akun operator, Master Kelas, Master Biaya Lain, dan struktur database dipertahankan. Jangan gunakan pada database sekolah, termasuk `db_spp` atau database Railway yang aktif.
 
-Skrip reset menghapus siswa, pembayaran, tagihan, tabungan, titipan SPP, dan audit terkait. Akun operator, Master Kelas, Master Biaya Lain, serta struktur database tidak dihapus.
+Sebelum menjalankan, buat clone dari backup yang sesuai dan pastikan nama target pada koneksi. Jalankan dari CLI dengan `SPP_DB_NAME` eksplisit dan `SPP_TEST_ALLOW_MUTATION=1`:
 
-## Urutan eksekusi
+```powershell
+$env:SPP_DB_NAME = 'db_spp_test_demo_reset_contoh'
+$env:SPP_TEST_ALLOW_MUTATION = '1'
+php sql/run_legacy_sql.php --script=reset_demo_students_and_finance.sql --apply --confirm-script=reset_demo_students_and_finance.sql
+php sql/run_legacy_sql.php --script=seed_students_psb.sql --apply --confirm-script=seed_students_psb.sql
+```
 
-1. Export/backup database target terlebih dahulu.
-2. Pilih database target di DBeaver. Untuk Railway, buat TCP proxy sementara dan gunakan database `railway`.
-3. Buka `sql/reset_demo_students_and_finance.sql`.
-4. Ubah satu baris berikut sebelum menjalankan seluruh skrip:
+Periksa hasil: 150 siswa aktif, 144 reguler, 6 PSB, 30 siswa dengan sisa Pangkal, 1.728 tagihan SPP, 1.728 tagihan Komite, 144 tagihan Daftar Ulang, dan nol pembayaran/mutasi/titipan. Untuk data laporan demo, jalankan hanya jika pembayaran masih nol:
 
-   ```sql
-   SET @spp_reset_confirmation := 'RESET_DEMO_2026';
-   ```
+```powershell
+php sql/run_legacy_sql.php --script=seed_demo_payments.sql --apply --confirm-script=seed_demo_payments.sql
+```
 
-5. Pastikan hasil akhir reset menunjukkan `siswa_setelah`, `pembayaran_setelah`, `mutasi_tabungan_setelah`, dan `tagihan_utama_setelah` semuanya `0`.
-6. Jalankan `sql/seed_students_psb.sql` pada database yang sama.
-7. Pastikan hasil seeder: 150 siswa aktif, 144 reguler, 6 PSB, 30 siswa dengan sisa Pangkal, 1.728 tagihan SPP, 1.728 tagihan Komite, 144 tagihan Daftar Ulang, dan seluruh pembayaran/mutasi/titipan bernilai `0`.
-8. Untuk mengisi data laporan demo, buka `sql/seed_demo_payments.sql`, ubah token menjadi `SEED_PAYMENT_DEMO_2026`, lalu jalankan pada database yang sama. Hasilnya tepat 1.000 pembayaran tanpa mutasi Tabungan.
-9. Seeder transaksi hanya boleh dijalankan ketika jumlah pembayaran masih `0`. Jika pernah dipakai atau ada transaksi baru, jalankan reset dan seeder siswa lagi terlebih dahulu.
-10. Tutup TCP proxy Railway setelah verifikasi selesai.
-
-`repair_one_time_fees.sql` tidak diperlukan setelah reset baseline ini. Skrip tersebut hanya untuk memperbaiki database lama tanpa menghapus datanya.
+Hasilnya harus 1.000 pembayaran tanpa mutasi Tabungan. Jika clone pernah menerima transaksi baru, buat ulang clone lalu ulangi urutan dari awal. Jalur `sql/*.sql` lama sengaja menolak impor langsung; jangan impor berkas `sql/definitions/` secara manual. Daftar dan kategori semua skrip lama ada di [operasi SQL legacy](LEGACY_SQL_OPERATIONS.md).

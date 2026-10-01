@@ -19,7 +19,7 @@ Sesuaikan `MySQL` bila nama service berbeda. Jangan menyimpan nilai password di 
 
 ## Database
 
-- Database yang **sudah berisi data** tidak boleh menerima impor `sql/schema.sql` atau `sql/bootstrap_production.php`. Schema referensi hanya untuk instalasi baru dan menolak impor biasa pada database nonkosong; bootstrap hanya untuk database kosong.
+- Database yang **sudah berisi data** tidak boleh menjalankan `sql/bootstrap_production.php`. `sql/schema.sql` hanya menolak impor langsung; skema referensi dikodekan di `sql/schema.payload` dan dibaca installer untuk database kosong. Migrasi database lama memakai runbook terpisah.
 - Sebelum migrasi atau reset, export/backup database target dan pastikan cara pemulihannya. Jika memakai TCP proxy untuk DBeaver, tutup proxy setelah pekerjaan selesai.
 - Reset/seed hanya untuk database demo yang boleh dihapus; gunakan [DEMO_DATA_RESET.md](./DEMO_DATA_RESET.md). Data demo tidak boleh dipakai sebagai data operasional sekolah.
 - Verifikasi schema dengan `sql/verify_schema.sql` dan bandingkan jumlah/total kas terhadap kondisi yang memang diharapkan **saat ini**, bukan terhadap angka impor historis.

@@ -131,6 +131,7 @@ $roleAvatars = [
 ];
 $roleAvatar = $roleAvatars[$role] ?? 'US';
 if (empty($_SESSION['csrf_unit_switch'])) $_SESSION['csrf_unit_switch']=bin2hex(random_bytes(32));
+if (empty($_SESSION['csrf_logout'])) $_SESSION['csrf_logout']=bin2hex(random_bytes(32));
 $activeUnit=unit_active_id();
 $unitPalette = unit_palette_for_view(isset($reportUnitId) ? (int)$reportUnitId : null);
 ?>
@@ -223,10 +224,13 @@ $unitPalette = unit_palette_for_view(isset($reportUnitId) ? (int)$reportUnitId :
         <span class="admin-role"><?= $roleLabel ?></span>
       </div>
     </div>
-    <a href="<?= $root ?>logout.php" class="logout-btn" title="Logout">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
-      <span class="logout-text">Logout</span>
-    </a>
+    <form action="<?= $root ?>logout.php" method="post">
+      <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_logout'], ENT_QUOTES, 'UTF-8') ?>">
+      <button type="submit" class="logout-btn" title="Logout">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        <span class="logout-text">Logout</span>
+      </button>
+    </form>
   </div>
 </aside>
 <div class="sidebar-backdrop" onclick="toggleSidebar()"></div>

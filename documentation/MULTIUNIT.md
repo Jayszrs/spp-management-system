@@ -31,7 +31,7 @@ Pada instalasi baru, kata sandi akun yang dibuat oleh `sql/bootstrap_unit_accoun
 
 ## Instalasi baru
 
-`sql/schema.sql` adalah skema referensi untuk instalasi baru; perintah `DROP TABLE` telah dihapus dan impor langsung pada database yang berisi tabel ditolak sebelum DDL. Untuk instalasi baru, gunakan `sql/bootstrap_production.php` pada database **kosong**, lalu migrasi unit dan buat akun. Semua langkah yang menulis database utama memerlukan persetujuan pemilik, backup baru, konfirmasi target, serta gate migrasi pada [runbook kesiapan](READINESS_MIGRATION_RUNBOOK_20261001.md). Contoh di bawah berlaku untuk clone disposable:
+Skema referensi instalasi baru disimpan sebagai payload non-SQL di `sql/schema.payload`; `sql/schema.sql` hanya menolak impor langsung, termasuk dengan `mysql --force`. Untuk instalasi baru, gunakan `sql/bootstrap_production.php` pada database **kosong**, lalu migrasi unit dan buat akun. Semua langkah yang menulis database utama memerlukan persetujuan pemilik, backup baru, konfirmasi target, serta gate migrasi pada [runbook kesiapan](READINESS_MIGRATION_RUNBOOK_20261001.md). Contoh di bawah berlaku untuk clone disposable:
 
 ```powershell
 $env:SPP_DB_NAME='db_spp_audit_instalasi_baru'
@@ -50,7 +50,7 @@ Jangan simpan berkas kredensial di repositori. `sql/bootstrap_production.php` me
 
 1. Hentikan penulisan selama migrasi. Cadangkan database lengkap, termasuk routine dan trigger. Verifikasi hasil cadangan dapat dipulihkan ke database pengujian.
 2. Catat jumlah siswa serta jumlah dan total `bayar`, tabungan, dan tagihan SD sebelum migrasi.
-3. Setelah persetujuan pemilik dan preflight pada clone, jalankan `sql/migrate_units.php --apply --confirm-main=db_spp --backup-file=<dump-baru>`, lalu `sql/bootstrap_unit_accounts.php <berkas-kredensial-baru> --apply --confirm-main=db_spp --backup-file=<dump-baru>` dengan `SPP_ALLOW_MAIN_MIGRATION=1`. Gate menuntut backup baru di luar repository; lihat [runbook kesiapan](READINESS_MIGRATION_RUNBOOK_20261001.md). Jangan jalankan `sql/schema.sql` pada database aktif.
+3. Setelah persetujuan pemilik dan preflight pada clone, jalankan `sql/migrate_units.php --apply --confirm-main=db_spp --backup-file=<dump-baru>`, lalu `sql/bootstrap_unit_accounts.php <berkas-kredensial-baru> --apply --confirm-main=db_spp --backup-file=<dump-baru>` dengan `SPP_ALLOW_MAIN_MIGRATION=1`. Gate menuntut backup baru di luar repository; lihat [runbook kesiapan](READINESS_MIGRATION_RUNBOOK_20261001.md). Jangan gunakan installer skema baru pada database aktif.
 4. Cocokkan kembali jumlah dan total SD, jumlah akun aktif per unit, dan 30 view operasional. Uji login tiap peran dan laporan Semua Unit.
 
 Migrasi menolak tabel yang tidak sesuai atau proses migrasi yang pernah terhenti. Karena perubahan DDL MySQL tidak dapat dibatalkan dengan `ROLLBACK`, pulihkan cadangan jika proses berhenti di tengah. Simpan cadangan hingga hasil verifikasi diterima.

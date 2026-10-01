@@ -155,7 +155,9 @@ function active_academic_year_from_payment_period($bulan, $tahun): string {
     return du_academic_year_label($month, $year);
 }
 
-$selectedAcademicYear = active_academic_year_from_payment_period($d['BULAN'], $d['TAHUN']);
+$selectedAcademicYear = $res_du && trim((string)$res_du['th_ajaran']) !== ''
+    ? (string)$res_du['th_ajaran']
+    : active_academic_year_from_payment_period($d['BULAN'], $d['TAHUN']);
 $annual_fee_payload = annual_fee_payload_for_options($koneksi, $id);
 $oneTimeAvailability = one_time_fee_status($koneksi, (string)$d['NO_INDUK'], $id);
 $initialFeeLocks = [];
@@ -175,7 +177,8 @@ foreach ($published_spp_payload[$d['NO_INDUK']]['tagihan'] ?? [] as $bill) {
         break;
     }
 }
-$isSppDeposit = !empty($currentSppAllocation['titipan_baru']);
+$isSppDeposit = (float)($currentSppAllocation['titipan_baru'] ?? 0) > .001;
+$usesSppDeposit = (float)($currentSppAllocation['titipan_digunakan'] ?? 0) > .001;
 $initialInputZero['spp'] = !$isSppDeposit && (!$sppBill || (float)$sppBill['remaining'] <= .001);
 if ($initialInputZero['spp']) $initialLockReasons['spp'] = 'Tidak ada tagihan SPP terbuka pada bulan ini.';
 $komiteBill = $komite_payload[$d['NO_INDUK']][$currentPeriodKey] ?? null;
@@ -420,7 +423,7 @@ $selectedPaymentMethod = $d['sistem_pembayaran'] ?? 'VA';
           <!-- Rincian Pembayaran -->
           <div class="section-divider"><span>Rincian Pembayaran</span></div>
           <section class="spp-deposit-banner" id="spp-deposit-banner" hidden aria-live="polite"><div><span>Saldo Titipan SPP</span><strong id="spp-deposit-balance">Rp 0</strong><small id="spp-deposit-capacity"></small></div><button type="button" class="btn btn-ghost" id="spp-use-deposit-button">Gunakan Titipan</button></section>
-          <div class="spp-deposit-action"><button type="button" class="btn btn-ghost" id="spp-record-deposit-button"><?= !empty($currentSppAllocation['titipan_baru']) ? 'Kembali ke Bayar SPP' : 'Catat Titipan SPP' ?></button><span id="spp-action-context" aria-live="polite"><?= !empty($currentSppAllocation['titipan_baru']) ? 'Nominal SPP dicatat sebagai titipan.' : '' ?></span></div>
+          <div class="spp-deposit-action"><button type="button" class="btn btn-ghost" id="spp-record-deposit-button"><?= $isSppDeposit ? 'Kembali ke Bayar SPP' : 'Catat Titipan SPP' ?></button><span id="spp-action-context" aria-live="polite"><?= $isSppDeposit ? 'Nominal SPP dicatat sebagai titipan.' : '' ?></span></div>
           <div class="alert alert-warning payment-overpaid-alert" id="payment-overpaid-alert" hidden></div>
           <div class="alert alert-warning payment-input-overlimit-alert" id="payment-input-overlimit-alert" hidden></div>
           <div class="table-container">
@@ -461,7 +464,7 @@ $selectedPaymentMethod = $d['sistem_pembayaran'] ?? 'VA';
             </table>
           </div>
 
-          <input type="hidden" id="kelas-du" name="kelas_du" value="<?= htmlspecialchars(preg_replace('/\D+/', '', (string)$d['KELAS'])) ?>" />
+          <input type="hidden" id="kelas-du" name="kelas_du" value="<?= htmlspecialchars(preg_replace('/\D+/', '', (string)($res_du['kelas'] ?? $d['KELAS']))) ?>" />
           <input type="hidden" id="tahun-ajaran-du" name="tahun_ajaran_du" value="<?= htmlspecialchars($selectedAcademicYear) ?>" />
           <input type="hidden" id="tagihan-daftar-ulang-id" name="tagihan_daftar_ulang_id" value="<?= $linkedDuBillId ?>" />
           <input type="hidden" id="du-expected-total" name="du_expected_total" value="" />
@@ -539,8 +542,8 @@ $selectedPaymentMethod = $d['sistem_pembayaran'] ?? 'VA';
           </template>
 
           <input type="hidden" name="potongan_spp" id="potongan-spp" value="0" />
-          <input type="hidden" name="gunakan_titipan_spp" id="gunakan-titipan-spp" data-nis="<?= htmlspecialchars($d['NO_INDUK']) ?>" value="<?= !empty($currentSppAllocation['titipan_digunakan']) ? '1' : '0' ?>" />
-          <input type="hidden" id="spp-action" name="spp_action" value="<?= !empty($currentSppAllocation['titipan_baru']) ? 'titipan' : 'bayar' ?>" />
+          <input type="hidden" name="gunakan_titipan_spp" id="gunakan-titipan-spp" data-nis="<?= htmlspecialchars($d['NO_INDUK']) ?>" value="<?= $usesSppDeposit ? '1' : '0' ?>" />
+          <input type="hidden" id="spp-action" name="spp_action" value="<?= $isSppDeposit ? 'titipan' : 'bayar' ?>" />
 
           <input type="hidden" name="catatan" value="<?= htmlspecialchars($d['KETERANGAN'] ?? '') ?>">
           <div class="section-divider"><span>History Transaksi Siswa</span></div>
