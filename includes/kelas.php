@@ -16,10 +16,11 @@ function class_label(array $class): string {
     return $level . $code;
 }
 
-function class_find(mysqli $db, int $classId, bool $activeOnly = false): ?array {
+function class_find(mysqli $db, int $classId, bool $activeOnly = false, bool $forUpdate = false): ?array {
     $sql = 'SELECT id, tingkat, kode_rombel, is_placeholder, is_active FROM master_kelas WHERE id = ?';
     if ($activeOnly) $sql .= ' AND is_active = 1';
     $sql .= ' LIMIT 1';
+    if ($forUpdate) $sql .= ' FOR UPDATE';
     $stmt = $db->prepare($sql);
     $stmt->bind_param('i', $classId);
     $stmt->execute();
@@ -286,7 +287,9 @@ function class_manual_promote_student(mysqli $db, string $noInduk, int $targetCl
             ? 'Selesaikan kelulusan kelas '.$last.' terlebih dahulu.'
             : 'Tidak ada siswa reguler aktif yang perlu dinaikkan.');
     }
-    $target = class_find($db, $targetClassId, true);
+    // Lock the target row before locking the student so a concurrent deactivate
+    // cannot make the snapshot stale while the promotion is still in progress.
+    $target = class_find($db, $targetClassId, true, true);
     if (!$target || (int)$target['is_placeholder'] === 1) throw new RuntimeException('Pilih rombel target yang aktif.');
     if ((int)$target['tingkat'] !== $currentStep + 1) {
         throw new RuntimeException('Tahap saat ini adalah kelas ' . $currentStep . ', jadi target wajib kelas ' . ($currentStep + 1) . '.');
@@ -394,19 +397,28 @@ function class_process_year_promotion(mysqli $db, string $targetYear): array {
         $processed = 0;
         foreach ($students as $student) {
             $noInduk = (string)$student['NO_INDUK'];
-            if ($level === $last) {
-                class_manual_graduate_student($db, $noInduk, $targetYear);
-                $graduated++;
-            } else {
+            $targetClassId = 0;
+            if ($level !== $last) {
                 $code = strtoupper((string)($student['kode_rombel'] ?? ''));
                 $targetClassId = $targetByCode[$code] ?? 0;
                 if ($targetClassId <= 0) {
                     $skipped++;
                     continue;
                 }
-                class_manual_promote_student($db, $noInduk, $targetClassId, $targetYear);
-                $promoted++;
             }
+            $db->begin_transaction();
+            try {
+                if ($level === $last) {
+                    class_manual_graduate_student($db, $noInduk, $targetYear);
+                } else {
+                    class_manual_promote_student($db, $noInduk, $targetClassId, $targetYear);
+                }
+                $db->commit();
+            } catch (Throwable $error) {
+                $db->rollback();
+                throw $error;
+            }
+            if ($level === $last) $graduated++; else $promoted++;
             $processed++;
         }
         if ($processed === 0) break;
@@ -414,15 +426,29 @@ function class_process_year_promotion(mysqli $db, string $targetYear): array {
     return ['promoted'=>$promoted,'graduated'=>$graduated,'skipped'=>$skipped,'target_year'=>$targetYear];
 }
 function class_disable_empty_rombel(mysqli $db): int {
-    $stmt = $db->prepare("UPDATE master_kelas mk
-        SET mk.is_active=0
-        WHERE mk.is_placeholder=0
-          AND mk.is_active=1
-          AND NOT EXISTS (SELECT 1 FROM siswa s WHERE s.master_kelas_id=mk.id AND s.is_active=1)");
-    $stmt->execute();
-    $affected = $stmt->affected_rows;
-    $stmt->close();
-    return max(0, $affected);
+    $db->begin_transaction();
+    try {
+        // Promotions and student edits lock this same class row before assigning it.
+        $classes = $db->query('SELECT id FROM master_kelas
+            WHERE is_placeholder=0 AND is_active=1 ORDER BY id FOR UPDATE')->fetch_all(MYSQLI_ASSOC);
+        $occupied = $db->prepare('SELECT COUNT(*) total FROM siswa WHERE master_kelas_id=? AND is_active=1');
+        $disable = $db->prepare('UPDATE master_kelas SET is_active=0 WHERE id=? AND is_active=1');
+        $affected = 0;
+        foreach ($classes as $class) {
+            $id = (int)$class['id'];
+            $occupied->bind_param('i', $id); $occupied->execute();
+            if ((int)$occupied->get_result()->fetch_assoc()['total'] !== 0) continue;
+            $disable->bind_param('i', $id); $disable->execute();
+            $affected += $disable->affected_rows;
+        }
+        $occupied->close();
+        $disable->close();
+        $db->commit();
+        return $affected;
+    } catch (Throwable $error) {
+        $db->rollback();
+        throw $error;
+    }
 }
 
 function class_enable_all_rombel(mysqli $db): int {

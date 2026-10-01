@@ -86,7 +86,7 @@ function validate_student_identity(mysqli $db, array $source): array {
     if ($name === '' || mb_strlen($name) > 100) {
         throw new RuntimeException('Nama siswa wajib diisi dan maksimal 100 karakter.');
     }
-    $class = class_find($db, $classId, true);
+    $class = class_find($db, $classId, true, true);
     if (!$class) throw new RuntimeException('Pilih kelas/rombel aktif dari Master Kelas.');
     return [$noInduk, $name, (string)$class['tingkat'], $classId];
 }

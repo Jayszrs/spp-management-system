@@ -96,14 +96,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $message = 'Rombel berhasil diperbarui. Snapshot histori lama tetap dipertahankan.';
             }
         } elseif ($action === 'toggle') {
-            $class = class_find($koneksi, $id);
+            $koneksi->begin_transaction();
+            $class = class_find($koneksi, $id, false, true);
             if (!$class || (int)$class['is_placeholder'] === 1) throw new RuntimeException('Rombel placeholder harus selalu aktif.');
             if ((int)$class['is_active'] === 1) {
                 $stmt=$koneksi->prepare('SELECT COUNT(*) total FROM siswa WHERE master_kelas_id=? AND is_active=1');$stmt->bind_param('i',$id);$stmt->execute();$activeStudents=(int)$stmt->get_result()->fetch_assoc()['total'];$stmt->close();
                 if($activeStudents>0)throw new RuntimeException('Rombel masih dipakai '.$activeStudents.' siswa aktif dan belum dapat dinonaktifkan.');
             }
-            $stmt = $koneksi->prepare('UPDATE master_kelas SET is_active = IF(is_active = 1, 0, 1) WHERE id = ?');
-            $stmt->bind_param('i', $id); $stmt->execute(); $stmt->close();
+            $newStatus = (int)$class['is_active'] === 1 ? 0 : 1;
+            $stmt = $koneksi->prepare('UPDATE master_kelas SET is_active = ? WHERE id = ?');
+            $stmt->bind_param('ii', $newStatus, $id); $stmt->execute(); $stmt->close();
+            $koneksi->commit();
             $message = 'Status rombel berhasil diubah.';
         } else {
             throw new RuntimeException('Aksi Master Kelas tidak dikenali.');
