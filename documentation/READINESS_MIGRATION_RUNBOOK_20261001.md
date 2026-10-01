@@ -10,14 +10,15 @@ Pada clone `db_spp_audit_migration_20261001` yang diimpor dari backup pra-audit,
 
 1. Pastikan branch/commit yang benar-benar dipakai service Railway atau server lain. Branch review `audit/readiness-20261001` berisi kode baru; jangan aktifkan sebelum skema tujuan lengkap. `health.php` sengaja mengembalikan `unavailable` bila tabel pengaman atau kolom jurnal belum ada.
 2. Hentikan input pembayaran, penerbitan, perubahan siswa, dan tabungan. Catat waktu henti serta transaksi terakhir. Pastikan `SPP_DB_NAME` menunjuk database yang dimaksud, server MySQL dan pengguna database benar, dan tidak ada sesi penulisan yang masih berjalan.
-3. Jalankan `tests/readiness_integrity_audit.php`, `sql/audit_foreign_keys.php`, `sql/restore_multiunit_checks.php` tanpa `--apply`, dan `sql/add_savings_notes.php` tanpa `--apply`. Hentikan bila angka/invariant berbeda dari baseline yang baru dicatat, ada data yatim, pelanggaran CHECK, atau definisi constraint tak dikenal.
+3. Jalankan `tests/readiness_integrity_audit.php`, `sql/audit_foreign_keys.php`, `sql/restore_multiunit_checks.php`, `sql/add_savings_notes.php`, dan `sql/add_financial_request_guard.php` tanpa `--apply`. Hentikan bila angka/invariant berbeda dari baseline yang baru dicatat, ada data yatim, pelanggaran CHECK, atau definisi constraint tak dikenal.
 4. Buat dump **baru di luar repository** dengan `mysqldump --single-transaction --routines --triggers --result-file=<path-backup> db_spp`. Verifikasi ukuran, hash SHA-256, waktu pembuatan, dan bahwa dump tidak memuat `USE`/`CREATE DATABASE` yang mengarah ke target lain. Impor dump itu ke clone bernama `db_spp_audit_*`, lalu ulangi urutan migrasi dan audit integritas di clone. Jangan gunakan backup 30 September sebagai pengganti dump baru.
 
 ## Urutan penerapan setelah persetujuan eksplisit
 
-Pada koneksi MySQL yang sudah diverifikasi memilih `db_spp`, jalankan `sql/add_financial_request_guard.sql`. Skrip SQL itu menerima database yang dipilih klien; karena itu operator harus memeriksa `SELECT DATABASE()` tepat sebelum `source`. Jangan jalankan lewat koneksi yang default databasenya kosong atau berbeda. Setelahnya, set `SPP_DB_NAME=db_spp` dan `SPP_ALLOW_MAIN_MIGRATION=1`, lalu jalankan tiga perintah PHP berikut dengan **path backup baru yang sama**:
+Set `SPP_DB_NAME=db_spp` dan `SPP_ALLOW_MAIN_MIGRATION=1` setelah verifikasi koneksi dan persetujuan pemilik. Jalankan keempat perintah PHP berikut dengan **path backup baru yang sama**. File `.sql` adalah definisi internal untuk perintah pertama; jangan menjalankannya langsung melalui klien MySQL karena jalur itu tidak memakai pengaman target PHP.
 
 ```text
+php sql/add_financial_request_guard.php --apply --confirm-main=db_spp --backup-file=<path-backup>
 php sql/add_savings_notes.php --apply --confirm-main=db_spp --backup-file=<path-backup>
 php sql/restore_multiunit_checks.php --apply --confirm-main=db_spp --backup-file=<path-backup>
 php sql/restore_multiunit_foreign_keys.php --apply --confirm-main=db_spp --backup-file=<path-backup>

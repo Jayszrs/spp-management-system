@@ -385,6 +385,9 @@ function report_spp_year_data(mysqli $db,array $f):array{
 function report_item_is_monthly_category(string $category): bool {
     return $category === 'spp' || $category === 'komite';
 }
+function report_item_is_annual_category(string $category): bool {
+    return $category === 'daftar_ulang' || array_key_exists($category, annual_fee_components());
+}
 function report_item_month_period_label(int $startMonth, int $endMonth, int $year): string {
     $months = report_months();
     $start = $months[sprintf('%02d', $startMonth)] ?? (string)$startMonth;
@@ -486,7 +489,7 @@ function report_item_data(mysqli $db,array $f):array{
         return ['title'=>'Rekap Pembayaran per Item: '.$label,'subtitle'=>'Periode tagihan: '.$periodLabel,'columns'=>$columns,'rows'=>$rows];
     }
 
-    if (array_key_exists($category, annual_fee_components())) {
+    if (report_item_is_annual_category($category)) {
         $subtitle = 'Tahun ajaran: ' . $f['tahun_ajaran'];
         $statusFilters = $f;
         $statusFilters['status'] = '';

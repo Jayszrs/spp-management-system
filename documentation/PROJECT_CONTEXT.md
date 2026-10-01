@@ -2,7 +2,7 @@
 
 SistemSPP adalah aplikasi administrasi pembayaran sekolah berbasis PHP, JavaScript, dan MySQL (`mysqli`). Dokumen ini merangkum alur aktif. Untuk rincian teknis, kode dan schema adalah sumber kebenaran; [AI_CHANGELOG.md](./AI_CHANGELOG.md) adalah arsip perubahan, bukan panduan operasional.
 
-> **Status pengembangan 1 Oktober 2026:** [Audit kesiapan terbaru](./READINESS_AUDIT_20261001.md) mencatat perbaikan yang masih berada di working tree dan hanya diuji pada database latihan. Kode transaksi/tabungan baru bergantung pada tabel `keuangan_request`; catatan tabungan bergantung pada kolom `keterangan` dan view jurnal yang diperbarui. Database utama belum dimigrasi dan hanya dibaca selama audit. Periksa urutan deployment dan persetujuan migrasi sebelum mengaktifkan kode tersebut untuk operasional.
+> **Status pengembangan 1 Oktober 2026:** [Audit kesiapan terbaru](./READINESS_AUDIT_20261001.md) mencatat perbaikan pada branch review yang diuji pada database latihan. Kode transaksi/tabungan baru bergantung pada tabel `keuangan_request`; catatan tabungan bergantung pada kolom `keterangan` dan view jurnal yang diperbarui. Database utama belum dimigrasi dan hanya dibaca selama audit. Periksa urutan deployment dan persetujuan migrasi sebelum mengaktifkan kode tersebut untuk operasional.
 
 ## Lingkungan
 

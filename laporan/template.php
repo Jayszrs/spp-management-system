@@ -10,7 +10,7 @@ $filters=report_filters($koneksi,$_GET);
 if($template==='riwayat-tagihan'&&!isset($_GET['siswa_status'])) $filters['siswa_status']='all';
 if(!isset($_GET['kategori'])&&$template==='penerimaan') $filters['kategori']='semua';
 $perItemUsesMonthly=$template==='per-item'&&report_item_is_monthly_category($filters['kategori']);
-$perItemUsesAnnual=$template==='per-item'&&array_key_exists($filters['kategori'],annual_fee_components());
+$perItemUsesAnnual=$template==='per-item'&&report_item_is_annual_category($filters['kategori']);
 $isCashRecap=in_array($template,['setoran','kas-tabungan','titipan-spp'],true);
 $isSavingsCashRecap=$template==='kas-tabungan';
 $isSppDepositRecap=$template==='titipan-spp';
@@ -180,8 +180,8 @@ document.addEventListener('DOMContentLoaded',function(){
   const monthFields=Array.from(document.querySelectorAll('[data-per-item-period="month"]'));
   const dateFields=Array.from(document.querySelectorAll('[data-per-item-period="date"]'));
   const academicYearFields=Array.from(document.querySelectorAll('[data-per-item-period="academic-year"]'));
-  const monthlyCategories=new Set(['spp']);
-  const annualCategories=new Set(<?= json_encode(array_keys(annual_fee_components())) ?>);
+  const monthlyCategories=new Set(['spp','komite']);
+  const annualCategories=new Set(<?= json_encode(array_merge(array_keys(annual_fee_components()), ['daftar_ulang'])) ?>);
   function syncPerItemPeriodFields(){
     const value=category?.value||'';
     const isMonthly=monthlyCategories.has(value);

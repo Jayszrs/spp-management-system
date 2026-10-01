@@ -149,6 +149,22 @@ try {
             $stmt->bind_param('iisssd',$paymentId,$billId,$duFixtureNis,$levelText,$yearLabel,$amount);
             $stmt->execute();$stmt->close();
         }
+        foreach ([['2026/2027','1A','Rp 1.000','Rp 400','Rp 600'],['2027/2028','2A','Rp 2.000','Rp 500','Rp 1.500']] as [$yearLabel,$classLabel,$billText,$paidText,$dueText]) {
+            $itemQuery = http_build_query(['template'=>'per-item','kategori'=>'daftar_ulang',
+                'tahun_ajaran'=>$yearLabel,'siswa_status'=>'all','q'=>$duFixtureNis,
+                'tanggal_awal'=>'2099-12-30','tanggal_akhir'=>'2099-12-30']);
+            $screen = finance_http_ok(finance_http_get($base.'laporan/template.php?'.$itemQuery,$sessionId),'Per Item DU '.$yearLabel);
+            $excelItem = finance_http_ok(finance_http_get($base.'laporan/export_global.php?'.$itemQuery.'&format=excel&download=1',$sessionId),'Excel Per Item DU '.$yearLabel);
+            $previewItem = finance_http_ok(finance_http_get($base.'laporan/export_global.php?'.$itemQuery.'&format=preview',$sessionId),'Pratinjau PDF Per Item DU '.$yearLabel);
+            foreach ([$screen,$excelItem,$previewItem] as $body) {
+                finance_http_assert(str_contains($body,'UJI STRUK DU HISTORIS')
+                    && str_contains($body,$classLabel)
+                    && str_contains($body,$billText)
+                    && str_contains($body,$paidText)
+                    && str_contains($body,$dueText),
+                    'Layar/Excel/pratinjau Per Item DU tidak cocok dengan tagihan '.$yearLabel.'.');
+            }
+        }
         $oldReceipt = finance_http_ok(finance_http_get($base.'laporan/export_pdf.php?'.http_build_query(['output'=>'preview','mode'=>'selected','ids'=>[$duFixturePaymentIds[0]],'tanggal_awal'=>'2026-08-01','tanggal_akhir'=>'2026-08-01']),$sessionId),'Struk DU tahun asal');
         $oldReceipt=html_entity_decode($oldReceipt,ENT_QUOTES|ENT_HTML5,'UTF-8');
         finance_http_assert(str_contains($oldReceipt,'Uang Daftar Ulang (TA 2026/2027)')
@@ -181,4 +197,4 @@ try {
 }
 if ($failure) {fwrite(STDERR,'FAILED: '.$failure->getMessage().PHP_EOL);exit(1);}
 echo "OK: komponen Laporan Umum/Excel, tagihan Biaya Lain, kelas historis detail, riwayat, dan struk PDF"
-    .(getenv('SPP_TEST_ALLOW_MUTATION')==='1'?', termasuk potongan SPP dan DU lintas tahun':'').".\n";
+    .(getenv('SPP_TEST_ALLOW_MUTATION')==='1'?', termasuk potongan SPP, DU lintas tahun, dan Per Item DU pada layar/Excel/pratinjau':'').".\n";
