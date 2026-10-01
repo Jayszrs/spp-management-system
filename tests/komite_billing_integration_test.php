@@ -1,4 +1,11 @@
 <?php
+if (PHP_SAPI !== 'cli'
+    || getenv('SPP_TEST_ALLOW_MUTATION') !== '1'
+    || !preg_match('/^db_spp_(?:audit|test)_[a-z0-9_]+$/D', (string)getenv('SPP_DB_NAME'))) {
+    error_log('FAILED: tes mutasi memerlukan CLI, clone db_spp_audit_* atau db_spp_test_*, dan SPP_TEST_ALLOW_MUTATION=1.');
+    exit(1);
+}
+
 require_once __DIR__.'/../koneksi.php';
 require_once __DIR__.'/../includes/kelas.php';
 

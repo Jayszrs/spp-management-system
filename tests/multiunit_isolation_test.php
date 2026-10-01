@@ -1,7 +1,10 @@
 <?php
 /** Run only against a disposable, migrated copy of the database. */
-if (PHP_SAPI !== 'cli' || !str_starts_with((string)getenv('SPP_DB_NAME'), 'db_spp_test_')) {
-    throw new RuntimeException('Gunakan database pengujian db_spp_test_* melalui CLI.');
+if (PHP_SAPI !== 'cli'
+    || getenv('SPP_TEST_ALLOW_MUTATION') !== '1'
+    || !preg_match('/^db_spp_test_[a-z0-9_]+$/D', (string)getenv('SPP_DB_NAME'))) {
+    error_log('FAILED: tes mutasi memerlukan CLI, clone db_spp_test_*, dan SPP_TEST_ALLOW_MUTATION=1.');
+    exit(1);
 }
 session_start();
 require_once __DIR__ . '/../koneksi.php';

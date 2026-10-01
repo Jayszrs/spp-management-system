@@ -27,7 +27,14 @@ $stmt->execute();
 $rows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
 $stmt->close();
 
-$escape = static fn($value): string => htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
+$download = ($_GET['download'] ?? '') === '1';
+$escape = static function ($value) use ($download): string {
+    $text = (string)$value;
+    if ($download && preg_match('/^[\p{Z}\x00-\x20]*[=+\-@]/u', $text)) {
+        $text = "'" . $text;
+    }
+    return htmlspecialchars($text, ENT_QUOTES, 'UTF-8');
+};
 $statusLabels = ['active'=>'Aktif', 'archived'=>'Arsip/Lulus', 'all'=>'Semua'];
 $filterParts = [];
 if ($query !== '') $filterParts[] = 'Pencarian: ' . $query;
@@ -62,7 +69,7 @@ ob_start();
 <?php
 $documentHtml = ob_get_clean();
 
-if (($_GET['download'] ?? '') === '1') {
+if ($download) {
     header('Content-Type: application/vnd.ms-excel; charset=UTF-8');
     header('Content-Disposition: attachment; filename="data-siswa-' . strtolower(unit_label(unit_active_id())) . '-' . date('Ymd-His') . '.xls"');
     echo "\xEF\xBB\xBF" . $documentHtml;

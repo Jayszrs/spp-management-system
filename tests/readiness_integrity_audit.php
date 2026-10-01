@@ -52,6 +52,7 @@ $checks = [
             COALESCE(b.U_PANGKAL,0)+COALESCE(b.U_PSB,0)+COALESCE(b.U_SPP,0)
             +COALESCE(b.U_TITIPAN_SPP,0)+COALESCE(b.U_KOMITE,0)
             +COALESCE(b.U_LAIN,0)+COALESCE(d.total_du,0)
+            -COALESCE(b.potong_spp,0)
         ))>0.01",
     'tagihan_spp_salah_relasi' => "SELECT COUNT(*) FROM tagihan_spp t
         LEFT JOIN siswa_tahun_ajaran p ON p.id=t.penempatan_id

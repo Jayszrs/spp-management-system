@@ -2,11 +2,17 @@
 /**
  * Menyamakan collation database hasil migrasi XAMPP/Laragon.
  *
- * Jalankan dari root project:
- *   php sql/fix_mixed_collations.php
+ * Jalankan dari root project untuk audit; DDL membutuhkan --apply dan gate migrasi:
+ *   php sql/fix_mixed_collations.php [--apply]
  */
 
+if (PHP_SAPI !== 'cli') {
+    http_response_code(404);
+    exit;
+}
+
 require_once __DIR__ . '/../koneksi.php';
+require_once __DIR__ . '/readiness_migration_guard.php';
 
 $targetCharset = 'utf8mb4';
 $targetCollation = 'utf8mb4_general_ci';
@@ -34,6 +40,12 @@ echo "Sebelum:\n";
 foreach ($before as $row) {
     echo "- {$row['COLLATION_NAME']}: {$row['total']} kolom\n";
 }
+
+if (!in_array('--apply', $argv, true)) {
+    echo "AUDIT ONLY: collation database tidak diubah.\n";
+    exit;
+}
+readiness_migration_assert_apply_allowed($argv, $database);
 
 $tables = $koneksi->query("
     SELECT TABLE_NAME

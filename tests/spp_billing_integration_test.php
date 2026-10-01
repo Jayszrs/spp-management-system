@@ -1,4 +1,11 @@
 <?php
+if (PHP_SAPI !== 'cli'
+    || getenv('SPP_TEST_ALLOW_MUTATION') !== '1'
+    || !preg_match('/^db_spp_(?:audit|test)_[a-z0-9_]+$/D', (string)getenv('SPP_DB_NAME'))) {
+    error_log('FAILED: tes mutasi memerlukan CLI, clone db_spp_audit_* atau db_spp_test_*, dan SPP_TEST_ALLOW_MUTATION=1.');
+    exit(1);
+}
+
 require_once __DIR__.'/../koneksi.php';require_once __DIR__.'/../includes/spp_billing.php';require_once __DIR__.'/../includes/kelas.php';
 function spp_it_assert(bool $ok,string $message):void{if(!$ok)throw new RuntimeException($message);}
 if(!spp_billing_schema_ready($koneksi))throw new RuntimeException('Schema SPP baru belum tersedia.');

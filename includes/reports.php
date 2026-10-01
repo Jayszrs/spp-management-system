@@ -349,6 +349,7 @@ function report_receipt_data(mysqli $db,array $f):array{
     if($category!==''&&$category!=='semua')$components=array_values(array_filter($components,fn($r)=>$r['kategori_key']===$category));
     if($f['q']!=='')$components=array_values(array_filter($components,fn($r)=>report_row_matches_query($r,$f['q'])));
     $allCategories=report_categories($db);
+    $allCategories['potongan']='Potongan SPP';
     $wantedCategories=$category!==''&&$category!=='semua'
         ? array_intersect_key($allCategories,[$category=>true])
         : $allCategories;
