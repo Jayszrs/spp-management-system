@@ -10,6 +10,7 @@ if (PHP_SAPI !== 'cli') {
     exit;
 }
 require_once __DIR__ . '/../koneksi.php';
+require_once __DIR__ . '/readiness_migration_guard.php';
 
 $apply = in_array('--apply', $argv, true);
 $schema = DB_NAME;
@@ -52,16 +53,7 @@ if (!$apply) {
     exit;
 }
 
-$cloneAllowed = (bool)preg_match('/^db_spp_(?:audit|test)_[a-z0-9_]+$/', $schema)
-    && getenv('SPP_TEST_ALLOW_MUTATION') === '1';
-$backupOption = array_values(array_filter($argv, static fn(string $arg): bool => str_starts_with($arg, '--backup-file=')));
-$backupPath = count($backupOption) === 1 ? substr($backupOption[0], strlen('--backup-file=')) : '';
-$backupReady = $backupPath !== '' && is_file($backupPath) && filesize($backupPath) > 1000;
-$liveAllowed = $schema === 'db_spp' && in_array('--confirm-main=db_spp', $argv, true)
-    && getenv('SPP_ALLOW_MAIN_MIGRATION') === '1' && $backupReady;
-if (!$cloneAllowed && !$liveAllowed) {
-    throw new RuntimeException('Migrasi hanya boleh diterapkan pada clone db_spp_audit_*/db_spp_test_* dengan SPP_TEST_ALLOW_MUTATION=1, atau setelah persetujuan pemilik pada db_spp dengan SPP_ALLOW_MAIN_MIGRATION=1, --confirm-main=db_spp, dan --backup-file=<dump>.');
-}
+readiness_migration_assert_apply_allowed($argv, $schema);
 
 foreach ($tables as $table) {
     $base = $multiunit ? $table . '_data' : $table;

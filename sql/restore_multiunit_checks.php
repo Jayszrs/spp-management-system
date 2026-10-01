@@ -1,16 +1,14 @@
 <?php
 /**
- * Audit CHECK constraints on the physical multiunit tables. --apply is limited
- * to disposable databases; review the output and backup before any live DDL.
+ * Audit and restore CHECK constraints on the physical multiunit tables.
+ * Live DDL needs separate owner approval and a fresh external backup.
  */
 if (PHP_SAPI !== 'cli') exit(1);
 require_once __DIR__ . '/../koneksi.php';
+require_once __DIR__ . '/readiness_migration_guard.php';
 
 $apply = in_array('--apply', $argv, true);
-if ($apply && (!preg_match('/^db_spp_(?:test|audit)_[a-z0-9_]+$/i', DB_NAME)
-    || getenv('SPP_TEST_ALLOW_MUTATION') !== '1')) {
-    throw new RuntimeException('Penerapan hanya diizinkan pada database disposable dengan SPP_TEST_ALLOW_MUTATION=1.');
-}
+if ($apply) readiness_migration_assert_apply_allowed($argv, DB_NAME);
 $table = $koneksi->query("SELECT TABLE_TYPE FROM information_schema.TABLES
     WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='siswa'")->fetch_assoc();
 if (($table['TABLE_TYPE'] ?? '') !== 'VIEW') {
@@ -266,4 +264,4 @@ foreach (['INSERT' => 'bi', 'UPDATE' => 'bu'] as $event => $suffix) {
         throw new RuntimeException("Verifikasi trigger grade gagal setelah DDL: {$event}");
     }
 }
-echo 'SUMMARY added=' . $added . " mode=disposable\n";
+echo 'SUMMARY added=' . $added . ' mode=apply database=' . DB_NAME . "\n";

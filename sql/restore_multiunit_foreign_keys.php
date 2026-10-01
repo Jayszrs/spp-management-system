@@ -1,14 +1,12 @@
 <?php
 
-/** Restore schema.sql foreign keys on a disposable multiunit database only. */
+/** Restore schema.sql foreign keys after preflight and an approved backup. */
 if (PHP_SAPI !== 'cli') { http_response_code(404); exit; }
 require_once __DIR__ . '/audit_foreign_keys.php';
+require_once __DIR__ . '/readiness_migration_guard.php';
 
 $apply = in_array('--apply', $argv, true);
-if ($apply && (DB_NAME !== 'db_spp_audit_schema_20261001'
-    || getenv('SPP_TEST_ALLOW_MUTATION') !== '1')) {
-    throw new RuntimeException('DDL FK hanya diizinkan pada clone skema khusus dengan SPP_TEST_ALLOW_MUTATION=1.');
-}
+if ($apply) readiness_migration_assert_apply_allowed($argv, DB_NAME);
 
 $views = $koneksi->query("SELECT TABLE_NAME,TABLE_TYPE FROM information_schema.TABLES
     WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME IN ('siswa','master_kelas')")->fetch_all(MYSQLI_ASSOC);
@@ -21,6 +19,8 @@ $report = fk_audit_report($koneksi);
 $requiresDdl = array_merge($report['missing'], $report['mismatched']);
 $orphanCount = array_sum(array_column($requiresDdl, 'orphans'));
 $issueCount = array_sum(array_map(static fn($item) => count($item['preflight_issues']), $requiresDdl));
+$replacements = [];
+$unrepairableMismatch = false;
 echo 'PREFLIGHT database=' . $report['database']
     . ' expected=' . $report['expected']
     . ' present=' . $report['present']
@@ -66,17 +66,29 @@ if ($report['unresolved'] || $report['mismatched'] || $orphanCount || $issueCoun
                 $newName = 'fk_repaired_' . substr(sha1(strtolower($child . '.' . $column
                     . '>' . $parent . '.' . $parentColumn . ':' . $item['on_delete']
                     . ':' . $item['on_update'])), 0, 16);
-                echo 'REVIEW_REPLACEMENT_ONLY ALTER TABLE `' . $child . '` DROP FOREIGN KEY `' . $name
+                $ddl = 'ALTER TABLE `' . $child . '` DROP FOREIGN KEY `' . $name
                     . '`, ADD CONSTRAINT `' . $newName . '` FOREIGN KEY (`' . $column . '`) REFERENCES `'
                     . $parent . '` (`' . $parentColumn . '`) ON DELETE ' . $item['on_delete']
-                    . ' ON UPDATE ' . $item['on_update'] . ";\n";
+                    . ' ON UPDATE ' . $item['on_update'];
+                $replacements[] = [$ddl, $child, $column];
+                echo 'REVIEW_REPLACEMENT ' . $ddl . ";\n";
+            } else {
+                $unrepairableMismatch = true;
             }
         }
     }
+}
+if ($report['unresolved'] || $orphanCount || $issueCount || $unrepairableMismatch
+    || count($replacements) !== count($report['mismatched'])
+    || (!$apply && $report['mismatched'])) {
     throw new RuntimeException('Pemeriksaan FK belum bersih; tidak ada DDL yang diterapkan.');
 }
 if (!$apply) exit;
 
+foreach ($replacements as [$ddl, $child, $column]) {
+    $koneksi->query($ddl);
+    echo 'REPLACED ' . $child . '.' . $column . "\n";
+}
 foreach ($report['missing'] as $relation) {
     $child = fk_audit_identifier($relation['physical_child']);
     $column = fk_audit_identifier($relation['column']);
