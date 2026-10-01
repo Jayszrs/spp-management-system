@@ -4,6 +4,12 @@
  * Requires a DB account allowed to create views, routines and triggers.
  */
 if (PHP_SAPI !== 'cli') { http_response_code(404); exit; }
+require_once __DIR__ . '/readiness_migration_guard.php';
+$migrationTarget = (string)getenv('SPP_DB_NAME');
+if ($migrationTarget === 'db_spp' && !in_array('--apply', $argv, true)) {
+    throw new RuntimeException('Migrasi utama memerlukan --apply dan prasyarat persetujuan/backup.');
+}
+readiness_migration_assert_apply_allowed($argv, $migrationTarget);
 require_once __DIR__ . '/../koneksi.php';
 
 function unit_migration_table(mysqli $db, string $name): ?string {

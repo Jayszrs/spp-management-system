@@ -8,7 +8,7 @@ SistemSPP adalah aplikasi administrasi pembayaran sekolah berbasis PHP, JavaScri
 
 - Pengembangan lokal saat ini memakai Laragon di `C:\laragon\www\spp-management-system` dan database `db_spp`.
 - Konfigurasi koneksi berada di `koneksi.php`. Di Railway, koneksi memakai variabel `SPP_DB_*`; lihat [panduan deployment](./RAILWAY_DEPLOYMENT.md).
-- `sql/schema.sql` hanya untuk database baru/kosong dan tidak boleh diimpor ke database berisi data.
+- `sql/schema.sql` adalah referensi instalasi baru dan menolak impor biasa pada database berisi tabel; gunakan `sql/bootstrap_production.php` untuk database kosong. Berkas itu bukan migrasi data lama dan tidak boleh dipakai pada database aktif.
 - Untuk reset dan pengisian data **demo**, ikuti [DEMO_DATA_RESET.md](./DEMO_DATA_RESET.md). Jangan terapkan reset pada data sekolah sungguhan.
 
 ## Alur pembayaran aktif
@@ -20,6 +20,7 @@ SistemSPP adalah aplikasi administrasi pembayaran sekolah berbasis PHP, JavaScri
 - Daftar Ulang memakai tagihan tahunan. Dropdown tahun selalu tersedia di form input dan edit; tanda `!` muncul bila siswa memiliki tunggakan tahun ajaran sebelumnya. Tagihan tahun berjalan yang masih bersisa menjadi pilihan awal; jika sudah lunas, tunggakan lama tertua yang belum lunas dipilih. Pembayaran dapat dicicil sampai sisa tagihan, sedangkan tahun dan kelas pada transaksi berasal dari snapshot tagihan yang dipilih (bukan bulan SPP pada form). Baseline demo 2026/2027 tidak membuat tagihan Daftar Ulang tahun sebelumnya.
 - Biaya Lain memakai tagihan yang diterbitkan dari master. Tabungan masuk/keluar adalah jurnal terpisah, bukan komponen penerimaan pembayaran sekolah.
 - Riwayat kelas memakai `siswa_tahun_ajaran`; laporan dan struk membaca snapshot/tagihan terkait agar perubahan tarif atau kelas berikutnya tidak menulis ulang histori.
+- NIS internal menjadi penghubung riwayat dan tagihan. Setelah siswa dibuat, form Data Siswa tidak mengubah NIS; koreksi NIS historis memerlukan prosedur migrasi relasi tersendiri.
 - Surat Laporan ke Kepala Sekolah menampilkan total tunggakan per rombel dan total pilihan, tanpa nama atau NIS siswa. Cakupan dapat dipilih untuk satu rombel, seluruh rombel dalam satu tingkat kelas, atau seluruh kelas; status siswa Aktif/Arsip/Semua tetap dapat dipilih. PDF dan Excel memakai rekap yang sama.
 
 ## Hak akses

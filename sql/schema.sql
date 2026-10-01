@@ -9,6 +9,15 @@ CREATE DATABASE IF NOT EXISTS `db_spp`
 
 USE `db_spp`;
 
+-- Import langsung hanya boleh pada database yang benar-benar kosong. Kesalahan
+-- JSON sengaja menghentikan klien MySQL sebelum perubahan skema.
+-- Jalur instalasi yang disarankan adalah bootstrap_production.php.
+SELECT JSON_EXTRACT(
+  IF((SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE()) = 0,
+     '{"fresh_install":true}', 'refuse_non_empty_database'),
+  '$.fresh_install'
+);
+
 SET FOREIGN_KEY_CHECKS = 0;
 
 -- Tabel Admin (Untuk Login, tetap dipertahankan)
@@ -38,7 +47,6 @@ CREATE TABLE `keuangan_request` (
 
 -- Master kelas/rombel. Data lama menggunakan placeholder per tingkat sampai
 -- admin memindahkan siswa ke rombel sebenarnya (1A, 1B, dan seterusnya).
-DROP TABLE IF EXISTS `master_kelas`;
 CREATE TABLE `master_kelas` (
   `id` INT AUTO_INCREMENT PRIMARY KEY,
   `tingkat` TINYINT UNSIGNED NOT NULL,
@@ -62,7 +70,6 @@ INSERT INTO `master_kelas` (`tingkat`,`kode_rombel`,`is_placeholder`,`is_active`
 
 
 -- Tabel Siswa (Revisi Baru)
-DROP TABLE IF EXISTS `siswa`;
 CREATE TABLE `siswa` (
   `id`              INT AUTO_INCREMENT PRIMARY KEY,
   `NO_INDUK`        VARCHAR(10) NOT NULL UNIQUE,
@@ -93,7 +100,6 @@ CREATE TABLE `siswa` (
 ) ENGINE=InnoDB;
 
 -- Audit perubahan master siswa
-DROP TABLE IF EXISTS `siswa_audit_log`;
 CREATE TABLE `siswa_audit_log` (
   `id`                BIGINT AUTO_INCREMENT PRIMARY KEY,
   `siswa_id`          INT DEFAULT NULL,
@@ -111,9 +117,6 @@ CREATE TABLE `siswa_audit_log` (
 ) ENGINE=InnoDB;
 
 -- Tabel Bayar (Revisi Baru)
--- Hapus antrean lebih dahulu karena tabel ini mereferensikan pembayaran.
-DROP TABLE IF EXISTS `transaksi_otorisasi`;
-DROP TABLE IF EXISTS `bayar`;
 CREATE TABLE `bayar` (
   `id`          INT AUTO_INCREMENT PRIMARY KEY,
   `NO_INDUK`    VARCHAR(10) DEFAULT NULL,
@@ -189,7 +192,6 @@ CREATE TABLE `transaksi_otorisasi` (
 
 -- Pemetaan periode per transaksi SPP. Satu siswa hanya boleh memiliki satu
 -- transaksi SPP penuh untuk bulan dan tahun yang sama.
-DROP TABLE IF EXISTS `bayar_spp_periode`;
 CREATE TABLE `bayar_spp_periode` (
   `bayar_id` INT NOT NULL PRIMARY KEY,
   `no_induk` VARCHAR(10) NOT NULL,
@@ -295,7 +297,6 @@ CREATE TABLE `spp_audit_log` (
 ) ENGINE=InnoDB;
 
 -- Master jenis biaya lain
-DROP TABLE IF EXISTS `master_biaya_lain`;
 CREATE TABLE `master_biaya_lain` (
   `id`         INT AUTO_INCREMENT PRIMARY KEY,
   `nama`       VARCHAR(100) NOT NULL UNIQUE,
@@ -306,8 +307,6 @@ CREATE TABLE `master_biaya_lain` (
   CONSTRAINT `chk_master_biaya_lain_nominal` CHECK (`nominal` > 0)
 ) ENGINE=InnoDB;
 
-DROP TABLE IF EXISTS `tagihan_biaya_lain_audit_log`;
-DROP TABLE IF EXISTS `tagihan_biaya_lain`;
 CREATE TABLE `tagihan_biaya_lain` (
   `id` BIGINT AUTO_INCREMENT PRIMARY KEY,
   `master_biaya_lain_id` INT NOT NULL,
@@ -343,7 +342,6 @@ CREATE TABLE `tagihan_biaya_lain_audit_log` (
 
 -- Detail biaya lain per transaksi. Nama dan nominal disimpan sebagai snapshot
 -- agar perubahan master tidak mengubah riwayat transaksi.
-DROP TABLE IF EXISTS `bayar_biaya_lain`;
 CREATE TABLE `bayar_biaya_lain` (
   `id`                         INT AUTO_INCREMENT PRIMARY KEY,
   `bayar_id`                   INT NOT NULL,
@@ -367,12 +365,6 @@ CREATE TABLE `bayar_biaya_lain` (
 ) ENGINE=InnoDB;
 
 -- Tahun ajaran, penempatan, master, dan tagihan Daftar Ulang
-DROP TABLE IF EXISTS `bayar_du`;
-DROP TABLE IF EXISTS `daftar_ulang_audit_log`;
-DROP TABLE IF EXISTS `tagihan_daftar_ulang`;
-DROP TABLE IF EXISTS `Daftar_ulang`;
-DROP TABLE IF EXISTS `siswa_tahun_ajaran`;
-DROP TABLE IF EXISTS `tahun_ajaran`;
 CREATE TABLE `tahun_ajaran` (
   `id` INT AUTO_INCREMENT PRIMARY KEY, `label` CHAR(9) NOT NULL,
   `tanggal_mulai` DATE NOT NULL, `tanggal_selesai` DATE NOT NULL,
@@ -404,8 +396,6 @@ CREATE TABLE `siswa_tahun_ajaran` (
   CONSTRAINT `chk_penempatan_kelas_sd` CHECK (`kelas` IN ('0','1','2','3','4','5','6','PSB')),
   CONSTRAINT `chk_penempatan_psb_spp` CHECK (`spp_covered_by_psb` IN (0,1) AND (`spp_covered_by_psb` = 0 OR `spp_perbulan_snapshot` = 0))
 ) ENGINE=InnoDB;
-DROP TABLE IF EXISTS `bayar_komite`;
-DROP TABLE IF EXISTS `tagihan_komite`;
 CREATE TABLE `tagihan_komite` (
   `id` BIGINT AUTO_INCREMENT PRIMARY KEY,
   `tahun_ajaran_id` INT NOT NULL, `penempatan_id` BIGINT NOT NULL,
@@ -479,8 +469,6 @@ CREATE TABLE `bayar_du` (
   CONSTRAINT `fk_bayar_du_tagihan` FOREIGN KEY (`tagihan_daftar_ulang_id`) REFERENCES `tagihan_daftar_ulang`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE
 ) ENGINE=InnoDB;
 
-DROP TABLE IF EXISTS `bayar_tahunan_siswa`;
-DROP TABLE IF EXISTS `tagihan_tahunan_siswa`;
 CREATE TABLE `tagihan_tahunan_siswa` (
   `id` BIGINT AUTO_INCREMENT PRIMARY KEY,
   `tahun_ajaran_id` INT NOT NULL,
@@ -528,7 +516,6 @@ CREATE TABLE `bayar_tahunan_siswa` (
 ) ENGINE=InnoDB;
 
 -- Tabel Tabungan
-DROP TABLE IF EXISTS `tabungan`;
 CREATE TABLE `tabungan` (
   `id`       INT AUTO_INCREMENT PRIMARY KEY,
   `NO_INDUK` VARCHAR(10) NOT NULL UNIQUE,
@@ -538,7 +525,6 @@ CREATE TABLE `tabungan` (
 ) ENGINE=InnoDB;
 
 -- Tabel Transaksi Masuk
-DROP TABLE IF EXISTS `transaksi_m`;
 CREATE TABLE `transaksi_m` (
   `id`        INT AUTO_INCREMENT PRIMARY KEY,
   `bayar_id`  INT DEFAULT NULL,
@@ -557,7 +543,6 @@ CREATE TABLE `transaksi_m` (
 ) ENGINE=InnoDB;
 
 -- Tabel Transaksi Keluar
-DROP TABLE IF EXISTS `transaksi_k`;
 CREATE TABLE `transaksi_k` (
   `id`        INT AUTO_INCREMENT PRIMARY KEY,
   `NO_INDUK`  VARCHAR(10) DEFAULT NULL,
@@ -570,8 +555,5 @@ CREATE TABLE `transaksi_k` (
   KEY `idx_transaksi_k_siswa_tanggal` (`NO_INDUK`,`TANGGAL`),
   FOREIGN KEY (`NO_INDUK`) REFERENCES `siswa`(`NO_INDUK`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB;
-
--- Hapus tabel lama jika ada
-DROP TABLE IF EXISTS `pembayaran`;
 
 SET FOREIGN_KEY_CHECKS = 1;

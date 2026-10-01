@@ -1,4 +1,12 @@
 <?php
+if (PHP_SAPI !== 'cli') { http_response_code(404); exit; }
+
+$database = (string)getenv('SPP_DB_NAME');
+if (getenv('SPP_TEST_ALLOW_MUTATION') !== '1'
+    || !preg_match('/^db_spp_test_demo_payment_[a-z0-9_]+$/D', $database)) {
+    fwrite(STDERR, "FAILED: jalankan tes seed hanya lewat CLI pada clone baru db_spp_test_demo_payment_* dengan SPP_TEST_ALLOW_MUTATION=1.\n");
+    exit(1);
+}
 
 mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
 
@@ -14,15 +22,17 @@ function demo_payment_seed_run(mysqli $db, string $sql): void {
     if ($db->error !== '') throw new RuntimeException($db->error);
 }
 
-$database = 'db_spp_demo_payment_seed_test';
 $host = getenv('SPP_DB_HOST') ?: 'localhost';
 $user = getenv('SPP_DB_USER') ?: 'root';
 $pass = getenv('SPP_DB_PASS') !== false ? getenv('SPP_DB_PASS') : '';
 $db = new mysqli($host, $user, $pass);
 $db->set_charset('utf8mb4');
+$createdDatabase = false;
 
 try {
-    $db->query("DROP DATABASE IF EXISTS `{$database}`");
+    // CREATE without IF NOT EXISTS refuses to overwrite a previous or unrelated clone.
+    $db->query("CREATE DATABASE `{$database}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
+    $createdDatabase = true;
     $schema = file_get_contents(__DIR__ . '/../sql/schema.sql');
     if ($schema === false) throw new RuntimeException('sql/schema.sql tidak dapat dibaca.');
     $schema = str_replace(
@@ -92,6 +102,6 @@ try {
 
     echo "OK: seeder 1.000 pembayaran demo tervalidasi.\n";
 } finally {
-    $db->query("DROP DATABASE IF EXISTS `{$database}`");
+    if ($createdDatabase) $db->query("DROP DATABASE `{$database}`");
     $db->close();
 }

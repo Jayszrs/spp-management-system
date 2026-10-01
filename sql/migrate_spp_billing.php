@@ -6,6 +6,8 @@
 if (PHP_SAPI !== 'cli' || !in_array('--execute', $argv, true)) {
     fwrite(STDERR, "Script hanya berjalan melalui CLI dengan opsi --execute.\n"); exit(2);
 }
+require_once __DIR__ . '/readiness_migration_guard.php';
+readiness_migration_assert_apply_allowed($argv, (string)getenv('SPP_DB_NAME'));
 require_once __DIR__ . '/../koneksi.php';
 require_once __DIR__ . '/../includes/spp_billing.php';
 

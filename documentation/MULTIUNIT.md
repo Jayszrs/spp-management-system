@@ -2,10 +2,11 @@
 
 ## Data demo pada salinan uji
 
-Salin database yang sudah dimigrasi ke database khusus bernama `db_spp_test_*`. Mode `--apply` hanya bekerja pada salinan uji dan tidak mengubah skema. Perintah tanpa opsi penerapan hanya menampilkan jumlah data dan rencana pengisian. Pengisian database aktif memerlukan opsi berbeda, `--apply-live`, dan cadangan terlebih dahulu.
+Salin database yang sudah dimigrasi ke database khusus bernama `db_spp_test_*` atau `db_spp_audit_*`. Mode `--apply` hanya bekerja pada salinan uji dengan `SPP_TEST_ALLOW_MUTATION=1` dan tidak mengubah skema. Perintah tanpa opsi penerapan hanya menampilkan jumlah data dan rencana pengisian. Mode `--apply-live` dinonaktifkan; data demo tidak boleh diisikan ke database utama.
 
 ```powershell
 $env:SPP_DB_NAME='db_spp_test_demo_multiunit'
+$env:SPP_TEST_ALLOW_MUTATION='1'
 php sql/seed_demo_multiunit.php --as-of=2026-09-30
 php sql/seed_demo_multiunit.php --apply --as-of=2026-09-30
 php tests/demo_multiunit_reports_test.php 2026-09-30
@@ -15,7 +16,7 @@ Seeder mengisi SMP dan SMA masing-masing dengan 33 siswa reguler dan 3 PSB, tari
 
 Untuk menguji jalur pratinjau HTTP, jalankan server PHP terpisah dengan `SPP_DB_NAME` yang sama, atur `SPP_HTTP_BASE` ke alamat server itu, lalu jalankan `php tests/demo_multiunit_export_http_test.php 2026-09-30`.
 
-Setelah database aktif dicadangkan, `--apply-live --as-of=YYYY-MM-DD` dapat dipakai secara eksplisit dengan `SPP_DB_NAME=db_spp` untuk menambahkan data demo SMP/SMA pada instalasi lokal. Mode ini melewati SD sepenuhnya. Seeder tetap memakai kunci tetap dan transaksi database agar pengulangan pada tanggal yang sama tidak menggandakan data.
+Gunakan seeder hanya pada clone disposable. Pengulangan pada clone dengan tanggal yang sama tetap memakai kunci tetap dan tidak menggandakan data.
 
 Sistem memakai satu database. Setiap tabel siswa, kelas, master, tagihan, pembayaran, tabungan, dan audit memiliki `unit_id`. Nama tabel lama menjadi view yang otomatis membatasi data sesuai unit sesi. Tabel fisiknya bernama `*_data`; kode aplikasi hanya memakai view. Trigger database memeriksa kelas dan hubungan antartabel saat data ditulis.
 
@@ -30,21 +31,26 @@ Pada instalasi baru, kata sandi akun yang dibuat oleh `sql/bootstrap_unit_accoun
 
 ## Instalasi baru
 
-`sql/schema.sql` hanya boleh dipakai pada database **kosong** karena berisi perintah `DROP TABLE`. Jalankan skema, lalu:
+`sql/schema.sql` adalah skema referensi untuk instalasi baru; perintah `DROP TABLE` telah dihapus dan impor langsung pada database yang berisi tabel ditolak sebelum DDL. Untuk instalasi baru, gunakan `sql/bootstrap_production.php` pada database **kosong**, lalu migrasi unit dan buat akun. Semua langkah yang menulis database utama memerlukan persetujuan pemilik, backup baru, konfirmasi target, serta gate migrasi pada [runbook kesiapan](READINESS_MIGRATION_RUNBOOK_20261001.md). Contoh di bawah berlaku untuk clone disposable:
 
 ```powershell
-$env:SPP_DB_NAME='db_spp'
+$env:SPP_DB_NAME='db_spp_audit_instalasi_baru'
+$env:SPP_TEST_ALLOW_MUTATION='1'
+$env:SPP_BOOTSTRAP_TARGET=$env:SPP_DB_NAME
+$env:SPP_BOOTSTRAP_ADMIN_USER='admin'
+# Siapkan SPP_BOOTSTRAP_ADMIN_PASSWORD secara aman di lingkungan terminal ini.
+php sql/bootstrap_production.php --execute
 php sql/migrate_units.php
 php sql/bootstrap_unit_accounts.php 'C:\lokasi-aman\kredensial-unit.txt'
 ```
 
-Jangan simpan berkas kredensial di repositori. Instalasi baru tidak memiliki kata sandi bawaan. Alternatifnya, `sql/bootstrap_production.php` dapat membuat skema kosong dan akun SD pertama sebelum kedua perintah di atas; gunakan username `admin` agar akun tersebut dipertahankan.
+Jangan simpan berkas kredensial di repositori. `sql/bootstrap_production.php` memerlukan `SPP_BOOTSTRAP_TARGET` yang cocok dengan database kosong, username admin, kata sandi awal kuat, dan `--execute`. Gunakan username `admin` agar akun itu dipertahankan saat akun unit dibuat. Jalur berkas kredensial akun unit harus absolut dan berada di luar repository.
 
 ## Migrasi database berisi data
 
 1. Hentikan penulisan selama migrasi. Cadangkan database lengkap, termasuk routine dan trigger. Verifikasi hasil cadangan dapat dipulihkan ke database pengujian.
 2. Catat jumlah siswa serta jumlah dan total `bayar`, tabungan, dan tagihan SD sebelum migrasi.
-3. Jalankan `sql/migrate_units.php`, lalu `sql/bootstrap_unit_accounts.php` dengan target berkas kredensial baru di luar repositori. Jangan jalankan `sql/schema.sql` pada database aktif.
+3. Setelah persetujuan pemilik dan preflight pada clone, jalankan `sql/migrate_units.php --apply --confirm-main=db_spp --backup-file=<dump-baru>`, lalu `sql/bootstrap_unit_accounts.php <berkas-kredensial-baru> --apply --confirm-main=db_spp --backup-file=<dump-baru>` dengan `SPP_ALLOW_MAIN_MIGRATION=1`. Gate menuntut backup baru di luar repository; lihat [runbook kesiapan](READINESS_MIGRATION_RUNBOOK_20261001.md). Jangan jalankan `sql/schema.sql` pada database aktif.
 4. Cocokkan kembali jumlah dan total SD, jumlah akun aktif per unit, dan 30 view operasional. Uji login tiap peran dan laporan Semua Unit.
 
 Migrasi menolak tabel yang tidak sesuai atau proses migrasi yang pernah terhenti. Karena perubahan DDL MySQL tidak dapat dibatalkan dengan `ROLLBACK`, pulihkan cadangan jika proses berhenti di tengah. Simpan cadangan hingga hasil verifikasi diterima.
@@ -61,6 +67,7 @@ Jalankan pengujian integrasi hanya pada salinan database dengan nama `db_spp_tes
 
 ```powershell
 $env:SPP_DB_NAME='db_spp_test_multiunit'
+$env:SPP_TEST_ALLOW_MUTATION='1'
 php tests/multiunit_isolation_test.php
 php tests/academic_year_billing_test.php
 php tests/class_graduation_history_test.php

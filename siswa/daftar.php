@@ -127,6 +127,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $oldStudent = $action === 'update' ? find_student($koneksi, $id, true) : null;
             if ($action === 'update' && !$oldStudent) throw new RuntimeException('Data siswa tidak ditemukan.');
             [$noInduk, $name, $class, $classId] = validate_student_identity($koneksi, $_POST);
+            if ($oldStudent && $noInduk !== (string)$oldStudent['NO_INDUK']) {
+                throw new RuntimeException('Nomor induk tidak dapat diubah setelah siswa dibuat karena menjadi penghubung riwayat dan tagihan.');
+            }
 
             $stmtDuplicate = $koneksi->prepare('SELECT id FROM siswa WHERE NO_INDUK = ? AND id <> ? LIMIT 1');
             $stmtDuplicate->bind_param('si', $noInduk, $id);
@@ -567,7 +570,8 @@ $sppRatePreview = spp_current_effective_rate($koneksi, $previewLevel, $previewDi
             <div class="field-row">
               <label class="field-label" for="nis-baru">No. Induk</label>
               <input class="field-input" type="text" inputmode="numeric" maxlength="10" id="nis-baru" name="no_induk" required
-                value="<?= htmlspecialchars((string)form_student_value('no_induk', $oldInput, $formStudent, $fieldMap)) ?>" />
+                value="<?= htmlspecialchars((string)($editStudent['NO_INDUK'] ?? form_student_value('no_induk', $oldInput, $formStudent, $fieldMap))) ?>" <?= $editStudent ? 'readonly aria-readonly="true"' : '' ?> />
+              <?php if ($editStudent): ?><small class="payment-auto-note">Nomor induk menjadi penghubung riwayat dan tagihan siswa.</small><?php endif; ?>
             </div>
             <div class="field-row">
               <label class="field-label" for="nama-baru">Nama Lengkap</label>

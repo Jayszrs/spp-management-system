@@ -5,6 +5,19 @@ $output = $argv[1] ?? '';
 if ($output === '' || !preg_match('/^(?:[A-Za-z]:[\\\\\/]|\/)/', $output)) {
     fwrite(STDERR, "Usage: php sql/bootstrap_unit_accounts.php ABSOLUTE_CREDENTIALS_FILE\n"); exit(1);
 }
+require_once __DIR__ . '/readiness_migration_guard.php';
+$accountTarget = (string)getenv('SPP_DB_NAME');
+if ($accountTarget === 'db_spp' && !in_array('--apply', $argv, true)) {
+    throw new RuntimeException('Bootstrap akun utama memerlukan --apply dan prasyarat persetujuan/backup.');
+}
+readiness_migration_assert_apply_allowed($argv, $accountTarget);
+$workspace = realpath(dirname(__DIR__));
+$outputDirectory = realpath(dirname($output));
+if ($workspace === false || $outputDirectory === false
+    || str_starts_with(strtolower($outputDirectory . DIRECTORY_SEPARATOR),
+        strtolower($workspace . DIRECTORY_SEPARATOR))) {
+    throw new RuntimeException('Berkas kredensial harus berada di luar repository.');
+}
 require_once __DIR__ . '/../koneksi.php';
 if (!unit_schema_ready($koneksi)) throw new RuntimeException('Migrasi unit belum dijalankan.');
 $handle = @fopen($output, 'x');

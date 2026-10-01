@@ -6,13 +6,15 @@ if (PHP_SAPI !== 'cli' || getenv('SPP_TEST_ALLOW_MUTATION') !== '1') {
 
 mysqli_report(MYSQLI_REPORT_ERROR | MYSQLI_REPORT_STRICT);
 
-$database = 'db_spp_schema_install_test_' . bin2hex(random_bytes(6));
+$database = 'db_spp_audit_schema_install_' . bin2hex(random_bytes(6));
 $host = getenv('SPP_DB_HOST') ?: 'localhost';
 $user = getenv('SPP_DB_USER') ?: 'root';
 $pass = getenv('SPP_DB_PASS') !== false ? getenv('SPP_DB_PASS') : '';
 $db = new mysqli($host, $user, $pass);
 $db->set_charset('utf8mb4');
 $created = false;
+$credentialsFile = sys_get_temp_dir() . DIRECTORY_SEPARATOR
+    . 'spp-unit-accounts-' . bin2hex(random_bytes(6)) . '.txt';
 
 try {
     // CREATE without IF NOT EXISTS reserves only a fresh disposable target.
@@ -31,7 +33,10 @@ try {
     if ($replacementCount !== 2) throw new RuntimeException('Kontrak nama database pada schema.sql berubah.');
 
     $db->multi_query($sql);
-    while ($db->more_results()) $db->next_result();
+    do {
+        $result = $db->store_result();
+        if ($result instanceof mysqli_result) $result->free();
+    } while ($db->more_results() && $db->next_result());
 
     $required = ['master_spp_tahun', 'master_spp_tarif', 'tagihan_spp', 'spp_alokasi_batch', 'spp_alokasi', 'titipan_spp_mutasi', 'spp_audit_log', 'transaksi_otorisasi', 'keuangan_request'];
     $quoted = implode(',', array_fill(0, count($required), '?'));
@@ -60,6 +65,21 @@ try {
         WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='siswa'")->fetch_assoc()['n'] !== 1) {
         throw new RuntimeException('Migrasi multiunit tidak membuat view operasional siswa.');
     }
+    // The documented workflow runs account bootstrap in a new CLI process.
+    $process = proc_open([PHP_BINARY, __DIR__ . '/../sql/bootstrap_unit_accounts.php', $credentialsFile],
+        [['pipe', 'r'], ['pipe', 'w'], ['pipe', 'w']], $pipes, dirname(__DIR__), null,
+        ['bypass_shell' => true]);
+    if (!is_resource($process)) throw new RuntimeException('Proses bootstrap akun tidak dapat dibuka.');
+    fclose($pipes[0]);
+    $bootstrapOutput = stream_get_contents($pipes[1]); fclose($pipes[1]);
+    $bootstrapError = stream_get_contents($pipes[2]); fclose($pipes[2]);
+    if (proc_close($process) !== 0) {
+        throw new RuntimeException('Bootstrap akun clone gagal: ' . trim($bootstrapError ?: $bootstrapOutput));
+    }
+    if ((int)$koneksi->query('SELECT COUNT(*) FROM admin')->fetch_row()[0] !== 19
+        || !is_file($credentialsFile) || filesize($credentialsFile) === 0) {
+        throw new RuntimeException('Bootstrap akun clone tidak lengkap.');
+    }
     foreach ([2 => 7, 3 => 10] as $unitId => $grade) {
         unit_set_context($koneksi, $unitId);
         $class = $koneksi->query("SELECT id FROM master_kelas WHERE tingkat={$grade} AND kode_rombel='A'")->fetch_assoc();
@@ -84,9 +104,16 @@ try {
 
     echo "OK: instalasi baru dan migrasi multiunit menerima tarif SPP serta kelas awal SMP/SMA.\n";
 } finally {
+    if (is_file($credentialsFile)) {
+        if (realpath(dirname($credentialsFile)) !== realpath(sys_get_temp_dir())
+            || !preg_match('/^spp-unit-accounts-[a-f0-9]{12}\.txt$/D', basename($credentialsFile))) {
+            throw new RuntimeException('Berkas kredensial tes tidak cocok; penghapusan dibatalkan.');
+        }
+        unlink($credentialsFile);
+    }
     if ($created) {
         $currentDatabase = (string)$db->query('SELECT DATABASE()')->fetch_row()[0];
-        if (!preg_match('/^db_spp_schema_install_test_[a-f0-9]{12}$/D', $database)
+        if (!preg_match('/^db_spp_audit_schema_install_[a-f0-9]{12}$/D', $database)
             || $currentDatabase !== $database) {
             throw new RuntimeException('Target penghapusan database latihan tidak sesuai; database dipertahankan.');
         }

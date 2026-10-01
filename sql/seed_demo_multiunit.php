@@ -3,14 +3,16 @@
 if (PHP_SAPI !== 'cli') { http_response_code(404); exit; }
 
 $apply = false;
-$applyLive = false;
 $asOfText = date('Y-m-d');
 $asOfProvided = false;
 foreach (array_slice($argv, 1) as $argument) {
     if ($argument === '--apply') { $apply = true; continue; }
-    if ($argument === '--apply-live') { $apply = true; $applyLive = true; continue; }
+    if ($argument === '--apply-live') {
+        fwrite(STDERR, "--apply-live dinonaktifkan; seeder demo hanya boleh pada clone disposable.\n");
+        exit(1);
+    }
     if (str_starts_with($argument, '--as-of=')) { $asOfText = substr($argument, 8); $asOfProvided = true; continue; }
-    fwrite(STDERR, "Usage: php sql/seed_demo_multiunit.php [--apply|--apply-live] [--as-of=YYYY-MM-DD]\n");
+    fwrite(STDERR, "Usage: php sql/seed_demo_multiunit.php [--apply] [--as-of=YYYY-MM-DD]\n");
     exit(1);
 }
 $asOf = DateTimeImmutable::createFromFormat('!Y-m-d', $asOfText, new DateTimeZone('Asia/Jakarta'));
@@ -20,14 +22,18 @@ if (!$asOf || $asOf->format('Y-m-d') !== $asOfText) {
 if ($apply && !$asOfProvided) {
     fwrite(STDERR, "--apply memerlukan --as-of=YYYY-MM-DD.\n"); exit(1);
 }
-if ($applyLive && (string)(getenv('SPP_DB_NAME') ?: '') !== 'db_spp') {
-    fwrite(STDERR, "--apply-live hanya diizinkan pada SPP_DB_NAME=db_spp.\n"); exit(1);
+$database = (string)getenv('SPP_DB_NAME');
+if (!preg_match('/^db_spp_(?:test|audit)_[a-z0-9_]+$/D', $database)) {
+    fwrite(STDERR, "Seeder demo memerlukan SPP_DB_NAME=db_spp_test_* atau db_spp_audit_*.\n"); exit(1);
 }
-if ($apply && !$applyLive && !preg_match('/^db_spp_test_[a-z0-9_]+$/i', (string)(getenv('SPP_DB_NAME') ?: ''))) {
-    fwrite(STDERR, "--apply hanya diizinkan pada SPP_DB_NAME=db_spp_test_*.\n"); exit(1);
+if ($apply && getenv('SPP_TEST_ALLOW_MUTATION') !== '1') {
+    fwrite(STDERR, "--apply memerlukan SPP_TEST_ALLOW_MUTATION=1 pada clone disposable.\n"); exit(1);
 }
 
 require_once __DIR__ . '/../koneksi.php';
+if (DB_NAME !== $database || (string)$koneksi->query('SELECT DATABASE() AS target')->fetch_assoc()['target'] !== $database) {
+    throw new RuntimeException('Koneksi tidak menuju clone yang diminta.');
+}
 if (!unit_schema_ready($koneksi)) throw new RuntimeException('Jalankan migrasi multiunit pada database uji terlebih dahulu.');
 
 function demo_query(mysqli $db, string $sql, array $values = []): mysqli_result|bool {
@@ -73,7 +79,7 @@ foreach ([1,2,3] as $unitId) {
 echo "Database: " . DB_NAME . "; tanggal contoh: {$asOfText}; mode: " . ($apply ? 'TERAPKAN' : 'PERIKSA') . "\n";
 foreach ($before as $unitId=>$counts) echo "Unit " . unit_label($unitId) . ': ' . json_encode($counts) . "\n";
 if (!$apply) {
-    echo "Rencana: 36 siswa per SMP/SMA (33 reguler, 3 PSB), tagihan dan transaksi terkait; SD hanya tabungan jika masih kosong pada database uji. Gunakan --apply pada salinan db_spp_test_* atau --apply-live pada db_spp setelah cadangan.\n";
+    echo "Rencana: 36 siswa per SMP/SMA (33 reguler, 3 PSB), tagihan dan transaksi terkait; SD hanya tabungan jika masih kosong pada database uji. Gunakan --apply pada clone disposable dengan SPP_TEST_ALLOW_MUTATION=1.\n";
     exit(0);
 }
 
@@ -275,7 +281,7 @@ function demo_savings(mysqli $db, int $unitId, string $asOfText): void {
 $koneksi->begin_transaction();
 try {
     foreach ($profiles as $unitId=>$profile) demo_students($koneksi,$unitId,$profile,$asOfText);
-    foreach ($applyLive ? [2,3] : [1,2,3] as $unitId) demo_savings($koneksi,$unitId,$asOfText);
+    foreach ([1,2,3] as $unitId) demo_savings($koneksi,$unitId,$asOfText);
     $koneksi->commit();
 } catch (Throwable $error) {
     $koneksi->rollback();

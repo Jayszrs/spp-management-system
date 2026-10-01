@@ -40,7 +40,7 @@ foreach ($statements as $statement) {
         $ddl[] = $statement;
     } elseif (preg_match('/^INSERT INTO\s+`?master_kelas`?(?:\s|\()/i', $statement)) {
         $masterClasses = $statement;
-    } elseif (preg_match('/^(CREATE DATABASE|USE\b|SET FOREIGN_KEY_CHECKS\b|DROP TABLE\b)/i', $statement)) {
+    } elseif (preg_match('/^(CREATE DATABASE|USE\b|SET FOREIGN_KEY_CHECKS\b|SELECT JSON_EXTRACT\()/i', $statement)) {
         continue;
     } elseif (preg_match('/^(?:INSERT INTO|UPDATE)\s+`?(?:admin|siswa|tahun_ajaran|Daftar_ulang|siswa_tahun_ajaran|tagihan_daftar_ulang|tagihan_komite)`?(?:\s|\()/i', $statement)) {
         continue;
