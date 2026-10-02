@@ -2,6 +2,8 @@
 
 ## Hasil lokal
 
+Pemulihan UI sesudah penggabungan juga sudah diverifikasi: [audit UI](UI_RECOVERY_AUDIT_20261002.md), 576 perbandingan screenshot lulus dan regresi kontrol/browser lulus. Paket ini hanya memperbaiki stylesheet dan versi aset; tidak memerlukan migrasi atau perubahan data. Kelulusan UI sebelumnya dikoreksi karena tidak menangkap CSS rusak setelah penghapusan Titipan SPP.
+
 Status kode 2 Oktober 2026: seluruh 11 commit audit sampai `6a95cc0` sudah digabung ke `main` dengan fast-forward, tanpa konflik. Penggabungan tidak menerapkan ulang migrasi database. Health CLI/HTTP dan 14 pemeriksaan integritas diperiksa ulang dan lulus; baseline di bawah tetap sama.
 
 Pembersihan dummy `db_spp` telah diterapkan atas otorisasi pemilik. Aplikasi kembali terbuka, HTTP health 200 `ok`, URL Titipan SPP lama 404. Utama: **222 siswa, 1.018 pembayaran, Rp577.145.000 penerimaan**, Tabungan **12 rekening/Rp1.050.000**, 12 jurnal masuk/6 keluar. Tabel lain dan pembayaran/alokasi biasa memiliki fingerprint sama. Skema: 61 FK, 18 CHECK/dua trigger, 14 invariant bersih. Rincian bukti ada di [audit terkini](READINESS_AUDIT_20261001.md).

@@ -13,6 +13,15 @@ File ini mencatat perubahan proyek secara reverse chronological. Baca [PROJECT_C
 - Jangan menghapus atau menulis ulang entri lama. Tambahkan entri koreksi bila diperlukan.
 - Perubahan implementasi dan entri changelog wajib masuk commit yang sama.
 
+## 2026-10-02 - Pemulihan UI sesuai 7647608
+
+- Aktor: Codex, atas permintaan pemilik memperbaiki seluruh regresi UI hasil audit; basis `e479606` pada `main`.
+- Penyebab: pembersihan Titipan SPP merusak 10 penutup selector `:is(...)`, target turunan dan aturan responsif bersama; aturan tema/layout di bagian berikutnya tidak terbaca. Audit sebelumnya melewatkan kerusakan visual meski interaksi dan database lulus.
+- Perilaku tampilan: seluruh aturan komponen aktif mengikuti desain `7647608`, tema SD hijau/SMP biru/SMA merah dan mode terang/gelap kembali. Pembersihan selector titipan memakai AST, menjaga cabang bersama. Tombol logout POST/CSRF tetap memakai penyesuaian tampilannya. 23 pemanggil stylesheet PHP memakai versi `filemtime`.
+- API/database: tidak ada perubahan bisnis, JavaScript aplikasi, migrasi atau data utama. Titipan SPP tetap dihapus; pembayaran langsung dan hasil perbaikan audit tetap berlaku. Tabungan tetap utuh.
+- Verifikasi: sintaks/AST CSS, CSSOM Chromium, 576 screenshot dari 32 halaman/varian x tiga unit x dua tema x tiga viewport lulus dengan nol selisih piksel/overflow/error JavaScript. Kontrol sidebar/unit/tema/dropdown DU/filter/ekspor/preview tiga unit dan empat alur browser pembayaran/pendaftaran/otorisasi/kenaikan lulus dengan verifikasi database. Utama health CLI/HTTP OK, 14 invariant nol, 222 siswa/1.018 pembayaran/Rp577.145.000. Seluruh tabel bisnis sama dengan clone visual; fingerprint tiga tabel Tabungan tetap sama.
+- Bukti: [audit UI](UI_RECOVERY_AUDIT_20261002.md), [sebelum/sesudah](ui-recovery-20261002-before-after.png), [tema unit](ui-recovery-20261002-palettes.png). Kegagalan alat/fixture dicatat terpisah dan diperbaiki sebelum hasil final.
+
 ## 2026-10-02 - Penggabungan hasil audit ke main
 
 - Aktor: Codex, atas permintaan pemilik untuk menjadikan seluruh hasil audit sebagai versi main.

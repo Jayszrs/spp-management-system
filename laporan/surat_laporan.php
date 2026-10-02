@@ -11,7 +11,7 @@ requireRole(['admin','bendahara','kasir']);
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Surat Laporan | SistemSPP</title>
   <link rel="icon" href="../assets/img/favicon.png?v=2">
-  <link rel="stylesheet" href="../assets/css/style.css?v=unitpalette4">
+  <link rel="stylesheet" href="../assets/css/style.css?v=unitpalette4&amp;mtime=<?= filemtime(__DIR__ . '/../assets/css/style.css') ?>">
   <script>(function(){document.documentElement.setAttribute('data-theme',localStorage.getItem('spp_theme')||'light')})();</script>
 </head>
 <body>

@@ -78,7 +78,7 @@ if ($view === 'preview' && $principalRows) {
     <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
     <title>Surat Laporan ke Kepala Sekolah | SistemSPP</title>
     <link rel="icon" href="../assets/img/favicon.png?v=2">
-    <link rel="stylesheet" href="../assets/css/style.css?v=principal-redesign1">
+    <link rel="stylesheet" href="../assets/css/style.css?v=principal-redesign1&amp;mtime=<?= filemtime(__DIR__ . '/../assets/css/style.css') ?>">
     <script>(function(){try{document.documentElement.setAttribute('data-theme',localStorage.getItem('spp_theme')||'light')}catch(e){}})();</script>
 </head>
 <body class="principal-report-page">

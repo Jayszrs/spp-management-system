@@ -6,6 +6,7 @@ SistemSPP adalah aplikasi administrasi pembayaran sekolah berbasis PHP, JavaScri
 
 ## Lingkungan
 
+- **Pemulihan UI 2 Oktober 2026:** desain komponen aktif dikembalikan sesuai `7647608` setelah regresi CSS penghapusan titipan. Tema SD/SMP/SMA, terang/gelap dan responsif dibuktikan lewat 576 perbandingan screenshot serta tes kontrol browser; seluruh aturan bisnis terbaru tetap berlaku. Lihat [audit UI](UI_RECOVERY_AUDIT_20261002.md). Versi stylesheet PHP memakai `filemtime` agar perubahan tidak tertahan cache browser.
 - Pengembangan lokal saat ini memakai Laragon di `C:\laragon\www\spp-management-system` dan database `db_spp`.
 - Konfigurasi koneksi berada di `koneksi.php`. Di Railway, koneksi memakai variabel `SPP_DB_*`; lihat [panduan deployment](./RAILWAY_DEPLOYMENT.md).
 - Skema instalasi baru berada pada payload non-SQL `sql/schema.payload`, dibaca oleh `sql/schema_source.php`. `sql/schema.sql` hanya menolak impor langsung, termasuk ketika klien memakai `mysql --force`. Gunakan `sql/bootstrap_production.php` untuk database kosong; jangan pakai payload ini sebagai migrasi data lama.

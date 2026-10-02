@@ -210,7 +210,7 @@ $classFilterQuery = ['q_kelas' => $classSearch, 'tingkat_kelas' => $classLevelFi
   <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
   <title>Master Kelas | SistemSPP</title>
   <link rel="icon" type="image/png" href="assets/img/favicon.png?v=2">
-  <link rel="stylesheet" href="assets/css/style.css?v=unitpalette4">
+  <link rel="stylesheet" href="assets/css/style.css?v=unitpalette4&amp;mtime=<?= filemtime(__DIR__ . '/assets/css/style.css') ?>">
   <script>(function(){var t=localStorage.getItem('spp_theme')||'light';document.documentElement.setAttribute('data-theme',t);})();</script>
 </head>
 <body>

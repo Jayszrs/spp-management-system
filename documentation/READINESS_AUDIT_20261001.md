@@ -8,6 +8,14 @@
 
 ## Aturan aktif
 
+### Koreksi verifikasi UI - 2 Oktober 2026
+
+Audit sebelumnya melewatkan regresi visual dari penghapusan Titipan SPP: 10 tanda kurung selector CSS tidak tertutup, target turunan dan aturan responsif bersama hilang. Kelulusan fungsi/browser sebelumnya tidak cukup membuktikan tampilan utuh. UI kini dipulihkan sesuai `7647608`, dengan fitur dan perbaikan bisnis terbaru tetap berlaku; 23 pemanggil stylesheet memakai versi `filemtime`.
+
+[Audit pemulihan UI](UI_RECOVERY_AUDIT_20261002.md) mencatat **576 perbandingan screenshot lulus** (32 halaman/varian, SD/SMP/SMA, terang/gelap, desktop 1440/2560 dan ponsel 390), nol selisih piksel terhadap acuan, nol overflow dokumen dan kesalahan JavaScript. Kontrol tiga unit dan browser pembayaran/pendaftaran/otorisasi/kenaikan beserta verifier database dijalankan ulang dan lulus. Baseline utama dan fingerprint Tabungan tetap sama. [Bukti sebelum/sesudah](ui-recovery-20261002-before-after.png) dan [tema tiga unit](ui-recovery-20261002-palettes.png) tersedia.
+
+### Kontrak pembayaran
+
 - Satu transaksi SPP melunasi tepat sisa satu tagihan bulanan. Nominal kurang/lebih ditolak; tidak dicatat sebagai saldo.
 - Tunggakan SPP tertua harus dilunasi dahulu. Pasangan SPP-Komite tetap berlaku; konfirmasi periode mendatang tetap muncul.
 - Tahun tujuan baru dapat diterbitkan setelah kenaikan resmi membentuk penempatan tujuan. Kelas tidak diperkirakan dan penempatan rencana tidak dibuat. Pembayaran tagihan tujuan dapat diterima sebelum tahun kalender tagihan tersebut.

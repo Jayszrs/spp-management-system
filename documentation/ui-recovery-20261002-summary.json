@@ -1,0 +1,173 @@
+{
+  "date": "2026-10-02",
+  "base_commit": "e479606",
+  "design_reference": "7647608",
+  "method": "Same current DOM/data, original reference stylesheet plus secure logout button adaptation; animations disabled and clock frozen only in tests",
+  "pages": [
+    "dashboard.php",
+    "laporan/global.php",
+    "laporan/index.php",
+    "laporan/surat_laporan.php",
+    "laporan/surat_orang_tua.php",
+    "laporan/template.php?template=kas-tabungan",
+    "laporan/template.php?template=penerimaan",
+    "laporan/template.php?template=per-item",
+    "laporan/template.php?template=riwayat-tagihan",
+    "laporan/template.php?template=saldo-tabungan",
+    "laporan/template.php?template=setoran",
+    "laporan/template.php?template=spp-tahunan",
+    "laporan/template.php?template=status",
+    "laporan/template.php?template=tabungan-siswa",
+    "laporan/template.php?template=tunggakan-siswa",
+    "laporan/template.php?template=tunggakan-siswa&view=detail",
+    "laporan/template.php?template=tunggakan-siswa&view=preview",
+    "master_biaya_lain.php",
+    "master_daftar_ulang.php",
+    "master_kelas.php",
+    "master_spp.php",
+    "otorisasi_transaksi.php",
+    "pembayaran/edit.php",
+    "pembayaran/form.php",
+    "pembayaran/lihat.php",
+    "pembayaran/riwayat_daftar_ulang.php",
+    "role_management.php",
+    "siswa/daftar.php",
+    "tabungan/cetak.php",
+    "tabungan/keluar.php",
+    "tabungan/masuk.php",
+    "tabungan/riwayat.php"
+  ],
+  "cases": 576,
+  "failures": 0,
+  "javascript_errors": 0,
+  "pixels_above_color_threshold": 0,
+  "color_threshold": 0.1,
+  "document_overflows": 0,
+  "combinations": [
+    {
+      "unit": "sd",
+      "theme": "light",
+      "width": 1440,
+      "passed": 32
+    },
+    {
+      "unit": "sd",
+      "theme": "light",
+      "width": 2560,
+      "passed": 32
+    },
+    {
+      "unit": "sd",
+      "theme": "light",
+      "width": 390,
+      "passed": 32
+    },
+    {
+      "unit": "sd",
+      "theme": "dark",
+      "width": 1440,
+      "passed": 32
+    },
+    {
+      "unit": "sd",
+      "theme": "dark",
+      "width": 2560,
+      "passed": 32
+    },
+    {
+      "unit": "sd",
+      "theme": "dark",
+      "width": 390,
+      "passed": 32
+    },
+    {
+      "unit": "smp",
+      "theme": "light",
+      "width": 1440,
+      "passed": 32
+    },
+    {
+      "unit": "smp",
+      "theme": "light",
+      "width": 2560,
+      "passed": 32
+    },
+    {
+      "unit": "smp",
+      "theme": "light",
+      "width": 390,
+      "passed": 32
+    },
+    {
+      "unit": "smp",
+      "theme": "dark",
+      "width": 1440,
+      "passed": 32
+    },
+    {
+      "unit": "smp",
+      "theme": "dark",
+      "width": 2560,
+      "passed": 32
+    },
+    {
+      "unit": "smp",
+      "theme": "dark",
+      "width": 390,
+      "passed": 32
+    },
+    {
+      "unit": "sma",
+      "theme": "light",
+      "width": 1440,
+      "passed": 32
+    },
+    {
+      "unit": "sma",
+      "theme": "light",
+      "width": 2560,
+      "passed": 32
+    },
+    {
+      "unit": "sma",
+      "theme": "light",
+      "width": 390,
+      "passed": 32
+    },
+    {
+      "unit": "sma",
+      "theme": "dark",
+      "width": 1440,
+      "passed": 32
+    },
+    {
+      "unit": "sma",
+      "theme": "dark",
+      "width": 2560,
+      "passed": 32
+    },
+    {
+      "unit": "sma",
+      "theme": "dark",
+      "width": 390,
+      "passed": 32
+    }
+  ],
+  "main_database": {
+    "students": 222,
+    "placements": 210,
+    "payments": 1018,
+    "receipts": 577145000,
+    "savings_accounts": 12,
+    "savings_balance": 1050000,
+    "integrity_failures": 0
+  },
+  "test_databases_removed": [
+    "db_spp_audit_ui_recovery_20261002",
+    "db_spp_audit_ui_actions_20261002"
+  ],
+  "owned_test_servers_stopped": [
+    18104,
+    18105
+  ]
+}

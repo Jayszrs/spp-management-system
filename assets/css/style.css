@@ -672,10 +672,6 @@ h1, h2, h3, h4, h5, h6, .card-title, .topbar-title h2, .sidebar-brand-name {
 }
 .logout-btn {
   color: var(--text-muted);
-  border: 0;
-  background: none;
-  font: inherit;
-  cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -684,6 +680,10 @@ h1, h2, h3, h4, h5, h6, .card-title, .topbar-title h2, .sidebar-brand-name {
   border-radius: var(--radius-sm);
   text-decoration: none;
   transition: all var(--transition);
+  border: 0;
+  background: none;
+  font: inherit;
+  cursor: pointer;
 }
 .logout-btn:hover { color: var(--red); background: var(--red-bg); }
 .logout-text { display: none; font-size: 12px; font-weight: 700; }
@@ -7617,13 +7617,13 @@ a.btn {
   order: 8;
 }
 
-.report-template-shell .report-filter-kas-tabungan .report-date-range-field{
+.report-template-shell .report-filter-kas-tabungan .report-date-range-field {
   grid-column: span 5 !important;
 }
-.report-template-shell .report-filter-kas-tabungan .field-row:has(select[name="operator"]){
+.report-template-shell .report-filter-kas-tabungan .field-row:has(select[name="operator"]) {
   grid-column: span 4 !important;
 }
-.report-template-shell .report-filter-kas-tabungan .report-filter-actions{
+.report-template-shell .report-filter-kas-tabungan .report-filter-actions {
   grid-column: span 3 !important;
   grid-template-columns: minmax(0, 1fr) minmax(88px, 112px) !important;
   align-self: end;
@@ -7631,7 +7631,7 @@ a.btn {
   padding: 0 !important;
   background: transparent !important;
 }
-.report-template-shell .report-filter-kas-tabungan .report-filter-actions .btn{
+.report-template-shell .report-filter-kas-tabungan .report-filter-actions .btn {
   height: 42px;
   border-radius: 12px;
 }
@@ -7732,7 +7732,7 @@ a.btn {
   .report-template-shell .report-filter-setoran .field-row:has(select[name="per_page"]),
   .report-template-shell .report-filter-kas-tabungan .report-date-range-field,
   .report-template-shell .report-filter-kas-tabungan .field-row:has(select[name="operator"]),
-  .report-template-shell .report-filter-kas-tabungan .report-filter-actions{
+  .report-template-shell .report-filter-kas-tabungan .report-filter-actions {
     grid-column: span 1 !important;
   }
   .report-template-shell .report-global-filter-form .report-filter-actions,
@@ -8333,7 +8333,7 @@ a.btn {
   font-size: 1.45rem;
   line-height: 1;
 }
-[data-theme="dark"] :is(.report-table-report-filter-setoran,.report-table-report-filter-kas-tabungan) .report-settlement-section-head{
+[data-theme="dark"] :is(.report-table-report-filter-setoran,.report-table-report-filter-kas-tabungan) .report-settlement-section-head {
   background: linear-gradient(115deg, rgba(52,211,153,.09), rgba(245,158,11,.035));
 }
 [data-theme="dark"] :is(.report-table-report-filter-setoran,.report-table-report-filter-kas-tabungan) .report-settlement-total-card {
@@ -8342,6 +8342,11 @@ a.btn {
   box-shadow: 0 8px 24px rgba(0,0,0,.12);
 }
 @media (max-width: 700px) {
+  :is(.report-table-report-filter-setoran,.report-table-report-filter-kas-tabungan) .report-settlement-section-head {
+    align-items: stretch;
+    flex-direction: column;
+    padding: 16px;
+  }
   :is(.report-table-report-filter-setoran,.report-table-report-filter-kas-tabungan) .report-settlement-total-card {
     align-items: flex-start;
     flex-direction: column;
@@ -9831,20 +9836,20 @@ a.btn {
 }
 
 /* Stable layout for the daily savings recap. */
-.report-template-shell :is(.report-filter-kas-tabungan{
+.report-template-shell :is(.report-filter-kas-tabungan) {
   grid-template-columns: repeat(12, minmax(0, 1fr)) !important;
   align-items: end;
   gap: 12px !important;
 }
-.report-template-shell :is(.report-filter-kas-tabungan{
+.report-template-shell :is(.report-filter-kas-tabungan) .report-date-range-field {
   grid-column: span 7 !important;
   min-width: 0;
 }
-.report-template-shell :is(.report-filter-kas-tabungan{
+.report-template-shell :is(.report-filter-kas-tabungan) .field-row:has(select[name="operator"]) {
   grid-column: span 5 !important;
   min-width: 0;
 }
-.report-template-shell :is(.report-filter-kas-tabungan{
+.report-template-shell :is(.report-filter-kas-tabungan) .report-filter-actions {
   grid-column: 1 / -1 !important;
   display: grid !important;
   grid-template-columns: minmax(220px, 1fr) minmax(120px, 170px) !important;
@@ -9854,18 +9859,18 @@ a.btn {
   padding: 0 !important;
   background: transparent !important;
 }
-.report-template-shell :is(.report-filter-kas-tabungan{
+.report-template-shell :is(.report-filter-kas-tabungan) .report-filter-actions .btn {
   width: 100%;
   min-width: 0;
   height: 44px;
   padding: 0 18px;
   border-radius: 11px;
 }
-.report-template-shell :is(.report-filter-kas-tabungan{
+.report-template-shell :is(.report-filter-kas-tabungan) .report-date-range-picker {
   position: relative;
   z-index: 12;
 }
-.report-template-shell :is(.report-filter-kas-tabungan{
+.report-template-shell :is(.report-filter-kas-tabungan) .report-date-range-popover {
   z-index: 80;
 }
 
@@ -9906,44 +9911,44 @@ a.btn {
   .report-template-shell :is(.report-filter-kas-tabungan) .report-filter-actions {
     grid-column: 1 / -1 !important;
   }
-  .report-template-shell :is(.report-filter-kas-tabungan{
+  .report-template-shell :is(.report-filter-kas-tabungan) .report-filter-actions {
     grid-template-columns: 1fr !important;
   }
   .report-table-report-filter-kas-tabungan > .report-settlement-component-card,
   .report-table-report-filter-kas-tabungan > .report-settlement-method-summary,
-  .report-table-report-filter-kas-tabungan > .report-settlement-total-card{
+  .report-table-report-filter-kas-tabungan > .report-settlement-total-card {
     margin-right: 14px;
     margin-left: 14px;
   }
 }
 
 /* Final layout: Kas Tabungan Harian. */
-.report-template-shell .report-template-filters.report-filter-kas-tabungan{
+.report-template-shell .report-template-filters.report-filter-kas-tabungan {
   display: grid !important;
   grid-template-columns: minmax(0, 1fr) minmax(220px, .72fr) !important;
   align-items: end !important;
   gap: 12px !important;
 }
 .report-template-shell .report-template-filters.report-filter-kas-tabungan .report-date-range-field,
-.report-template-shell .report-template-filters.report-filter-kas-tabungan .field-row:has(select[name="operator"]){
+.report-template-shell .report-template-filters.report-filter-kas-tabungan .field-row:has(select[name="operator"]) {
   grid-column: auto !important;
   width: 100%;
   min-width: 0;
 }
 .report-template-shell .report-template-filters.report-filter-kas-tabungan .report-date-range-button,
-.report-template-shell .report-template-filters.report-filter-kas-tabungan select[name="operator"]{
+.report-template-shell .report-template-filters.report-filter-kas-tabungan select[name="operator"] {
   box-sizing: border-box;
   width: 100%;
   min-width: 0;
   height: 44px;
 }
-.report-template-shell .report-template-filters.report-filter-kas-tabungan .report-date-range-value{
+.report-template-shell .report-template-filters.report-filter-kas-tabungan .report-date-range-value {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.report-template-shell .report-template-filters.report-filter-kas-tabungan .report-filter-actions{
+.report-template-shell .report-template-filters.report-filter-kas-tabungan .report-filter-actions {
   grid-column: 1 / -1 !important;
   display: grid !important;
   grid-template-columns: minmax(0, 1fr) minmax(220px, .72fr) !important;
@@ -9954,7 +9959,7 @@ a.btn {
   padding: 0 !important;
   background: transparent !important;
 }
-.report-template-shell .report-template-filters.report-filter-kas-tabungan .report-filter-actions .btn{
+.report-template-shell .report-template-filters.report-filter-kas-tabungan .report-filter-actions .btn {
   width: 100% !important;
   min-width: 0;
   height: 42px;
@@ -10012,13 +10017,20 @@ a.btn {
 }
 
 @media (max-width: 900px) {
-  .report-template-shell .report-template-filters.report-filter-kas-tabungan .report-filter-actions{
+  .report-template-shell .report-template-filters.report-filter-kas-tabungan {
+    grid-template-columns: 1fr !important;
+  }
+  .report-template-shell .report-template-filters.report-filter-kas-tabungan .report-filter-actions {
     grid-column: 1 !important;
     grid-template-columns: 1fr 1fr !important;
   }
 }
 @media (max-width: 620px) {
-  .report-template-shell .report-template-filters.report-filter-kas-tabungan .report-filter-actions .btn{
+  .report-template-shell .report-template-filters.report-filter-kas-tabungan .report-filter-actions {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+  }
+  .report-template-shell .report-template-filters.report-filter-kas-tabungan .report-filter-actions .btn {
     width: 100% !important;
     min-width: 0;
   }
@@ -12361,11 +12373,11 @@ html body .report-template-shell .report-global-filter-form.report-filter-per-it
 
 /* Two-filter reports use the entire row for date and operator. */
 html body .report-template-shell .report-global-filter-form.report-template-filters:is(
-  .report-filter-kas-tabungan{
+  .report-filter-kas-tabungan) {
   grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
 }
 html body .report-template-shell .report-global-filter-form.report-template-filters:is(
-  .report-filter-kas-tabungan{
+  .report-filter-kas-tabungan) > .report-filter-actions {
   grid-column: 1 / -1 !important;
   grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
 }
@@ -12398,11 +12410,9 @@ html body .report-template-shell .report-global-filter-form.report-template-filt
 
 @media (max-width: 640px) {
   html body .report-template-shell .report-global-filter-form.report-template-filters:is(
-    .report-filter-kas-tabungan
-  ),
+    .report-filter-kas-tabungan),
   html body .report-template-shell .report-global-filter-form.report-template-filters:is(
-    .report-filter-kas-tabungan
-  ) > .report-filter-actions {
+    .report-filter-kas-tabungan) > .report-filter-actions {
     grid-template-columns: minmax(0, 1fr) !important;
   }
 }
