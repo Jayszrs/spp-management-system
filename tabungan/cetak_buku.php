@@ -35,7 +35,7 @@ if (!is_string($output) || !in_array($output, ['preview', 'pdf'], true)) {
 
 try {
     $koneksi->begin_transaction();
-    $studentStmt = $koneksi->prepare('SELECT s.NO_INDUK, s.NO_induk_diknas, s.NAMA, s.KELAS, COALESCE(t.SALDO, 0) AS SALDO FROM siswa s LEFT JOIN tabungan t ON t.NO_INDUK=s.NO_INDUK WHERE s.NO_INDUK=? LIMIT 1');
+    $studentStmt = $koneksi->prepare('SELECT s.NO_INDUK, s.unit_id, s.NO_induk_diknas, s.NAMA, s.KELAS, COALESCE(t.SALDO, 0) AS SALDO FROM siswa s LEFT JOIN tabungan t ON t.NO_INDUK=s.NO_INDUK WHERE s.NO_INDUK=? LIMIT 1');
     $studentStmt->bind_param('s', $nis);
     $studentStmt->execute();
     $student = $studentStmt->get_result()->fetch_assoc();
@@ -86,7 +86,7 @@ if ($output === 'preview'):
   </style>
 </head>
 <body><main class="wrap">
-  <div class="head"><div><h1>Buku Tabungan - <?= book_escape($student['NAMA']) ?></h1><p class="muted">Unit <?= book_escape(unit_label(unit_active_id())) ?> · NIS <?= book_escape($nis) ?> · <?= count($book['entries']) ?> transaksi · <?= count($book['pages']) ?> halaman buku · <?= count($book['sides']) / 2 ?> lembar A5</p></div>
+  <div class="head"><div><h1>Buku Tabungan - <?= book_escape($student['NAMA']) ?></h1><p class="muted">Unit <?= book_escape(unit_label((int)$student['unit_id'])) ?> · NIS <?= book_escape($nis) ?> · <?= count($book['entries']) ?> transaksi · <?= count($book['pages']) ?> halaman buku · <?= count($book['sides']) / 2 ?> lembar A5</p></div>
     <div class="actions"><a class="btn secondary" href="cetak.php">Kembali ke Cetak Tabungan</a><a class="btn" href="<?= book_escape($pdfUrl) ?>" target="_blank" rel="noopener">Buka PDF untuk dicetak</a></div></div>
   <div class="instructions"><strong>Pengaturan cetak buku lipat</strong>Cetak PDF pada kertas A5 lanskap, skala 100% atau actual size, dua sisi dengan pembalikan pada sisi pendek. Lipat setiap lembar di tengah untuk menghasilkan buku A6. Periksa pratinjau sisi depan dan belakang sebelum mencetak seluruh buku.</div>
   <iframe src="<?= book_escape($pdfUrl) ?>" title="Pratinjau PDF buku tabungan <?= book_escape($student['NAMA']) ?>"></iframe>
@@ -99,7 +99,7 @@ require_once __DIR__ . '/../includes/pdf.php';
 require_pdf_library();
 $logoFile = __DIR__ . '/../assets/img/school-logo.png';
 $logo = is_file($logoFile) ? 'data:image/png;base64,' . base64_encode(file_get_contents($logoFile)) : '';
-$school = unit_school_name(unit_active_id());
+$school = unit_school_name((int)$student['unit_id']);
 
 function book_page(array $page, array $student, string $school, string $logo, string $position): string
 {

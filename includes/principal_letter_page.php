@@ -49,8 +49,9 @@ if ($view === 'detail') {
     $allDebtors = report_student_debt_groups($koneksi, $filters, '', [], $principalDate);
     foreach ($allDebtors as $student) {
         if ((int)($student['master_kelas_id'] ?? 0) === (int)$detailRow['master_kelas_id']
+            && (int)($student['unit_id'] ?? 0) === (int)($detailRow['unit_id'] ?? 0)
             && (int)($student['tingkat'] ?? 0) === (int)$detailRow['tingkat']
-            && (string)($student['kelas'] ?? '') === (string)$detailRow['kelas']) {
+            && (string)($student['kelas'] ?? '') === (string)($detailRow['kelas_asli'] ?? $detailRow['kelas'])) {
             $detailStudents[] = $student;
         }
     }
@@ -111,7 +112,7 @@ if ($view === 'preview' && $principalRows) {
             <div class="principal-section-heading"><div><h2 id="principal-filter-title">Filter Data</h2><p>Pilih cakupan dan status siswa untuk memperbarui seluruh rekap.</p></div></div>
             <form method="get" class="principal-filter-form">
                 <input type="hidden" name="template" value="tunggakan-siswa"><input type="hidden" name="unit" value="<?= report_e($scope) ?>">
-                <div class="field-row"><label class="field-label" for="principal-class">Cakupan Kelas/Rombel</label><select class="field-input field-select" id="principal-class" name="kelas"><option value="">Seluruh Kelas/Rombel</option><?php foreach ($classLevels as $level): ?><option value="tingkat:<?= report_e($level) ?>" <?= $filters['kelas'] === 'tingkat:' . $level ? 'selected' : '' ?>>Seluruh Rombel Kelas <?= report_e($level) ?></option><?php endforeach; ?><?php foreach ($classes as $class): ?><option value="rombel:<?= (int)$class['id'] ?>" <?= $filters['kelas'] === 'rombel:' . (int)$class['id'] ? 'selected' : '' ?>>Rombel <?= report_e(class_label($class)) ?></option><?php endforeach; ?></select></div>
+                <div class="field-row"><label class="field-label" for="principal-class">Cakupan Kelas/Rombel</label><select class="field-input field-select" id="principal-class" name="kelas"><option value="">Seluruh Kelas/Rombel</option><?php foreach ($classLevels as $level): ?><option value="tingkat:<?= report_e($level) ?>" <?= $filters['kelas'] === 'tingkat:' . $level ? 'selected' : '' ?>>Seluruh Rombel Kelas <?= report_e($level) ?></option><?php endforeach; ?><?php foreach ($classes as $class): ?><option value="rombel:<?= (int)$class['id'] ?>" <?= $filters['kelas'] === 'rombel:' . (int)$class['id'] ? 'selected' : '' ?>>Rombel <?= report_e($class['label']) ?></option><?php endforeach; ?></select></div>
                 <div class="field-row"><label class="field-label" for="principal-status">Status Siswa</label><select class="field-input field-select" id="principal-status" name="siswa_status"><?php foreach (['active'=>'Aktif','archived'=>'Arsip/Lulus','all'=>'Semua'] as $key=>$label): ?><option value="<?= $key ?>" <?= $filters['siswa_status'] === $key ? 'selected' : '' ?>><?= $label ?></option><?php endforeach; ?></select></div>
                 <div class="principal-filter-date"><span>Jumlah dihitung sampai</span><strong><?= report_e(report_date_label($principalDate)) ?></strong></div>
                 <div class="principal-filter-actions"><button class="btn btn-primary" type="submit">Tampilkan Rekap</button><a class="btn btn-ghost" href="template.php?template=tunggakan-siswa&amp;unit=<?= report_e($scope) ?>">Reset</a></div>

@@ -26,6 +26,14 @@ SistemSPP adalah aplikasi administrasi pembayaran sekolah berbasis PHP, JavaScri
 
 ## Hak akses
 
+### Cakupan Super Admin — 3 Oktober 2026
+
+Sidebar menyimpan SD/SMP/SMA atau **Semua Unit** dalam sesi. Semua Unit hanya untuk baca data, riwayat, laporan, surat, dan pengaturan; baris/rombel/ekspor menyertakan unit. Master tahunan gabungan menampilkan tarif per unit/tahun. Struk, buku Tabungan dan surat individual memakai sekolah pemilik data.
+
+Pada input/edit pembayaran, Tabungan Masuk/Keluar dan otorisasi, opsi Semua Unit tidak tersedia. Sesi gabungan menampilkan **Pilih unit untuk transaksi**, tanpa memilih unit otomatis atau memuat form. Pilih SD/SMP/SMA terlebih dahulu. Seluruh mutasi siswa/master/penerbitan/kenaikan/pengaturan juga wajib satu unit. Guard role di server menolak tulis dalam sesi gabungan (409) dan permintaan transaksi dengan cakupan gabungan (422), termasuk query/POST; pengaman CSRF dan kepemilikan tetap berlaku. Akun selain Super Admin selalu memakai unit akunnya. Pergantian cakupan membersihkan pilihan terkait unit dan mempertahankan tanggal.
+
+Pemilih cakupan Dashboard/laporan memperbarui sesi melalui POST dengan CSRF. URL laporan lama `unit=all` tetap dapat dibuka sebagai cakupan baca. Palette super yang sudah tersedia dipakai pada gabungan; stylesheet hasil pemulihan tidak berubah. Tidak diperlukan migrasi. Lihat [bukti fitur Semua Unit](ALL_UNITS_AUDIT_20261003.md).
+
 | Aksi | Admin | Kasir | Bendahara |
 | --- | :---: | :---: | :---: |
 | Input, lihat, cetak pembayaran | Ya | Ya | Tidak |

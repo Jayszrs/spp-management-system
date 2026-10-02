@@ -9,9 +9,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST'
     http_response_code(403); exit('Permintaan tidak valid.');
 }
 $unitId=filter_input(INPUT_POST,'unit_id',FILTER_VALIDATE_INT);
-if (!in_array($unitId,[1,2,3],true)) { http_response_code(422); exit('Unit tidak valid.'); }
-$_SESSION['active_unit_id']=$unitId;
-unit_set_context($koneksi,$unitId);
+if (!in_array($unitId,[0,1,2,3],true)) { http_response_code(422); exit('Unit tidak valid.'); }
 $next=(string)($_POST['next'] ?? 'dashboard.php');
 $base=rtrim(str_replace('\\','/',dirname($_SERVER['SCRIPT_NAME'])), '/');
 if ($base==='.') $base='';
@@ -19,11 +17,14 @@ if (!str_starts_with($next,$base.'/') || str_starts_with($next,'//') || str_cont
     $next=$base.'/dashboard.php';
 }
 $path=parse_url($next, PHP_URL_PATH);
-if (in_array($path, [$base.'/dashboard.php', $base.'/laporan/index.php', $base.'/laporan/global.php', $base.'/laporan/template.php'], true)) {
-    parse_str((string)(parse_url($next, PHP_URL_QUERY) ?? ''), $params);
-    if (($params['unit'] ?? '') === 'all') {
-        $params['unit']='active';
-        $next=$path.'?'.http_build_query($params);
-    }
+if ($unitId === 0 && unit_transaction_route(rawurldecode((string)$path))) {
+    http_response_code(422); exit('Transaksi wajib memilih SD, SMP, atau SMA.');
 }
+parse_str((string)(parse_url($next, PHP_URL_QUERY) ?? ''), $params);
+foreach (['unit','unit_id','kelas','master_kelas_id','tingkat_kelas','q_kelas','operator','kategori','komponen_tagihan','q','search','nis','id','edit','action','aksi','page','view','detail','batch'] as $key) unset($params[$key]);
+// An edit page requires a payment ID: switching returns to its safe list.
+if (str_ends_with((string)$path, '/pembayaran/edit.php')) $path=$base.'/pembayaran/lihat.php';
+$next=$path.($params?'?'.http_build_query($params):'');
+$_SESSION['active_unit_id']=$unitId;
+unit_set_context($koneksi,$unitId);
 header('Location: '.$next, true, 303);

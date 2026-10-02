@@ -55,7 +55,7 @@ $yearResult = $koneksi->query("SELECT label FROM tahun_ajaran WHERE status IN ('
 while ($year = $yearResult->fetch_row()) $academicYears[] = $year[0];
 
 $studentOptions = $koneksi->query("
-    SELECT DISTINCT s.NO_INDUK, s.NO_induk_diknas, s.NAMA, s.KELAS,
+    SELECT DISTINCT s.NO_INDUK, s.unit_id, s.NO_induk_diknas, s.NAMA, s.KELAS,
            s.master_kelas_id, mk.tingkat AS master_tingkat, mk.kode_rombel, mk.is_placeholder
     FROM tagihan_daftar_ulang tdu
     JOIN siswa s ON s.NO_INDUK = tdu.no_induk
@@ -256,7 +256,7 @@ unset($_SESSION['flash']);
               <?php endforeach; ?>
             </datalist>
           </div>
-          <select class="field-input field-select filter-sel" name="kelas"><option value="">Semua Kelas</option><?php foreach ($allowedClasses as $class): ?><option value="tingkat:<?= $class ?>" <?= $filterClass === 'tingkat:'.$class ? 'selected' : '' ?>>Semua Kelas <?= $class ?></option><?php endforeach; ?><?php foreach ($classRows as $classRow): ?><option value="rombel:<?= (int)$classRow['id'] ?>" <?= $filterClass === 'rombel:'.((int)$classRow['id']) ? 'selected' : '' ?>><?= du_e(class_label($classRow)) ?></option><?php endforeach; ?></select>
+          <select class="field-input field-select filter-sel" name="kelas"><option value="">Semua Kelas</option><?php foreach ($allowedClasses as $class): ?><option value="tingkat:<?= $class ?>" <?= $filterClass === 'tingkat:'.$class ? 'selected' : '' ?>>Semua Kelas <?= $class ?></option><?php endforeach; ?><?php foreach ($classRows as $classRow): ?><option value="rombel:<?= (int)$classRow['id'] ?>" <?= $filterClass === 'rombel:'.((int)$classRow['id']) ? 'selected' : '' ?>><?= du_e($classRow['label']) ?></option><?php endforeach; ?></select>
           <select class="field-input field-select filter-sel" name="tahun_ajaran"><option value="">Semua Tahun Ajaran</option><?php foreach ($academicYears as $year): ?><option value="<?= du_e($year) ?>" <?= $filterYear === $year ? 'selected' : '' ?>><?= du_e($year) ?></option><?php endforeach; ?></select>
           <select class="field-input field-select filter-sel" name="status"><option value="">Semua Status</option><option value="cicilan" <?= $filterStatus === 'cicilan' ? 'selected' : '' ?>>Belum Lunas</option><option value="lunas" <?= $filterStatus === 'lunas' ? 'selected' : '' ?>>Lunas</option></select>
           <select class="field-input field-select filter-sel du-page-size" name="per_page" aria-label="Jumlah data per halaman"><?php foreach ($allowedPageSizes as $pageSize): ?><option value="<?= $pageSize ?>" <?= $perPage === $pageSize ? 'selected' : '' ?>><?= $pageSize ?> / halaman</option><?php endforeach; ?></select>
@@ -284,7 +284,7 @@ unset($_SESSION['flash']);
             <?php else: foreach ($visibleGroups as $index => $group): ?>
               <tr>
                 <td data-label="No"><?= $offset + $index + 1 ?></td>
-                <td data-label="Siswa"><strong><?= du_e($group['nama']) ?></strong><br><span class="badge-nis"><?= du_e($group['no_induk']) ?></span><?php if (!empty($group['no_induk_diknas'])): ?><small class="report-secondary-id">Diknas <?= du_e($group['no_induk_diknas']) ?></small><?php endif; ?></td>
+                <td data-label="Siswa"><strong><?= unit_record_badge($group) ?><?= du_e($group['nama']) ?></strong><br><span class="badge-nis"><?= du_e($group['no_induk']) ?></span><?php if (!empty($group['no_induk_diknas'])): ?><small class="report-secondary-id">Diknas <?= du_e($group['no_induk_diknas']) ?></small><?php endif; ?></td>
                 <td data-label="Kelas / Tahun"><div class="du-class-year-cell"><span class="kelas-badge">Kelas <?= du_e($group['kelas']) ?></span><small class="du-history-nis"><?= du_e($group['th_ajaran']) ?></small></div></td>
                 <td data-label="Tagihan" class="nominal"><?= du_money($group['total']) ?></td>
                 <td data-label="Terbayar" class="nominal"><?= du_money($group['paid']) ?></td>

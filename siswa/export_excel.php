@@ -61,9 +61,9 @@ ob_start();
 <header class="heading"><h1>DATA SISWA · UNIT <?= $escape(unit_label(unit_active_id())) ?></h1><p><?= $escape(unit_school_name(unit_active_id())) ?></p></header>
 <div class="meta"><span><?= $escape($filterLabel) ?></span><span>Dibuat: <?= $escape($generated) ?></span></div>
 <div class="summary"><div><span>Jumlah Siswa</span><strong><?= number_format(count($rows)) ?></strong></div></div>
-<table><thead><tr><th>No</th><th>NIS</th><th>NIS Diknas</th><th>Nama</th><th>Kelas/Rombel</th><th>SPP Per Bulan</th><th>Status</th></tr></thead><tbody>
-<?php if (!$rows): ?><tr><td colspan="7" class="center">Tidak ada siswa sesuai filter.</td></tr><?php else: foreach ($rows as $index => $row): ?>
-<tr><td class="center"><?= $index + 1 ?></td><td><?= $escape($row['NO_INDUK']) ?></td><td><?= $escape((string)($row['NO_induk_diknas'] ?? '')) ?></td><td><?= $escape($row['NAMA']) ?></td><td><?= $escape(class_label(['tingkat'=>$row['master_tingkat'] ?: $row['KELAS'],'kode_rombel'=>$row['kode_rombel'] ?? 'BELUM','is_placeholder'=>$row['is_placeholder'] ?? 1])) ?></td><td class="money">Rp <?= number_format((float)$row['SPP_PERBULAN'], 0, ',', '.') ?></td><td><?= ((int)$row['is_active'] === 1) ? 'Aktif' : 'Arsip/Lulus' ?></td></tr>
+<table><thead><tr><th>No</th><?php if(unit_all_readonly()): ?><th>Unit</th><?php endif; ?><th>NIS</th><th>NIS Diknas</th><th>Nama</th><th>Kelas/Rombel</th><th>SPP Per Bulan</th><th>Status</th></tr></thead><tbody>
+<?php if (!$rows): ?><tr><td colspan="<?= unit_all_readonly()?8:7 ?>" class="center">Tidak ada siswa sesuai filter.</td></tr><?php else: foreach ($rows as $index => $row): ?>
+<tr><td class="center"><?= $index + 1 ?></td><?php if(unit_all_readonly()): ?><td><?= $escape(unit_label((int)$row['unit_id'])) ?></td><?php endif; ?><td><?= $escape($row['NO_INDUK']) ?></td><td><?= $escape((string)($row['NO_induk_diknas'] ?? '')) ?></td><td><?= $escape($row['NAMA']) ?></td><td><?= $escape(class_label(['tingkat'=>$row['master_tingkat'] ?: $row['KELAS'],'kode_rombel'=>$row['kode_rombel'] ?? 'BELUM','is_placeholder'=>$row['is_placeholder'] ?? 1])) ?></td><td class="money">Rp <?= number_format((float)$row['SPP_PERBULAN'], 0, ',', '.') ?></td><td><?= ((int)$row['is_active'] === 1) ? 'Aktif' : 'Arsip/Lulus' ?></td></tr>
 <?php endforeach; endif; ?>
 </tbody></table><div class="footer">SistemSPP | Data mengikuti filter aktif pada saat laporan dibuat.</div></body></html>
 <?php

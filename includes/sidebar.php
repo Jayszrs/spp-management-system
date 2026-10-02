@@ -129,8 +129,35 @@ $roleAvatar = $roleAvatars[$role] ?? 'US';
 if (empty($_SESSION['csrf_unit_switch'])) $_SESSION['csrf_unit_switch']=bin2hex(random_bytes(32));
 if (empty($_SESSION['csrf_logout'])) $_SESSION['csrf_logout']=bin2hex(random_bytes(32));
 $activeUnit=unit_active_id();
+$transactionUnitOnly = unit_transaction_route((string)($_SERVER['SCRIPT_NAME'] ?? ''));
 $unitPalette = unit_palette_for_view(isset($reportUnitId) ? (int)$reportUnitId : null);
 ?>
+<script>
+function unitSwitchReportScope(select) {
+  var form=document.createElement('form');form.method='post';form.action=<?= json_encode($root.'unit_switch.php') ?>;
+  var fields={csrf_token:<?= json_encode($_SESSION['csrf_unit_switch']) ?>,unit_id:select.value==='all'?'0':<?= json_encode((string)$activeUnit) ?>,next:location.pathname+location.search};
+  Object.keys(fields).forEach(function(name){var input=document.createElement('input');input.type='hidden';input.name=name;input.value=fields[name];form.append(input)});
+  document.body.append(form);form.submit();
+}
+</script>
+<?php if (unit_all_readonly() && !$transactionUnitOnly): ?>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  var main=document.querySelector('main');
+  if(main){var note=document.createElement('div');note.className='alert alert-info';note.textContent='Semua Unit: tampilan baca. Pilih SD, SMP, atau SMA untuk transaksi atau perubahan data.';var content=main.querySelector('.page-content');if(content)content.prepend(note);else main.querySelector('.topbar')?.after(note)}
+  document.querySelectorAll('form[method="post" i]').forEach(function(form){
+    if(form.classList.contains('sidebar-unit-form') || form.action.includes('logout.php'))return;
+    form.querySelectorAll('input,select,textarea,button').forEach(function(control){control.disabled=true});
+    form.hidden=true;form.style.setProperty('display','none','important');
+    var editor=form.closest('.master-modern-form');if(editor){editor.hidden=true;editor.style.setProperty('display','none','important')}
+    if(form.id==='form-tambah-akun'){var card=form.closest('.main-card');if(card){card.hidden=true;card.style.setProperty('display','none','important')}}
+    form.addEventListener('submit',function(event){event.preventDefault()});
+  });
+  document.querySelectorAll('.btn-tbl-edit,.btn-reset-password,.btn-delete-account').forEach(function(control){control.hidden=true;control.style.setProperty('display','none','important')});
+  document.querySelectorAll('[data-edit-url]').forEach(function(row){row.removeAttribute('data-edit-url');row.removeAttribute('role');row.removeAttribute('tabindex');row.classList.remove('clickable-payment-row')});
+});
+</script>
+<?php endif; ?>
 <!-- Early theme init to prevent flash -->
 <script>(function(){document.documentElement.setAttribute('data-palette',<?= json_encode($unitPalette, JSON_HEX_TAG | JSON_HEX_AMP) ?>);try{document.documentElement.setAttribute('data-theme',localStorage.getItem('spp_theme')||'light')}catch(e){document.documentElement.setAttribute('data-theme',document.documentElement.getAttribute('data-theme')||'light')}})();</script>
 
@@ -151,13 +178,14 @@ $unitPalette = unit_palette_for_view(isset($reportUnitId) ? (int)$reportUnitId :
       <label for="sidebar-unit-select">Unit operasional</label>
       <span class="sidebar-unit-select-wrap">
         <select id="sidebar-unit-select" name="unit_id" onchange="this.form.submit()">
-          <?php foreach ([1=>'SD',2=>'SMP',3=>'SMA'] as $id=>$name): ?>
+          <?php if ($transactionUnitOnly && $activeUnit === 0): ?><option value="" selected disabled>Pilih unit</option><?php endif; ?>
+          <?php foreach (($transactionUnitOnly ? [1=>'SD',2=>'SMP',3=>'SMA'] : [0=>'Semua Unit',1=>'SD',2=>'SMP',3=>'SMA']) as $id=>$name): ?>
           <option value="<?= $id ?>" <?= $activeUnit===$id?'selected':'' ?>><?= $name ?></option>
           <?php endforeach; ?>
         </select>
         <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>
       </span>
-      <small>Menu operasional mengikuti unit ini.</small>
+      <small><?= $transactionUnitOnly ? 'Transaksi wajib menggunakan satu unit.' : ($activeUnit === 0 ? 'Semua Unit hanya untuk melihat data dan rekap.' : 'Menu operasional mengikuti unit ini.') ?></small>
     </form>
   </div>
   <?php endif; ?>
@@ -173,7 +201,7 @@ $unitPalette = unit_palette_for_view(isset($reportUnitId) ? (int)$reportUnitId :
     label.textContent = <?= json_encode(isset($reportUnitId) && (int)$reportUnitId === 0 ? 'Rekap' : 'Unit operasional', JSON_HEX_TAG|JSON_HEX_AMP) ?>;
     var value = document.createElement('strong');
     value.className = 'topbar-unit-value';
-    value.textContent = <?= json_encode(isset($reportUnitId) && (int)$reportUnitId === 0 ? 'Semua Unit' : unit_label($activeUnit), JSON_HEX_TAG|JSON_HEX_AMP) ?>;
+    value.textContent = <?= json_encode($transactionUnitOnly && $activeUnit === 0 ? 'Belum dipilih' : (isset($reportUnitId) && (int)$reportUnitId === 0 ? 'Semua Unit' : unit_label($activeUnit)), JSON_HEX_TAG|JSON_HEX_AMP) ?>;
     badge.setAttribute('aria-label', label.textContent + ': ' + value.textContent);
     badge.append(label, value);
     var clock = bar.querySelector('.clock-badge');

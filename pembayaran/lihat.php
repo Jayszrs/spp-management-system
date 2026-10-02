@@ -121,7 +121,7 @@ $lastShown = $totalPayments > 0 ? min($offset + $perPage, $totalPayments) : 0;
 $periodLabel = $filter_tanggal_awal === $filter_tanggal_akhir
     ? date('d/m/Y', strtotime($filter_tanggal_awal))
     : date('d/m/Y', strtotime($filter_tanggal_awal)) . ' - ' . date('d/m/Y', strtotime($filter_tanggal_akhir));
-$studentOptions = $koneksi->query("SELECT s.NO_INDUK,s.NO_induk_diknas,s.NAMA,s.KELAS FROM siswa s WHERE s.is_active=1 ORDER BY s.NAMA")->fetch_all(MYSQLI_ASSOC);
+$studentOptions = $koneksi->query("SELECT s.NO_INDUK,s.unit_id,s.NO_induk_diknas,s.NAMA,s.KELAS FROM siswa s WHERE s.is_active=1 ORDER BY s.NAMA")->fetch_all(MYSQLI_ASSOC);
 $studentSearchDisplay = $search;
 foreach ($studentOptions as $studentOption) {
     if ($search !== '' && ($search === $studentOption['NO_INDUK'] || $search === (string)($studentOption['NO_induk_diknas'] ?? ''))) {
@@ -230,7 +230,7 @@ foreach ($studentOptions as $studentOption) {
             </div>
             <datalist id="payment-history-siswa-list">
               <?php foreach ($studentOptions as $studentOption): ?>
-              <option value="<?= htmlspecialchars($studentOption['NAMA']) ?>" data-nis="<?= htmlspecialchars($studentOption['NO_INDUK']) ?>" data-diknas="<?= htmlspecialchars((string)($studentOption['NO_induk_diknas'] ?? '')) ?>" data-nama="<?= htmlspecialchars($studentOption['NAMA']) ?>" data-kelas="<?= htmlspecialchars($studentOption['KELAS']) ?>"></option>
+              <option value="<?= htmlspecialchars($studentOption['NAMA']) ?>" data-nis="<?= htmlspecialchars($studentOption['NO_INDUK']) ?>" data-diknas="<?= htmlspecialchars((string)($studentOption['NO_induk_diknas'] ?? '')) ?>" data-nama="<?= htmlspecialchars($studentOption['NAMA']) ?>" data-kelas="<?= htmlspecialchars((unit_all_readonly()?unit_label((int)$studentOption['unit_id']).' · ':'').$studentOption['KELAS']) ?>"></option>
               <?php endforeach; ?>
             </datalist>
           </div>
@@ -291,7 +291,7 @@ foreach ($studentOptions as $studentOption) {
               <tr<?= $rowAttrs ?>>
                 <td data-label="No"><?= $no++ ?></td>
                 <td data-label="NIS"><span class="badge-nis"><?= htmlspecialchars($row['NO_INDUK']) ?></span><?php if (!empty($row['NO_induk_diknas'])): ?><small class="du-history-nis">Diknas <?= htmlspecialchars($row['NO_induk_diknas']) ?></small><?php endif; ?></td>
-                <td data-label="Nama Siswa"><?= htmlspecialchars($row['NAMA']) ?></td>
+                <td data-label="Nama Siswa"><?= unit_record_badge($row) ?><?= htmlspecialchars($row['NAMA']) ?></td>
                 <td data-label="Kelas" class="kelas-col"><span class="kelas-badge">Kelas <?= htmlspecialchars($row['kelas_transaksi']) ?></span></td>
                 <td data-label="Bulan / Tahun">
                   <?= htmlspecialchars(month_code($row['BULAN'])) ?> <?= $row['TAHUN'] ?>

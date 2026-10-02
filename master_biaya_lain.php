@@ -457,7 +457,7 @@ $_SESSION['fee_publish_request_keys'] = array_slice($_SESSION['fee_publish_reque
               <?php else: $no = 1; while ($item = $masterList->fetch_assoc()): ?>
               <tr>
                 <td data-label="No"><?= $no++ ?></td>
-                <td data-label="Nama Biaya"><strong><?= htmlspecialchars($item['nama']) ?></strong></td>
+                <td data-label="Nama Biaya"><strong><?= unit_record_badge($item) ?><?= htmlspecialchars($item['nama']) ?></strong></td>
                 <td data-label="Nominal" class="nominal">Rp <?= number_format((float)$item['nominal'], 0, ',', '.') ?></td>
                 <td data-label="Status"><span class="master-status <?= $item['is_active'] ? 'is-active' : 'is-inactive' ?>"><?= $item['is_active'] ? 'Aktif' : 'Nonaktif' ?></span></td>
                 <td data-label="Tagihan"><span class="badge-count"><?= (int)$item['jumlah_tagihan'] ?></span></td>

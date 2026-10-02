@@ -13,6 +13,15 @@ File ini mencatat perubahan proyek secara reverse chronological. Baca [PROJECT_C
 - Jangan menghapus atau menulis ulang entri lama. Tambahkan entri koreksi bila diperlukan.
 - Perubahan implementasi dan entri changelog wajib masuk commit yang sama.
 
+## 2026-10-03 - Semua Unit untuk baca data dan rekap
+
+- Aktor: Codex, implementasi rencana pemilik pada `main` di atas `c8f5ac9`.
+- Perilaku: pilihan Semua Unit khusus Super Admin disimpan di sesi dan diselaraskan dengan Dashboard/pemilih laporan. Input/edit pembayaran, Tabungan Masuk/Keluar dan otorisasi hanya memiliki SD/SMP/SMA; sesi gabungan meminta pemilihan eksplisit sebelum form dimuat. Semua mutasi siswa/master/penerbitan/kenaikan/pengaturan ditolak dalam mode gabungan, termasuk request lama/manipulasi. Filter terkait unit dibersihkan saat berpindah, tanggal dipertahankan.
+- Data/kompatibilitas: identitas unit pada daftar/pencarian/rombel/ekspor, overview tarif tahunan gabungan, PSB terpisah, struk/buku/surat individual memakai sekolah pemilik. Join tahun ajaran jurnal Tabungan diperbaiki agar gabungan tidak melipatgandakan transaksi; detail rombel memakai label asli dan unit. URL laporan lama tetap didukung untuk baca; aturan pembayaran, histori dan pengaman sebelumnya tetap berlaku.
+- Database/migrasi/UI: tidak ada perubahan skema/data utama/stylesheet. Tema tiga unit dan palette super tetap memakai desain yang dipulihkan. Utama tetap 222 siswa, 1.018 pembayaran/Rp577.145.000; Tabungan 12 rekening/Rp1.050.000, 12 jurnal masuk/6 keluar; fingerprint seluruh 32 tabel identik, health OK dan 14 invariant nol.
+- Verifikasi: enam perjalanan reguler/PSB SD/SMP/SMA sampai kelulusan, pembayaran/otorisasi/Tabungan, kenaikan dan laporan historis, 307 request akses, pengaman Semua Unit dengan fingerprint tetap, sepuluh template sumber/layar/Excel/PDF serta sekolah pemilik cetak. Browser empat alur dan kontrol tiga unit lulus; matriks final 768 kasus empat cakupan/dua tema/tiga viewport cocok dengan acuan. Tes visual memakai penghitungan ulang layout yang sama pada kedua gambar, tanpa toleransi raster tambahan. 28 PHP, dua JS dan parser CSS/CSSOM lulus.
+- Bukti/batas: [audit Semua Unit](ALL_UNITS_AUDIT_20261003.md), [data](all-units-20261003-data.png), [gate transaksi](all-units-20261003-transaction.png), [ponsel](all-units-20261003-mobile.png). Status kesiapan lokal tetap siap terbatas dengan syarat; deployment dinilai tersendiri. Backup di luar Git dipertahankan; hanya dua server/clone milik paket ini dibersihkan.
+
 ## 2026-10-02 - Pemulihan UI sesuai 7647608
 
 - Aktor: Codex, atas permintaan pemilik memperbaiki seluruh regresi UI hasil audit; basis `e479606` pada `main`.

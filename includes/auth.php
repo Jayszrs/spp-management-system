@@ -37,6 +37,7 @@ function requireRole(array $roles): void {
         }
         exit;
     }
+    if (function_exists('unit_guard_request')) unit_guard_request();
 }
 
 /**

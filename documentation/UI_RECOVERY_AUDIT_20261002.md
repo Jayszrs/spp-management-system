@@ -1,5 +1,7 @@
 # Pemulihan UI SistemSPP - 2 Oktober 2026
 
+> **Pemeriksaan lanjutan 3 Oktober:** [Audit Semua Unit](ALL_UNITS_AUDIT_20261003.md) memperluas matriks menjadi empat cakupan, 768 kasus. Desain/stylesheet pemulihan tetap sama. Mode gabungan menambah identitas unit dan gate transaksi; detail surat diuji dengan kunci rombel nyata. Bukti 576 kasus di bawah tetap merupakan hasil historis 2 Oktober.
+
 ## Penyebab dan perubahan
 
 Kode dasar perbaikan: `e479606` pada `main`. Acuan desain: `7647608`, **Fix historical reports and SPP payment order feedback**.

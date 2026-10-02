@@ -22,7 +22,7 @@ function unit_is_super(): bool {
 }
 
 function unit_palette_for_view(?int $reportUnitId = null): string {
-    if (unit_is_super() && $reportUnitId === 0) return 'super';
+    if (unit_is_super() && ($reportUnitId === 0 || ($reportUnitId === null && unit_active_id() === 0))) return 'super';
     return match (unit_active_id()) { 2 => 'smp', 3 => 'sma', default => 'sd' };
 }
 
@@ -41,7 +41,7 @@ function unit_school_name(int $unitId): string {
 
 function unit_level_bounds(?int $unitId = null): array {
     return match ($unitId ?? unit_active_id()) {
-        2 => [7,9], 3 => [10,12], default => [1,6],
+        0 => [1,12], 2 => [7,9], 3 => [10,12], default => [1,6],
     };
 }
 
@@ -82,7 +82,7 @@ function unit_bootstrap_context(mysqli $db): void {
     $_SESSION['admin_unit_id'] = $account['unit_id'] === null ? null : (int)$account['unit_id'];
     if ($account['role'] === 'super_admin') {
         $selected = (int)($_SESSION['active_unit_id'] ?? 1);
-        if ($selected < 1 || $selected > 3) $selected = 1;
+        if ($selected < 0 || $selected > 3) $selected = 1;
     } else {
         $selected = (int)$account['unit_id'];
     }
@@ -99,9 +99,66 @@ function unit_report_scope(mysqli $db, string $choice): int {
 
 function unit_report_selector(int $reportUnitId): string {
     if (!unit_is_super()) return '';
+    if (unit_active_id() === 0) return '<span class="unit-report-picker">Cakupan rekap: <strong>Semua Unit</strong></span>';
     $selected = $reportUnitId === 0 ? 'all' : 'active';
-    return '<label class="unit-report-picker">Cakupan rekap <select class="field-input field-select" name="unit" onchange="this.form.submit()">'
+    return '<label class="unit-report-picker">Cakupan rekap <select class="field-input field-select" name="unit" onchange="unitSwitchReportScope(this)">'
         . '<option value="active"' . ($selected === 'active' ? ' selected' : '') . '>Unit aktif: ' . unit_label(unit_active_id()) . '</option>'
         . '<option value="all"' . ($selected === 'all' ? ' selected' : '') . '>Semua Unit</option>'
         . '</select></label>';
+}
+
+// Route classification is shared by the sidebar, entry gate and switch endpoint.
+function unit_transaction_route(string $path): bool {
+    $path = str_replace('\\', '/', (string)(parse_url($path, PHP_URL_PATH) ?? ''));
+    return preg_match('#/(pembayaran/(form|edit|proses)\.php|tabungan/(masuk|keluar|proses)\.php|otorisasi_transaksi\.php)$#D', $path) === 1;
+}
+
+function unit_all_readonly(): bool {
+    return unit_is_super() && unit_active_id() === 0;
+}
+
+function unit_guard_request(): void {
+    if (PHP_SAPI === 'cli') return;
+    $path = (string)($_SERVER['SCRIPT_NAME'] ?? '');
+    if (unit_transaction_route($path)
+        && (($_GET['unit'] ?? '') === 'all' || ($_POST['unit'] ?? '') === 'all'
+            || (isset($_GET['unit_id']) && (string)$_GET['unit_id'] === '0')
+            || (isset($_POST['unit_id']) && (string)$_POST['unit_id'] === '0'))) {
+        http_response_code(422);
+        header('Content-Type: text/plain; charset=utf-8');
+        exit('Transaksi wajib memilih SD, SMP, atau SMA.');
+    }
+    if (!unit_all_readonly()) return;
+    $koneksi = $GLOBALS['koneksi'];
+    $allowed = ['unit_switch.php', 'logout.php'];
+    if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'GET'
+        && !in_array(basename($path), $allowed, true)) {
+        http_response_code(409);
+        header('Content-Type: text/plain; charset=utf-8');
+        exit('Pilih SD, SMP, atau SMA untuk melakukan perubahan. Semua Unit hanya untuk melihat data.');
+    }
+    if (unit_transaction_route($path)) {
+        if (basename($path) === 'proses.php') {
+            http_response_code(409);
+            exit('Pilih unit untuk transaksi.');
+        }
+        require __DIR__ . '/unit_transaction_gate.php';
+        exit;
+    }
+    // Annual master screens otherwise resolve one arbitrary year with LIMIT 1.
+    if (in_array(basename($path), ['master_spp.php', 'master_daftar_ulang.php'], true)) {
+        require __DIR__ . '/unit_master_overview.php';
+        exit;
+    }
+}
+
+function unit_record_badge(array $row): string {
+    if (($GLOBALS['app_unit_id']??1) !== 0) return '';
+    $unitId=(int)($row['unit_id']??0);
+    if (!$unitId) {
+        static $students=null;
+        if($students===null){$students=[];foreach($GLOBALS['koneksi']->query('SELECT NO_INDUK,unit_id FROM siswa')->fetch_all(MYSQLI_ASSOC) as $s)$students[$s['NO_INDUK']]=(int)$s['unit_id'];}
+        $unitId=$students[$row['NO_INDUK']??$row['no_induk']??$row['nis']??'']??0;
+    }
+    return $unitId>0?'<span class="kelas-badge" data-unit="'.$unitId.'">'.unit_label($unitId).'</span> ':'';
 }

@@ -1,6 +1,8 @@
-# Kesiapan SistemSPP setelah penghapusan Titipan SPP - 2 Oktober 2026
+# Kesiapan SistemSPP — pembaruan 3 Oktober 2026
 
 ## Status terkini
+
+**Pembaruan 3 Oktober:** Semua Unit sudah tersedia pada sidebar Super Admin untuk data/rekap dalam mode baca. Transaksi tetap wajib memilih SD/SMP/SMA; dari sesi gabungan, form belum dimuat sebelum pemilihan unit. Perubahan siswa/master/penerbitan/kenaikan/pengaturan juga ditolak pada sesi gabungan. [Audit fitur dan regresi](ALL_UNITS_AUDIT_20261003.md) mencatat enam perjalanan reguler/PSB sampai kelulusan, 307 pemeriksaan akses, rekonsiliasi sepuluh template layar/Excel/PDF, 768 kasus visual empat cakupan, dan fingerprint 32 tabel utama tetap sama. Tidak ada migrasi atau perubahan data utama. Status siap terbatas dengan syarat di bawah tetap berlaku.
 
 **Siap terbatas dengan syarat untuk Laragon lokal pada cakupan yang diuji.** Titipan SPP sudah dihapus dari kode dan database dummy `db_spp`, sesuai rencana pemilik. Aplikasi lokal kembali terbuka; HTTP `health.php` 200 `ok`, URL Titipan SPP lama 404. Modul Tabungan tetap berfungsi dan datanya utuh. Data sekolah sungguhan, cetak fisik, backup rutin dan deployment server lain tetap memerlukan pemeriksaan lingkungan masing-masing.
 

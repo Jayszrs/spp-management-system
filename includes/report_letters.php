@@ -14,9 +14,9 @@ function report_letter_unit_id(): int {
     return (int)($GLOBALS['app_unit_id'] ?? 1);
 }
 
-function report_letter_header(string $logo): string {
+function report_letter_header(string $logo, ?int $unitId=null): string {
     $image=$logo!==''?'<img src="'.report_e($logo).'" alt="Logo sekolah">':'';
-    $schoolName=function_exists('unit_school_name')?unit_school_name(report_letter_unit_id()):"SEKOLAH DASAR AL-QUR'AN (SDA) MUTIARA HIKMAH";
+    $schoolName=function_exists('unit_school_name')?unit_school_name($unitId??report_letter_unit_id()):"SEKOLAH DASAR AL-QUR'AN (SDA) MUTIARA HIKMAH";
     return '<table class="kop"><tr><td style="width:68px">'.$image.'</td><td><h1>'.report_e($schoolName).'</h1><p>Perum Bekasi Griya Asri II, Tambun Selatan · Telp. 021-88363466</p></td><td style="width:68px"></td></tr></table>';
 }
 
@@ -24,7 +24,7 @@ function report_parent_letters_html(array $students,string $today): string {
     $logo=report_letter_logo();
     $html='<!doctype html><html lang="id"><head><meta charset="utf-8"><title>Surat Tunggakan Orang Tua</title><style>'.report_letter_css().'</style></head><body>';
     foreach($students as $student){
-        $html.='<section class="letter">'.report_letter_header($logo);
+        $html.='<section class="letter">'.report_letter_header($logo,(int)($student['unit_id']??report_letter_unit_id()));
         $html.='<div class="date">Tambun Selatan, '.report_e(report_date_label($today)).'</div>';
         $html.='<div class="recipient">Yth. Bapak/Ibu Orang Tua/Wali<br><strong>'.report_e($student['nama']).'</strong><br>di tempat</div>';
         $html.='<div class="subject">Pemberitahuan Tunggakan Biaya Pendidikan</div>';

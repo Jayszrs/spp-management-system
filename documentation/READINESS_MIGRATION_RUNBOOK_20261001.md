@@ -2,6 +2,8 @@
 
 ## Hasil lokal
 
+**Pembaruan kode 3 Oktober 2026:** [Semua Unit untuk data/rekap](ALL_UNITS_AUDIT_20261003.md) tersedia pada Super Admin, dengan transaksi dan seluruh mutasi wajib per unit. Paket ini tidak menambah skema/migrasi, tidak menerapkan ulang pembersihan, dan tidak mengubah database utama. Health serta 14 invariant bersih; 222 siswa/1.018 pembayaran/Rp577.145.000 dan fingerprint seluruh 32 tabel tetap sama. Prosedur pemulihan Titipan SPP di bawah tetap merupakan riwayat migrasi 2 Oktober.
+
 Pemulihan UI sesudah penggabungan juga sudah diverifikasi: [audit UI](UI_RECOVERY_AUDIT_20261002.md), 576 perbandingan screenshot lulus dan regresi kontrol/browser lulus. Paket ini hanya memperbaiki stylesheet dan versi aset; tidak memerlukan migrasi atau perubahan data. Kelulusan UI sebelumnya dikoreksi karena tidak menangkap CSS rusak setelah penghapusan Titipan SPP.
 
 Status kode 2 Oktober 2026: seluruh 11 commit audit sampai `6a95cc0` sudah digabung ke `main` dengan fast-forward, tanpa konflik. Penggabungan tidak menerapkan ulang migrasi database. Health CLI/HTTP dan 14 pemeriksaan integritas diperiksa ulang dan lulus; baseline di bawah tetap sama.

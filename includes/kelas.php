@@ -17,7 +17,7 @@ function class_label(array $class): string {
 }
 
 function class_find(mysqli $db, int $classId, bool $activeOnly = false, bool $forUpdate = false): ?array {
-    $sql = 'SELECT id, tingkat, kode_rombel, is_placeholder, is_active FROM master_kelas WHERE id = ?';
+    $sql = 'SELECT id, unit_id, tingkat, kode_rombel, is_placeholder, is_active FROM master_kelas WHERE id = ?';
     if ($activeOnly) $sql .= ' AND is_active = 1';
     $sql .= ' LIMIT 1';
     if ($forUpdate) $sql .= ' FOR UPDATE';
@@ -34,11 +34,11 @@ function class_all(mysqli $db, bool $activeOnly = true, bool $includePlaceholder
     $where = [];
     if ($activeOnly) $where[] = 'is_active = 1';
     if (!$includePlaceholder) $where[] = 'is_placeholder = 0';
-    $sql = 'SELECT id, tingkat, kode_rombel, is_placeholder, is_active FROM master_kelas';
+    $sql = 'SELECT id, unit_id, tingkat, kode_rombel, is_placeholder, is_active FROM master_kelas';
     if ($where) $sql .= ' WHERE ' . implode(' AND ', $where);
     $sql .= " ORDER BY CASE WHEN tingkat=0 THEN 0 ELSE 1 END, tingkat, is_placeholder, kode_rombel";
     $rows = $db->query($sql)->fetch_all(MYSQLI_ASSOC);
-    foreach ($rows as &$row) $row['label'] = class_label($row);
+    foreach ($rows as &$row) $row['label'] = (($GLOBALS['app_unit_id']??1)===0?unit_label((int)$row['unit_id']).' · ':'') . class_label($row);
     unset($row);
     return $rows;
 }

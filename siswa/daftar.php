@@ -746,7 +746,7 @@ $sppRatePreview = spp_current_effective_rate($koneksi, $previewLevel, $previewDi
               <tr class="clickable-payment-row" data-edit-url="<?= htmlspecialchars($editUrl, ENT_QUOTES, 'UTF-8') ?>" tabindex="0" role="link" aria-label="Edit siswa <?= htmlspecialchars($student['NAMA'], ENT_QUOTES, 'UTF-8') ?>">
                 <td data-label="No"><?= $offset + $index + 1 ?></td>
                 <td data-label="No. Induk"><span class="badge-nis"><?= htmlspecialchars($student['NO_INDUK']) ?></span><?php if (!empty($student['NO_induk_diknas'])): ?><small class="du-history-nis">Diknas <?= htmlspecialchars($student['NO_induk_diknas']) ?></small><?php endif; ?></td>
-                <td data-label="Nama Siswa"><?= htmlspecialchars($student['NAMA']) ?></td>
+                <td data-label="Nama Siswa"><?= unit_record_badge($student) ?><?= htmlspecialchars($student['NAMA']) ?></td>
                 <td data-label="Kelas" class="student-class-col"><div class="student-class-cell"><span class="kelas-badge"><?= $isGraduate ? 'LULUS' : htmlspecialchars(class_label([
                   'tingkat' => $student['master_tingkat'] ?: $student['KELAS'],
                   'kode_rombel' => $student['kode_rombel'] ?? 'BELUM',
@@ -767,10 +767,10 @@ $sppRatePreview = spp_current_effective_rate($koneksi, $previewLevel, $previewDi
               <?php if($historyRows): ?>
               <tr class="student-class-history-row" id="<?= $historyId ?>" hidden>
                 <td colspan="8">
-                  <section class="student-class-history-panel" aria-label="Riwayat kelas <?= htmlspecialchars($student['NAMA']) ?>">
+                  <section class="student-class-history-panel" aria-label="Riwayat kelas <?= unit_record_badge($student) ?><?= htmlspecialchars($student['NAMA']) ?>">
                     <header class="student-class-history-head">
                       <div class="student-class-history-head-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 7v5l3 2"/></svg></div>
-                      <div class="student-class-history-copy"><h4>Riwayat Kelas</h4><p><?= htmlspecialchars($student['NAMA']) ?> · terbaru ke terlama</p></div>
+                      <div class="student-class-history-copy"><h4>Riwayat Kelas</h4><p><?= unit_record_badge($student) ?><?= htmlspecialchars($student['NAMA']) ?> · terbaru ke terlama</p></div>
                       <span class="student-class-history-count"><?= count($historyRows) ?> catatan</span>
                     </header>
                     <ol class="student-class-timeline">

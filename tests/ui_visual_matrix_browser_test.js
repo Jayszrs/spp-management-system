@@ -5,6 +5,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const { execFileSync } = require('node:child_process');
+const { createHash } = require('node:crypto');
 const { referenceCss } = require('./ui_css_reference');
 const { PNG } = require(path.join(process.env.SPP_CSS_TOOLS, 'pngjs'));
 const { chromium } = require(process.env.SPP_PLAYWRIGHT_CORE || 'playwright-core');
@@ -39,6 +40,11 @@ async function ready(page) {
 }
 async function compare(page,name,settings) {
  await ready(page);
+ // Rebuild the layout before both shots. Chromium otherwise reuses fractional
+ // collapsed-table border caches for the linked sheet but recalculates them
+ // when the reference sheet is inserted, creating a false visual difference.
+ async function layoutForScreenshot(){await page.evaluate(async()=>{const root=document.documentElement;const display=root.style.display;root.style.display='none';void root.offsetWidth;root.style.display=display;void root.offsetWidth;await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));window.scrollTo(0,0)});}
+ await layoutForScreenshot();
  const metrics=await page.evaluate(()=>{
   const rules=[];function visit(list){for(const r of list){if(r.selectorText)rules.push(r.selectorText);if(r.cssRules)visit(r.cssRules);}}
   for(const sheet of document.styleSheets){if(sheet.href?.includes('/assets/css/style.css'))visit(sheet.cssRules);}
@@ -53,12 +59,18 @@ async function compare(page,name,settings) {
  assert.ok(metrics.rules>1500 && metrics.tail,name+' CSS tail rules missing');
  assert.notEqual(metrics.panelPadding,'0px',name+' unit selector is unstyled');
  if(metrics.logoWidth!==null)assert.ok(metrics.logoWidth<=40,name+' oversized savings logo');
- const slug=`${settings.palette}-${settings.theme}-${settings.width}-${name.replace(/[^a-z0-9]+/gi,'-')}`;
+ const routeSlug=name.replace(/[^a-z0-9]+/gi,'-');
+ const shortSlug=routeSlug.length>120?routeSlug.slice(0,80)+'-'+createHash('sha256').update(name).digest('hex').slice(0,12):routeSlug;
+ const slug=`${settings.palette}-${settings.theme}-${settings.width}-${shortSlug}`;
+ const geometry=page=>page.evaluate(()=>[...document.querySelectorAll('table tr,table .kelas-badge,table .badge-nis')].slice(0,30).map(n=>({tag:n.tagName,text:n.textContent.trim(),rect:n.getBoundingClientRect().toJSON(),appearance:Object.fromEntries(['font','color','background-color','border-color','line-height'].map(key=>[key,getComputedStyle(n).getPropertyValue(key)]))})));
+ const actualGeometry=await geometry(page);
  const actual=await page.screenshot({path:path.join(output,slug+'-actual.png')});
  await page.evaluate(css=>{
-  for(const link of document.querySelectorAll('link[rel="stylesheet"]'))if(link.href.includes('/assets/css/style.css'))link.disabled=true;
-  const style=document.createElement('style');style.id='ui-original-reference';style.textContent=css;document.head.append(style);
- },originalCss);
+  const link=[...document.querySelectorAll('link[rel="stylesheet"]')].find(l=>l.href.includes('/assets/css/style.css'));
+  const style=document.createElement('style');style.textContent=css;link.before(style);link.disabled=true;
+ },settings.palette==='super'?retainedCss:originalCss);
+ await page.evaluate(async()=>{await document.fonts.ready;window.scrollTo(0,0);await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));window.scrollTo(0,0)});
+ await layoutForScreenshot();
  const reference=await page.screenshot({path:path.join(output,slug+'-reference.png')});
  const a=PNG.sync.read(actual),b=PNG.sync.read(reference);
  assert.equal(a.width,b.width);assert.equal(a.height,b.height);
@@ -66,7 +78,12 @@ async function compare(page,name,settings) {
  const diff=new PNG({width:a.width,height:a.height});
  const mismatched=pixelmatch(a.data,b.data,diff.data,a.width,a.height,{threshold:0.1});
  const fraction=mismatched/(a.width*a.height);
- if(fraction>0.0001){fs.writeFileSync(path.join(output,slug+'-diff.png'),PNG.sync.write(diff));throw new Error(`${slug}: reference mismatch ${mismatched} pixels (${(fraction*100).toFixed(4)}%)`);}
+ if(fraction>0.0001){
+  fs.writeFileSync(path.join(output,slug+'-diff.png'),PNG.sync.write(diff));
+  const positions={actual:actualGeometry,reference:await geometry(page)};
+  fs.writeFileSync(path.join(output,slug+'-geometry.json'),JSON.stringify(positions,null,2));
+  throw new Error(`${slug}: reference mismatch ${mismatched} pixels (${(fraction*100).toFixed(4)}%)`);
+ }
  results.push({page:name,...settings,...metrics,mismatched});
 }
 
@@ -89,17 +106,21 @@ async function compare(page,name,settings) {
   await page.locator('#password').fill(fs.readFileSync(process.env.SPP_TEST_ADMIN_PASSWORD_FILE,'utf8').trim());
   await page.locator('#btn-login').click();await page.waitForURL('**/dashboard.php');
   const errors=[];page.on('pageerror',e=>errors.push(e.message));
-  for(const unit of [1,2,3]){
+  const unitCases=process.env.SPP_UI_UNITS?process.env.SPP_UI_UNITS.split(',').map(Number):[0,1,2,3];
+  for(const unit of unitCases){
    await page.setViewportSize(viewports[0]);await page.goto(new URL('/dashboard.php',base).href);
    await Promise.all([page.waitForNavigation(),page.locator('#sidebar-unit-select').selectOption(String(unit))]);
-   const palette={1:'sd',2:'smp',3:'sma'}[unit];
+   const palette={0:'super',1:'sd',2:'smp',3:'sma'}[unit];
+   await page.goto(new URL('/laporan/template.php?template=tunggakan-siswa',base).href);
+   const detailLink=page.locator('a.principal-row-action').first();
+   const detailRoute=await detailLink.count()?'laporan/'+await detailLink.getAttribute('href'):'laporan/template.php?template=tunggakan-siswa&view=detail';
    for(const theme of ['light','dark']){
     await page.evaluate(value=>localStorage.setItem('spp_theme',value),theme);
-    for(const viewport of viewports){
+    for(const viewport of viewports.filter(v=>!process.env.SPP_UI_WIDTHS||process.env.SPP_UI_WIDTHS.split(',').includes(String(v.width)))){
      await page.setViewportSize(viewport);
-     const routes=[...menu,`pembayaran/edit.php?id=${ids[unit].id}`,...templates.map(id=>'laporan/template.php?template='+id),
-      'laporan/template.php?template=tunggakan-siswa&view=detail','laporan/template.php?template=tunggakan-siswa&view=preview','laporan/surat_orang_tua.php'];
-     for(const route of routes){
+     const routes=[...menu,`pembayaran/edit.php?id=${ids[unit || 1].id}`,...templates.map(id=>'laporan/template.php?template='+id),
+      detailRoute,'laporan/template.php?template=tunggakan-siswa&view=preview','laporan/surat_orang_tua.php'];
+     for(const route of routes.filter(r=>!process.env.SPP_UI_ROUTE_MATCH||process.env.SPP_UI_ROUTE_MATCH.split(',').some(match=>r.includes(match)))){
       try{const response=await page.goto(new URL('/'+route,base).href);assert.equal(response.status(),200,route+' HTTP');
        assert.ok(!page.url().includes('login.php'),route+' login redirect');
        await compare(page,route,{palette,theme,width:viewport.width});
@@ -112,6 +133,6 @@ async function compare(page,name,settings) {
   }
   assert.deepEqual(errors,[],'JavaScript page errors');
   assert.deepEqual(failures,[],'Visual reference failures; see matrix.json');
-  console.log(`OK: ${results.length} visual comparisons, all units/themes/viewports and browser CSSOM`);
+  console.log(`OK: ${results.length} visual comparisons for selected cases and browser CSSOM`);
  }finally{await browser.close();}
 })().catch(e=>{console.error(e.message);process.exitCode=1;});

@@ -120,8 +120,8 @@ $exportSetoranExcelUrl = 'laporan/export_global.php?template=setoran&format=exce
             <span><?= $reportUnitId === 0 ? 'Ringkasan keuangan SD, SMP, dan SMA hari ini.' : 'Ringkasan keuangan unit operasional hari ini.' ?></span>
           </div>
           <nav class="dashboard-scope-options" aria-label="Pilih cakupan rekap">
-            <a href="dashboard.php?unit=active" class="dashboard-scope-option<?= $reportUnitId !== 0 ? ' is-selected' : '' ?>"<?= $reportUnitId !== 0 ? ' aria-current="page"' : '' ?>>Unit <?= htmlspecialchars(unit_label(unit_active_id())) ?></a>
-            <a href="dashboard.php?unit=all" class="dashboard-scope-option<?= $reportUnitId === 0 ? ' is-selected' : '' ?>"<?= $reportUnitId === 0 ? ' aria-current="page"' : '' ?>>Semua Unit</a>
+            <?php if(unit_active_id() !== 0): ?><a href="dashboard.php?unit=active" onclick="unitSwitchReportScope({value:'active'});return false" class="dashboard-scope-option<?= $reportUnitId !== 0 ? ' is-selected' : '' ?>"<?= $reportUnitId !== 0 ? ' aria-current="page"' : '' ?>>Unit <?= htmlspecialchars(unit_label(unit_active_id())) ?></a><?php endif; ?>
+            <a href="dashboard.php?unit=all" onclick="unitSwitchReportScope({value:'all'});return false" class="dashboard-scope-option<?= $reportUnitId === 0 ? ' is-selected' : '' ?>"<?= $reportUnitId === 0 ? ' aria-current="page"' : '' ?>>Semua Unit</a>
           </nav>
         </div>
         <?php endif; ?>

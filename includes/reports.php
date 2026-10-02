@@ -109,7 +109,7 @@ function report_filters(mysqli $db, array $source): array {
     ];
 }
 function report_classes(mysqli $db): array { return class_all($db, true); }
-function report_years(mysqli $db): array { return $db->query('SELECT label,status FROM tahun_ajaran ORDER BY label DESC')->fetch_all(MYSQLI_ASSOC); }
+function report_years(mysqli $db): array { return $db->query("SELECT label,CASE WHEN COUNT(DISTINCT status)=1 THEN MIN(status) ELSE 'beragam antarunit' END status FROM tahun_ajaran GROUP BY label ORDER BY label DESC")->fetch_all(MYSQLI_ASSOC); }
 function report_class_filter_value($value): string {
     $value = trim((string)$value);
     if ($value === '' || $value === '0') return '';
@@ -543,7 +543,7 @@ function report_savings_transactions(mysqli $db,string $start,string $end,array 
       UNION ALL SELECT id,NO_INDUK,TANGGAL,0,KELUAR,user_id,keterangan,'Keluar',1 FROM transaksi_k
     ) x JOIN siswa s ON $studentJoin
       $operatorJoin
-      LEFT JOIN tahun_ajaran ta ON DATE(x.tanggal) BETWEEN ta.tanggal_mulai AND ta.tanggal_selesai
+      LEFT JOIN tahun_ajaran ta ON ta.unit_id=s.unit_id AND DATE(x.tanggal) BETWEEN ta.tanggal_mulai AND ta.tanggal_selesai
       LEFT JOIN siswa_tahun_ajaran sta ON sta.tahun_ajaran_id=ta.id AND $placementJoin
       LEFT JOIN master_kelas mk ON mk.id=COALESCE(sta.master_kelas_id,s.master_kelas_id)
       WHERE $where ORDER BY x.tanggal,x.urutan_mutasi,x.id";
@@ -776,7 +776,7 @@ function report_student_debt_groups(mysqli $db,array $filters,string $beforeAcad
     $currentStudents=[];
     if($asOfDate!==''){
         $sourceFilters['kelas']='';
-        $result=$db->query('SELECT s.NO_INDUK,s.NAMA,s.NO_induk_diknas,s.KELAS,s.master_kelas_id,s.is_active,mk.tingkat,mk.kode_rombel,mk.is_placeholder FROM siswa s LEFT JOIN master_kelas mk ON mk.id=s.master_kelas_id');
+        $result=$db->query('SELECT s.NO_INDUK,s.unit_id,s.NAMA,s.NO_induk_diknas,s.KELAS,s.master_kelas_id,s.is_active,mk.tingkat,mk.kode_rombel,mk.is_placeholder FROM siswa s LEFT JOIN master_kelas mk ON mk.id=s.master_kelas_id');
         while($student=$result->fetch_assoc()){
             $student['tingkat']=(int)($student['tingkat']??$student['KELAS']);
             $student['kelas']=$student['master_kelas_id']?class_label($student):(string)$student['KELAS'];
@@ -814,6 +814,7 @@ function report_student_debt_groups(mysqli $db,array $filters,string $beforeAcad
         if(!isset($groups[$nis])){
             $groups[$nis]=[
                 'nis'=>$nis,
+                'unit_id'=>(int)($currentStudents[$nis]['unit_id']??0),
                 'nis_diknas'=>(string)($row['nis_diknas']??''),
                 'nama'=>(string)($currentStudents[$nis]['NAMA']??$row['nama']??''),
                 'kelas'=>(string)($currentStudents[$nis]['kelas']??$row['kelas']??'Belum diatur'),
@@ -857,9 +858,10 @@ function report_principal_debt_rows(array $students):array{
         $classId=(int)($student['master_kelas_id']??0);
         $level=(int)($student['tingkat']??0);
         $class=(string)($student['kelas']??'Belum diatur');
-        $key=$classId>0?'id:'.$classId:'level:'.$level.'|'.$class;
+        $unitId=(int)($student['unit_id']??0);
+        $key=$unitId.'|'.($classId>0?'id:'.$classId:'level:'.$level.'|'.$class);
         if(!isset($groups[$key]))$groups[$key]=[
-            'kelas'=>$class,'tingkat'=>$level,'master_kelas_id'=>$classId,
+            'kelas'=>$class,'tingkat'=>$level,'master_kelas_id'=>$classId,'unit_id'=>$unitId,
             'jumlah_siswa'=>0,'total_tunggakan'=>0.0,
         ];
         $groups[$key]['jumlah_siswa']++;
@@ -885,7 +887,7 @@ function report_principal_scope_label(array $filters,array $classes):string{
     if($classFilter==='')return 'Seluruh Kelas/Rombel';
     if(($level=report_class_filter_level($filters))>0)return 'Seluruh Rombel Kelas '.$level;
     $rombelId=report_class_filter_rombel_id($filters);
-    foreach($classes as $class)if((int)$class['id']===$rombelId)return 'Rombel '.class_label($class);
+    foreach($classes as $class)if((int)$class['id']===$rombelId)return 'Rombel '.($class['label']??class_label($class));
     return 'Rombel dipilih';
 }
 function report_prior_debt_summary(mysqli $db,string $targetAcademicYear,array $studentNis):array{
@@ -1024,7 +1026,20 @@ function report_savings_cash_data(mysqli $db,array $f):array{
 
 
 function report_build(mysqli $db,string $template,array $filters):array{
-    return match($template){'status'=>report_status_data($db,$filters),'penerimaan'=>report_receipt_data($db,$filters),'spp-tahunan'=>report_spp_year_data($db,$filters),'per-item'=>report_item_data($db,$filters),'tabungan-siswa'=>report_savings_student_data($db,$filters),'saldo-tabungan'=>report_savings_balance_data($db,$filters),'riwayat-tagihan'=>report_billing_history_data($db,$filters),'tunggakan-siswa'=>report_principal_debt_data($db,$filters),'setoran'=>report_settlement_data($db,$filters),'kas-tabungan'=>report_savings_cash_data($db,$filters),default=>throw new InvalidArgumentException('Template laporan tidak dikenali.')};
+    $report=match($template){'status'=>report_status_data($db,$filters),'penerimaan'=>report_receipt_data($db,$filters),'spp-tahunan'=>report_spp_year_data($db,$filters),'per-item'=>report_item_data($db,$filters),'tabungan-siswa'=>report_savings_student_data($db,$filters),'saldo-tabungan'=>report_savings_balance_data($db,$filters),'riwayat-tagihan'=>report_billing_history_data($db,$filters),'tunggakan-siswa'=>report_principal_debt_data($db,$filters),'setoran'=>report_settlement_data($db,$filters),'kas-tabungan'=>report_savings_cash_data($db,$filters),default=>throw new InvalidArgumentException('Template laporan tidak dikenali.')};
+    if (($GLOBALS['app_unit_id']??1) !== 0) return $report;
+    $students=[];foreach($db->query('SELECT NO_INDUK,unit_id FROM siswa')->fetch_all(MYSQLI_ASSOC) as $s)$students[$s['NO_INDUK']]=(int)$s['unit_id'];
+    $classes=[];foreach($db->query('SELECT id,unit_id FROM master_kelas')->fetch_all(MYSQLI_ASSOC) as $c)$classes[(int)$c['id']]=(int)$c['unit_id'];
+    $hasIdentity=false;
+    foreach($report['rows'] as &$row){
+        $unitId=$students[$row['nis']??'']??$classes[(int)($row['master_kelas_id']??0)]??(int)($row['unit_id']??0);
+        if($unitId>0){$hasIdentity=true;$row['unit_id']=$unitId;$row['unit']=unit_label($unitId);
+            // Grouped tables and principal letters also render the class label.
+            if(isset($row['kelas'])){$row['kelas_asli']=$row['kelas'];$row['kelas']=unit_label($unitId).' · '.$row['kelas'];}
+        }
+    }unset($row);
+    if($hasIdentity || in_array($template,['status','penerimaan','spp-tahunan','per-item','tabungan-siswa','saldo-tabungan','riwayat-tagihan','tunggakan-siswa'],true))array_unshift($report['columns'],['unit','Unit']);
+    return $report;
 }
 function report_savings_transaction_totals(array $rows): array {
     $masuk=0;$keluar=0;foreach($rows as $row){$masuk+=(float)($row['masuk']??0);$keluar+=(float)($row['keluar']??0);}return ['total_masuk'=>$masuk,'total_keluar'=>$keluar,'selisih'=>$masuk-$keluar];

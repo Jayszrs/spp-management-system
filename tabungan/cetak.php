@@ -5,7 +5,7 @@ require_once __DIR__ . '/../includes/auth.php';
 requireRole(['admin', 'kasir', 'bendahara']);
 
 $students = $koneksi->query("
-    SELECT s.NO_INDUK, s.NO_induk_diknas, s.NAMA, s.KELAS,
+    SELECT s.NO_INDUK, s.unit_id, s.NO_induk_diknas, s.NAMA, s.KELAS,
            COALESCE(t.SALDO, 0) AS saldo,
            COALESCE(m.jumlah, 0) + COALESCE(k.jumlah, 0) AS transaksi
     FROM siswa s
@@ -95,7 +95,7 @@ function print_book_escape($value): string
               </div>
               <datalist id="savings-print-list">
                 <?php foreach ($students as $student): ?>
-                <option value="<?= print_book_escape($student['NAMA']) ?>" data-nis="<?= print_book_escape($student['NO_INDUK']) ?>" data-diknas="<?= print_book_escape($student['NO_induk_diknas'] ?? '') ?>" data-nama="<?= print_book_escape($student['NAMA']) ?>" data-kelas="<?= print_book_escape($student['KELAS']) ?>" data-kelas-id="<?= print_book_escape($student['KELAS']) ?>" data-saldo="<?= print_book_escape($student['saldo']) ?>" data-transaksi="<?= (int)$student['transaksi'] ?>"></option>
+                <option value="<?= print_book_escape($student['NAMA']) ?>" data-nis="<?= print_book_escape($student['NO_INDUK']) ?>" data-diknas="<?= print_book_escape($student['NO_induk_diknas'] ?? '') ?>" data-nama="<?= print_book_escape($student['NAMA']) ?>" data-kelas="<?= print_book_escape((unit_all_readonly()?unit_label((int)$student['unit_id']).' · ':'').$student['KELAS']) ?>" data-kelas-id="<?= print_book_escape($student['KELAS']) ?>" data-saldo="<?= print_book_escape($student['saldo']) ?>" data-transaksi="<?= (int)$student['transaksi'] ?>"></option>
                 <?php endforeach; ?>
               </datalist>
             </div>
