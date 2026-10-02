@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/http_form_scope.php';
 
 /** Jalankan hanya terhadap database disposable dan server PHP uji. */
 require_once __DIR__ . '/../koneksi.php';
@@ -81,6 +82,7 @@ if (getenv('SPP_TEST_ALLOW_MUTATION') !== '1' || !str_starts_with(DB_NAME, 'db_s
 }
 
 $baseUrl = getenv('SPP_TEST_BASE_URL') ?: 'http://127.0.0.1:8097';
+spp_test_assert_http_clone($baseUrl, DB_NAME);
 $testPassword = (string)getenv('SPP_TEST_ADMIN_PASSWORD');
 if ($testPassword === '' && ($passwordFile = (string)getenv('SPP_TEST_ADMIN_PASSWORD_FILE')) !== '') $testPassword = trim(file_get_contents($passwordFile));
 if ($testPassword === '') throw new RuntimeException('Password admin tes belum disiapkan.');
@@ -117,7 +119,7 @@ try {
     $submit = static function (string $nis, int $billId, float $du, float $spp = 0, float $komite=0) use ($baseUrl, &$cookies, $month, $calendarYear): array {
         $form = du_http_request($baseUrl . '/pembayaran/form.php', [], $cookies);
         du_http_assert($form['status'] === 200
-            && preg_match('/name="csrf_token" value="([a-f0-9]{64})"/', $form['body'], $csrf) === 1
+            && preg_match('/name="csrf_token" value="([a-f0-9]{64})"/', spp_test_form_scope($form['body'], 'spp_action'), $csrf) === 1
             && preg_match('/name="request_key" value="([a-f0-9]{32})"/', $form['body'], $key) === 1,
             'Token input pembayaran tidak tersedia.');
         return du_http_request($baseUrl . '/pembayaran/proses.php', [
@@ -139,7 +141,7 @@ try {
     du_http_assert($submit($students[1], $studentBills[$previous], 100000)['status'] === 302 && str_contains(du_http_flash($baseUrl, $cookies), 'tidak cocok dengan siswa'), 'ID tagihan milik siswa lain tidak ditolak.');
 
     $edit = du_http_request($baseUrl . '/pembayaran/edit.php?id=' . (int)$payment['id'], [], $cookies);
-    du_http_assert(preg_match('/name="csrf_token" value="([a-f0-9]+)"/', $edit['body'], $tokenMatch) === 1, 'Token CSRF edit tidak ditemukan.');
+    du_http_assert(preg_match('/name="csrf_token" value="([a-f0-9]+)"/', spp_test_form_scope($edit['body'], 'spp_action'), $tokenMatch) === 1, 'Token CSRF edit tidak ditemukan.');
     $move = du_http_request($baseUrl . '/pembayaran/proses.php', [
         'aksi'=>'update', 'id'=>(int)$payment['id'], 'csrf_token'=>$tokenMatch[1], 'no_induk'=>$students[0],
         'tanggal_bayar'=>date('Y-m-d H:i:s'), 'bulan_bayar'=>$month, 'tahun_bayar'=>$calendarYear,

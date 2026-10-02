@@ -2,6 +2,7 @@
 /** Savings note persistence, display, validation, role and unit isolation. */
 require_once __DIR__ . '/../koneksi.php';
 require_once __DIR__ . '/../includes/reports.php';
+require_once __DIR__ . '/http_form_scope.php';
 if (getenv('SPP_TEST_ALLOW_MUTATION') !== '1' || !str_starts_with(DB_NAME, 'db_spp_audit_')) {
     throw new RuntimeException('Tes mutasi hanya untuk db_spp_audit_* dengan flag tes.');
 }
@@ -11,6 +12,7 @@ if ($password === '' && ($file = (string)getenv('SPP_TEST_ADMIN_PASSWORD_FILE'))
 }
 if ($password === '') throw new RuntimeException('Password akun tes belum disiapkan.');
 $base = rtrim((string)(getenv('SPP_TEST_BASE_URL') ?: 'http://127.0.0.1:8766'), '/');
+spp_test_assert_http_clone($base, DB_NAME);
 
 function note_assert(bool $ok, string $message): void {
     if (!$ok) throw new RuntimeException($message);
@@ -50,9 +52,10 @@ function note_form(string $base, string $path, array &$cookies, string $nis): ar
     $response = note_http($base . $path, null, $cookies);
     note_assert($response['status'] === 200 && str_contains($response['body'], $nis),
         'Server HTTP tidak memakai database latihan yang berisi siswa uji.');
-    note_assert(preg_match('/name="csrf_token" value="([a-f0-9]{64})"/', $response['body'], $csrf) === 1,
+    $form = spp_test_form_scope($response['body'], 'request_key');
+    note_assert(preg_match('/name="csrf_token" value="([a-f0-9]{64})"/', $form, $csrf) === 1,
         'Token CSRF tabungan tidak ada.');
-    note_assert(preg_match('/name="request_key" value="([a-f0-9]{32})"/', $response['body'], $key) === 1,
+    note_assert(preg_match('/name="request_key" value="([a-f0-9]{32})"/', $form, $key) === 1,
         'Kunci idempotensi tabungan tidak ada.');
     return ['csrf_token'=>$csrf[1], 'request_key'=>$key[1]];
 }

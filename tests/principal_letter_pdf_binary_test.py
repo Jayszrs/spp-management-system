@@ -208,6 +208,10 @@ def verify_case(unit: int, status: str, class_filter: str) -> dict:
 
 
 def main() -> None:
+    with urllib.request.urlopen(f"{BASE}/tests/browser_clone_identity.php", timeout=10) as identity:
+        assert identity.status == 200 and json.load(identity).get("database") == DB_NAME, (
+            "Server HTTP PDF tidak menuju database latihan yang diminta"
+        )
     checked = []
     archived_students: list[tuple[str, int]] = []
     try:

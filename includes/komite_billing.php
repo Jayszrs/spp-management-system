@@ -72,10 +72,24 @@ function komite_sync_student_rate(mysqli $db, string $noInduk, float $rate, int 
 
 function komite_bill(mysqli $db, string $noInduk, string $month, string $year, bool $forUpdate=false, int $excludePaymentId=0): ?array {
     $exclude = $excludePaymentId > 0 ? ' AND (bk.bayar_id IS NULL OR bk.bayar_id<>' . $excludePaymentId . ')' : '';
-    $sql = "SELECT tk.*,COALESCE((SELECT SUM(bk.nominal) FROM bayar_komite bk WHERE bk.tagihan_komite_id=tk.id" . $exclude . "),0) paid FROM tagihan_komite tk WHERE tk.no_induk=? AND tk.bulan=? AND tk.tahun=? AND tk.status='open' LIMIT 1";
+    $paidSql = $forUpdate ? '0' : "COALESCE((SELECT SUM(bk.nominal) FROM bayar_komite bk WHERE bk.tagihan_komite_id=tk.id" . $exclude . "),0)";
+    $sql = "SELECT tk.*,{$paidSql} paid FROM tagihan_komite tk WHERE tk.no_induk=? AND tk.bulan=? AND tk.tahun=? AND tk.status='open' LIMIT 1";
     if ($forUpdate) $sql .= ' FOR UPDATE';
     $stmt=$db->prepare($sql); $stmt->bind_param('sss',$noInduk,$month,$year);$stmt->execute();
     $bill=$stmt->get_result()->fetch_assoc();$stmt->close();
+    if ($bill && $forUpdate) {
+        // A scalar subquery can retain an older repeatable-read snapshot even
+        // after waiting for the bill lock. Read payment rows as current locks.
+        $paidRows = $db->prepare('SELECT nominal FROM bayar_komite WHERE tagihan_komite_id=?'
+            . ($excludePaymentId > 0 ? ' AND (bayar_id IS NULL OR bayar_id<>?)' : '') . ' FOR UPDATE');
+        $billId = (int)$bill['id'];
+        if ($excludePaymentId > 0) $paidRows->bind_param('ii', $billId, $excludePaymentId);
+        else $paidRows->bind_param('i', $billId);
+        $paidRows->execute();
+        $bill['paid'] = 0.0;
+        foreach ($paidRows->get_result()->fetch_all(MYSQLI_ASSOC) as $payment) $bill['paid'] += (float)$payment['nominal'];
+        $paidRows->close();
+    }
     if ($bill) { $bill['paid']=(float)$bill['paid'];$bill['remaining']=max(0,(float)$bill['nominal_tagihan']-$bill['paid']); }
     return $bill ?: null;
 }

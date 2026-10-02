@@ -22,6 +22,10 @@ try{
   $a=spp_allocate_payment($koneksi,$nis,null,'07','2196',250000,false,'2196-07-02 08:00:00','Tunai','test');spp_it_assert($a['bill_count']===1&&$a['deposit_created']===0.0,'Pembayaran satu bulan gagal.');
   $a2=spp_allocate_payment($koneksi,$nis,null,'08','2196',250000,false,'2196-07-02 08:01:00','Tunai','test');spp_it_assert($a2['bill_count']===1,'Pembayaran bulan berikutnya gagal.');
   $rateChange=spp_master_save_rates($koneksi,$masterId,[1=>300000,2=>250000,3=>250000,4=>250000,5=>250000,6=>250000]);spp_it_assert($rateChange['bills_updated']===10&&$rateChange['bills_locked']===2,'Perubahan tarif tidak memisahkan tagihan terkunci dan belum beralokasi.');
+  $placementRate=(float)$koneksi->query('SELECT spp_perbulan_snapshot FROM siswa_tahun_ajaran WHERE id='.$placementId)->fetch_row()[0];
+  $activeRate=(float)$koneksi->query("SELECT SPP_PERBULAN FROM siswa WHERE NO_INDUK='{$nis}'")->fetch_row()[0];
+  spp_it_assert($placementRate===250000.0&&$activeRate===300000.0,
+    'Tarif aktif tidak mengikuti master baru atau snapshot penempatan berbayar berubah.');
   $discountChange=spp_sync_student_discount($koneksi,$nis,10,$placementId);spp_it_assert($discountChange['updated']===10&&$discountChange['locked']===2,'Perubahan potongan tidak menjaga snapshot tagihan berbayar.');
   $amounts=$koneksi->query("SELECT bulan,nominal_tagihan FROM tagihan_spp WHERE no_induk='{$nis}' ORDER BY CAST(tahun AS UNSIGNED),CAST(bulan AS UNSIGNED) LIMIT 3")->fetch_all(MYSQLI_ASSOC);spp_it_assert((float)$amounts[0]['nominal_tagihan']===250000.0&&(float)$amounts[1]['nominal_tagihan']===250000.0&&(float)$amounts[2]['nominal_tagihan']===270000.0,'Snapshot tarif lama atau tarif efektif baru berubah tidak tepat.');
   try{spp_allocate_payment($koneksi,$nis,null,'09','2196',100000,false,'2196-07-03 08:00:00','Tunai','test');throw new RuntimeException('Pembayaran SPP kurang dari sebulan diterima.');}catch(RuntimeException $e){if(str_contains($e->getMessage(),'kurang dari sebulan diterima'))throw $e;}

@@ -1,6 +1,7 @@
 <?php
 /** Mutating HTTP regression: only run against a disposable clone with two PHP servers. */
 require_once __DIR__ . '/../koneksi.php';
+require_once __DIR__ . '/http_form_scope.php';
 
 if (getenv('SPP_TEST_ALLOW_MUTATION') !== '1' || !str_starts_with(DB_NAME, 'db_spp_audit_')) {
     throw new RuntimeException('Tes mutasi hanya boleh dijalankan pada database db_spp_audit_* dengan flag tes.');
@@ -9,7 +10,9 @@ $password = (string)getenv('SPP_TEST_ADMIN_PASSWORD');
 if ($password === '' && ($file = (string)getenv('SPP_TEST_ADMIN_PASSWORD_FILE')) !== '') $password = trim(file_get_contents($file));
 if ($password === '') throw new RuntimeException('Password admin tes belum disiapkan.');
 $base = (string)(getenv('SPP_TEST_BASE_URL') ?: 'http://127.0.0.1:8766');
+spp_test_assert_http_clone($base, DB_NAME);
 $secondBase = (string)(getenv('SPP_TEST_SECOND_BASE_URL') ?: '');
+spp_test_assert_http_clone($secondBase, DB_NAME);
 if ($secondBase === '') throw new RuntimeException('SPP_TEST_SECOND_BASE_URL diperlukan untuk tes serentak.');
 
 function guard_assert(bool $ok, string $message): void {
@@ -40,8 +43,9 @@ function guard_http(string $url, ?array $data, array &$cookies): array {
 function guard_form(string $base, string $path, array &$cookies): array {
     $page = guard_http($base . $path, null, $cookies);
     guard_assert($page['status'] === 200, 'Form tidak tersedia: ' . $path);
-    guard_assert(preg_match('/name="csrf_token" value="([a-f0-9]{64})"/', $page['body'], $csrf) === 1, 'Token CSRF tidak ada: ' . $path);
-    guard_assert(preg_match('/name="request_key" value="([a-f0-9]{32})"/', $page['body'], $key) === 1, 'Kunci idempotensi tidak ada: ' . $path);
+    $form = spp_test_form_scope($page['body'], 'request_key');
+    guard_assert(preg_match('/name="csrf_token" value="([a-f0-9]{64})"/', $form, $csrf) === 1, 'Token CSRF tidak ada: ' . $path);
+    guard_assert(preg_match('/name="request_key" value="([a-f0-9]{32})"/', $form, $key) === 1, 'Kunci idempotensi tidak ada: ' . $path);
     return ['csrf_token' => $csrf[1], 'request_key' => $key[1]];
 }
 function guard_login(string $base, string $password): array {

@@ -2,7 +2,7 @@
 
 SistemSPP adalah aplikasi administrasi pembayaran sekolah berbasis PHP, JavaScript, dan MySQL (`mysqli`). Dokumen ini merangkum alur aktif. Untuk rincian teknis, kode dan schema adalah sumber kebenaran; [AI_CHANGELOG.md](./AI_CHANGELOG.md) adalah arsip perubahan, bukan panduan operasional.
 
-> **Status pengembangan 1 Oktober 2026:** [Audit kesiapan terbaru](./READINESS_AUDIT_20261001.md) mencatat perbaikan pada branch review yang diuji pada database latihan. Kode transaksi/tabungan baru bergantung pada tabel `keuangan_request`; catatan tabungan bergantung pada kolom `keterangan` dan view jurnal yang diperbarui. Database utama belum dimigrasi dan hanya dibaca selama audit. Periksa urutan deployment dan persetujuan migrasi sebelum mengaktifkan kode tersebut untuk operasional.
+> **Status 2 Oktober 2026:** migrasi lokal `db_spp` telah diterapkan dengan izin pemilik; `keuangan_request`, catatan jurnal, 19 CHECK, dua trigger dan 64 FK siap. [Audit kesiapan terkini](./READINESS_AUDIT_20261001.md) menilai **siap terbatas dengan syarat** untuk Laragon pada cakupan yang diuji: enam lifecycle reguler/PSB SD/SMP/SMA, regresi keuangan, akses, konkurensi dan ekspor. Utama tetap 222 siswa/1.037 pembayaran/Rp579.620.000; data uji hanya pada clone. Deployment target dinilai terpisah; lihat [runbook migrasi](./READINESS_MIGRATION_RUNBOOK_20261001.md) sebelum perubahan skema berikutnya.
 
 ## Lingkungan
 
@@ -15,7 +15,7 @@ SistemSPP adalah aplikasi administrasi pembayaran sekolah berbasis PHP, JavaScri
 
 - Master Siswa menyimpan Pangkal dan PSB sebagai kewajiban sekali bayar. Pembayaran keduanya dapat dicicil sesuai sisa tagihan.
 - Master Penerbitan SPP membuat tagihan bulanan Juli–Juni berdasarkan penempatan siswa yang tersimpan. Kasir memilih **Bulan Tagihan SPP & Komite** dan **Tahun Tagihan**. Satu transaksi SPP hanya melunasi satu bulan; tunggakan SPP lebih tua diperiksa dahulu.
-- Komite adalah tagihan bulanan dari tarif `siswa.POMG`. Ketika SPP suatu bulan dibayar, Komite bulan yang sama harus sudah lunas atau ikut dilunasi. Komite dapat dibayar sendiri.
+- Komite adalah tagihan bulanan dari tarif `siswa.POMG`. Ketika SPP suatu bulan dibayar, Komite bulan yang sama harus sudah lunas atau ikut dilunasi. Jika SPP dan Komite periode yang sama sama-sama masih terutang, keduanya wajib dilunasi bersama. Komite dapat dibayar sendiri jika SPP belum terbit, nol/ditanggung PSB/potongan penuh/dibatalkan, atau telah lunas.
 - **Tanggal Bayar** mencatat hari uang diterima, bukan periode tagihan. Nominal SPP yang belum cukup untuk satu bulan atau melebihi sisa tagihan dicatat melalui tindakan terpisah **Catat Titipan SPP**. Penggunaan titipan memerlukan konfirmasi dan tidak menambah penerimaan kas baru.
 - Daftar Ulang memakai tagihan tahunan. Dropdown tahun selalu tersedia di form input dan edit; tanda `!` muncul bila siswa memiliki tunggakan tahun ajaran sebelumnya. Tagihan tahun berjalan yang masih bersisa menjadi pilihan awal; jika sudah lunas, tunggakan lama tertua yang belum lunas dipilih. Pembayaran dapat dicicil sampai sisa tagihan, sedangkan tahun dan kelas pada transaksi berasal dari snapshot tagihan yang dipilih (bukan bulan SPP pada form). Baseline demo 2026/2027 tidak membuat tagihan Daftar Ulang tahun sebelumnya.
 - Biaya Lain memakai tagihan yang diterbitkan dari master. Tabungan masuk/keluar adalah jurnal terpisah, bukan komponen penerimaan pembayaran sekolah.
@@ -33,7 +33,7 @@ SistemSPP adalah aplikasi administrasi pembayaran sekolah berbasis PHP, JavaScri
 | Setujui/tolak pengajuan kasir | Ya | Tidak | Tidak |
 | Periksa antrean/riwayat otorisasi | Ya | Pengajuan sendiri | Ya, baca saja |
 | Kelola Data Siswa, Kelas/Rombel, SPP, Biaya Lain, Daftar Ulang | Ya | Ya | Tidak |
-| Kelola akun/role | Ya | Tidak | Tidak |
+| Kelola akun/role | Super Admin saja | Tidak | Tidak |
 | Laporan Global | Ya | Ya | Ya |
 
 Guard backend berada di `includes/auth.php`. Hak akses harus diperiksa pada endpoint mutasi, bukan hanya dengan menyembunyikan tombol.

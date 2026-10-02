@@ -6,6 +6,7 @@ if (PHP_SAPI !== 'cli' || getenv('SPP_TEST_ALLOW_MUTATION') !== '1'
     exit(1);
 }
 require_once __DIR__ . '/../koneksi.php';
+require_once __DIR__ . '/http_form_scope.php';
 
 function zero_payment_assert(bool $condition, string $message): void {
     if (!$condition) throw new RuntimeException($message);
@@ -24,6 +25,7 @@ function zero_payment_http(string $url, string $sessionId, ?array $post = null):
 }
 
 $base = rtrim((string)getenv('SPP_HTTP_BASE'), '/');
+spp_test_assert_http_clone($base, DB_NAME);
 $parts = parse_url($base);
 zero_payment_assert(in_array($parts['host'] ?? '', ['127.0.0.1', 'localhost'], true), 'Server HTTP harus lokal.');
 zero_payment_assert((string)$koneksi->query('SELECT DATABASE()')->fetch_row()[0] === getenv('SPP_DB_NAME'), 'Koneksi CLI salah database.');
@@ -44,6 +46,7 @@ $passed = false;
 try {
     [$status, $form] = zero_payment_http($base . '/pembayaran/form.php', $sessionId);
     zero_payment_assert(str_contains($status, '200'), 'Form tidak tampil.');
+    $form = spp_test_form_scope($form, 'request_key');
     zero_payment_assert((bool)preg_match('/name="csrf_token" value="([a-f0-9]+)"/', $form, $csrf), 'Token CSRF tidak tersedia.');
     zero_payment_assert((bool)preg_match('/name="request_key" value="([a-f0-9]+)"/', $form, $key), 'Kunci permintaan tidak tersedia.');
     [$status] = zero_payment_http($base . '/pembayaran/proses.php', $sessionId, [

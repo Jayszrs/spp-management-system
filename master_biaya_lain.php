@@ -30,6 +30,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($aksi === 'terbitkan_tagihan') {
         try {
+            $publishKey = (string)($_POST['publish_request_key'] ?? '');
+            if (!preg_match('/^[a-f0-9]{32}$/D', $publishKey)
+                || !isset($_SESSION['fee_publish_request_keys'][$publishKey])) {
+                throw new RuntimeException('Formulir penerbitan sudah diproses atau kedaluwarsa. Muat ulang halaman sebelum mencoba lagi.');
+            }
+            unset($_SESSION['fee_publish_request_keys'][$publishKey]);
             $masterId = (int)($_POST['master_id'] ?? 0);
             $target = (string)($_POST['target'] ?? 'all');
             if (!in_array($target, ['all', 'tingkat', 'rombel', 'siswa'], true)) throw new RuntimeException('Target penerbitan tidak valid.');
@@ -127,6 +133,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     continue;
                 }
 
+                // Saldo sebesar satu tarif master setelah pembayaran lama berarti
+                // ada penerbitan ulang yang masih terbuka; jangan tulis ulang totalnya.
+                if ($paid > 0.001 && abs($remaining - $amount) <= 0.001) {
+                    $skipped++;
+                    continue;
+                }
+
                 if (abs($currentTotal - $amount) > 0.001) {
                     if ($amount + 0.001 < $paid) {
                         $conflicts++;
@@ -208,30 +221,65 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($aksi === 'toggle') {
         $id = (int)($_POST['id'] ?? 0);
-        $stmt = $koneksi->prepare('UPDATE master_biaya_lain SET is_active = IF(is_active = 1, 0, 1) WHERE id = ?');
-        $stmt->bind_param('i', $id);
-        $stmt->execute();
-        $stmt->close();
-        $_SESSION['flash'] = ['type' => 'success', 'msg' => 'Status master biaya berhasil diubah.'];
+        $targetStatus = (string)($_POST['target_active'] ?? '');
+        if (!in_array($targetStatus, ['0', '1'], true)) {
+            $_SESSION['flash'] = ['type' => 'error', 'msg' => 'Status tujuan master biaya tidak valid. Muat ulang halaman.'];
+            master_redirect();
+        }
+        try {
+            $koneksi->begin_transaction();
+            $stmt = $koneksi->prepare('SELECT is_active FROM master_biaya_lain WHERE id=? FOR UPDATE');
+            $stmt->bind_param('i', $id); $stmt->execute();
+            $current = $stmt->get_result()->fetch_assoc(); $stmt->close();
+            if (!$current) throw new RuntimeException('Master biaya tidak ditemukan.');
+            if ((int)$current['is_active'] === (int)$targetStatus) {
+                $koneksi->commit();
+                $_SESSION['flash'] = ['type' => 'warning', 'msg' => 'Status master biaya sudah sesuai. Tidak ada perubahan.'];
+            } else {
+                $newStatus = (int)$targetStatus;
+                $stmt = $koneksi->prepare('UPDATE master_biaya_lain SET is_active=? WHERE id=?');
+                $stmt->bind_param('ii', $newStatus, $id); $stmt->execute(); $stmt->close();
+                $koneksi->commit();
+                $_SESSION['flash'] = ['type' => 'success', 'msg' => 'Status master biaya berhasil diubah.'];
+            }
+        } catch (Throwable $error) {
+            try { $koneksi->rollback(); } catch (Throwable $ignored) {}
+            $_SESSION['flash'] = ['type' => 'error', 'msg' => $error->getMessage()];
+        }
         master_redirect();
     }
 
     if ($aksi === 'hapus') {
         $id = (int)($_POST['id'] ?? 0);
-        $stmtCount = $koneksi->prepare('SELECT (SELECT COUNT(*) FROM bayar_biaya_lain WHERE master_biaya_lain_id=?) + (SELECT COUNT(*) FROM tagihan_biaya_lain WHERE master_biaya_lain_id=?) AS jumlah');
-        $stmtCount->bind_param('ii', $id, $id);
-        $stmtCount->execute();
-        $jumlahPemakaian = (int)$stmtCount->get_result()->fetch_assoc()['jumlah'];
-        $stmtCount->close();
+        try {
+            $koneksi->begin_transaction();
+            // Penerbitan mengambil kunci master sebelum membuat tagihan. Hapus harus
+            // mengambil kunci yang sama sebelum menghitung relasi dan menghapus.
+            $stmt = $koneksi->prepare('SELECT id FROM master_biaya_lain WHERE id=? FOR UPDATE');
+            $stmt->bind_param('i', $id); $stmt->execute();
+            $master = $stmt->get_result()->fetch_assoc(); $stmt->close();
+            if (!$master) {
+                $koneksi->commit();
+                $_SESSION['flash'] = ['type' => 'warning', 'msg' => 'Master biaya sudah tidak tersedia.'];
+                master_redirect();
+            }
 
-        if ($jumlahPemakaian > 0) {
-            $_SESSION['flash'] = ['type' => 'error', 'msg' => 'Master sudah dipakai pada transaksi dan tidak dapat dihapus. Nonaktifkan agar tidak muncul di pembayaran baru.'];
-        } else {
-            $stmt = $koneksi->prepare('DELETE FROM master_biaya_lain WHERE id = ?');
-            $stmt->bind_param('i', $id);
-            $stmt->execute();
-            $stmt->close();
-            $_SESSION['flash'] = ['type' => 'success', 'msg' => 'Master biaya berhasil dihapus.'];
+            $stmtCount = $koneksi->prepare('SELECT (SELECT COUNT(*) FROM bayar_biaya_lain WHERE master_biaya_lain_id=?) + (SELECT COUNT(*) FROM tagihan_biaya_lain WHERE master_biaya_lain_id=?) AS jumlah');
+            $stmtCount->bind_param('ii', $id, $id); $stmtCount->execute();
+            $jumlahPemakaian = (int)$stmtCount->get_result()->fetch_assoc()['jumlah'];
+            $stmtCount->close();
+            if ($jumlahPemakaian > 0) {
+                $koneksi->commit();
+                $_SESSION['flash'] = ['type' => 'error', 'msg' => 'Master sudah dipakai pada transaksi dan tidak dapat dihapus. Nonaktifkan agar tidak muncul di pembayaran baru.'];
+            } else {
+                $stmt = $koneksi->prepare('DELETE FROM master_biaya_lain WHERE id=?');
+                $stmt->bind_param('i', $id); $stmt->execute(); $stmt->close();
+                $koneksi->commit();
+                $_SESSION['flash'] = ['type' => 'success', 'msg' => 'Master biaya berhasil dihapus.'];
+            }
+        } catch (Throwable $error) {
+            try { $koneksi->rollback(); } catch (Throwable $ignored) {}
+            $_SESSION['flash'] = ['type' => 'error', 'msg' => 'Master biaya gagal dihapus karena masih dipakai atau data berubah.'];
         }
         master_redirect();
     }
@@ -266,6 +314,12 @@ $masterList = $koneksi->query("
 $activeMasters = $koneksi->query("SELECT id,nama,nominal FROM master_biaya_lain WHERE is_active=1 ORDER BY nama")->fetch_all(MYSQLI_ASSOC);
 $activeClasses = class_all($koneksi, true);
 $activeStudents = $koneksi->query("SELECT s.NO_INDUK,s.NO_induk_diknas,s.NAMA,s.KELAS,s.master_kelas_id,mk.tingkat,mk.kode_rombel,mk.is_placeholder FROM siswa s LEFT JOIN master_kelas mk ON mk.id=s.master_kelas_id WHERE s.is_active=1 ORDER BY s.NAMA")->fetch_all(MYSQLI_ASSOC);
+$publishRequestKey = bin2hex(random_bytes(16));
+if (!isset($_SESSION['fee_publish_request_keys']) || !is_array($_SESSION['fee_publish_request_keys'])) {
+    $_SESSION['fee_publish_request_keys'] = [];
+}
+$_SESSION['fee_publish_request_keys'][$publishRequestKey] = true;
+$_SESSION['fee_publish_request_keys'] = array_slice($_SESSION['fee_publish_request_keys'], -20, null, true);
 ?>
 <!DOCTYPE html>
 <html lang="id" data-palette="<?= unit_palette_for_view(isset($reportUnitId) ? (int)$reportUnitId : null) ?>">
@@ -348,6 +402,7 @@ $activeStudents = $koneksi->query("SELECT s.NO_INDUK,s.NO_induk_diknas,s.NAMA,s.
         <?php else: ?>
         <form method="post" id="form-terbit-biaya" onsubmit="return confirm('Terbitkan tagihan ke target yang dipilih?')">
           <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_master_biaya_lain']) ?>">
+          <input type="hidden" name="publish_request_key" value="<?= htmlspecialchars($publishRequestKey, ENT_QUOTES, 'UTF-8') ?>">
           <input type="hidden" name="aksi" value="terbitkan_tagihan">
           <div class="report-filter-grid">
             <div class="field-row"><label class="field-label">Item Biaya</label><select class="field-input field-select" name="master_id" id="publish-fee" required><?php foreach($activeMasters as $master): ?><option value="<?= (int)$master['id'] ?>" data-nominal="<?= (float)$master['nominal'] ?>"><?= htmlspecialchars($master['nama']) ?> (Rp <?= number_format((float)$master['nominal'],0,',','.') ?>)</option><?php endforeach; ?></select></div>
@@ -411,7 +466,7 @@ $activeStudents = $koneksi->query("SELECT s.NO_INDUK,s.NO_induk_diknas,s.NAMA,s.
                   <a class="btn-tbl btn-tbl-edit" href="master_biaya_lain.php?edit=<?= (int)$item['id'] ?>">Edit</a>
                   <form method="POST" action="master_biaya_lain.php" style="display:inline">
                     <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_master_biaya_lain']) ?>" />
-                    <input type="hidden" name="aksi" value="toggle" /><input type="hidden" name="id" value="<?= (int)$item['id'] ?>" />
+                    <input type="hidden" name="aksi" value="toggle" /><input type="hidden" name="id" value="<?= (int)$item['id'] ?>" /><input type="hidden" name="target_active" value="<?= $item['is_active'] ? '0' : '1' ?>" />
                     <button class="btn-tbl btn-tbl-toggle" type="submit"><?= $item['is_active'] ? 'Nonaktifkan' : 'Aktifkan' ?></button>
                   </form>
                   <form method="POST" action="master_biaya_lain.php" style="display:inline" onsubmit="return confirm('Hapus master biaya <?= htmlspecialchars(addslashes($item['nama'])) ?>?')">

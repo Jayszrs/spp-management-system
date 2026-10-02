@@ -1,5 +1,7 @@
 # Audit alur operasional SistemSPP — 30 September 2026
 
+> **Pembaruan 2 Oktober 2026:** migrasi lokal sudah terpasang dengan izin pemilik. Temuan lanjutan dan regresi lintas SD/SMP/SMA telah dituntaskan pada clone; status lokal **siap terbatas dengan syarat**. [Audit kesiapan terkini](READINESS_AUDIT_20261001.md) adalah rujukan status; seluruh pernyataan/baseline bertanggal sebelumnya di bawah adalah bukti historis, termasuk migrasi yang ketika itu belum diterapkan dan aturan Komite yang disederhanakan. Komite mandiri kini dijelaskan dengan prasyarat SPP pada audit/konteks terbaru.
+
 > **Catatan lanjutan 1 Oktober:** Dokumen ini mempertahankan bukti pada tanggal auditnya. Audit kesiapan yang lebih baru menemukan dan memperbaiki tambahan masalah tarif historis, rekap keuangan, konkurensi pembayaran, agregasi Biaya Lain, dan perlindungan endpoint pada database latihan. Database utama masih memerlukan migrasi sebelum kode baru layak diterapkan. Lihat [audit kesiapan 1 Oktober](READINESS_AUDIT_20261001.md) untuk status serta batas bukti terbaru; angka dan batas pengujian di bawah berlaku untuk sesi 30 September.
 
 ## Hasil perbaikan pada 30 September 2026

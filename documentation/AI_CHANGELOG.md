@@ -13,6 +13,20 @@ File ini mencatat perubahan proyek secara reverse chronological. Baca [PROJECT_C
 - Jangan menghapus atau menulis ulang entri lama. Tambahkan entri koreksi bila diperlukan.
 - Perubahan implementasi dan entri changelog wajib masuk commit yang sama.
 
+## 2026-10-02 - Penutupan regresi kesiapan lokal
+
+**AI/Aktor:** Codex bersama pemilik proyek.
+
+**Tujuan:** Menuntaskan temuan audit, penerimaan lintas unit, dan sinkronisasi status migrasi.
+
+**Perilaku:** Laporan membedakan SPP belum diterbitkan/dibatalkan dan memisahkan penerimaan berdasarkan snapshot kelas; tarif aktif yang belum dibayar mengikuti master tujuan; default kenaikan mengikuti rombel aktif dengan histori asal terlindungi; status formulir eksplisit sehingga replay tidak membalik; penerbitan ulang Biaya Lain dan delete-publish terlindungi. Komite memakai current read setelah lock agar dua kasir tidak membayar tagihan sama dua kali. Koreksi keterangan lama: Komite mandiri hanya ketika SPP periode itu tidak lagi terutang atau belum diterbitkan; ketika keduanya terutang, bayar bersama.
+
+**Database/migrasi:** Empat migrasi yang sudah disiapkan diterapkan pada `db_spp` dummy dengan izin pemilik dan backup; tidak ada migrasi tambahan untuk paket perbaikan ini. Utama tetap 222 siswa, 1.037 pembayaran, Rp579.620.000 dan 14 invariant nol; health/skema cocok.
+
+**Kompatibilitas:** Tidak mengubah API publik atau struktur tambahan. Riwayat/nominal berbayar dipertahankan; formulir lama tanpa status/kunci penerbitan valid diminta dimuat ulang. PSB SD kelas 1 menanggung SPP; PSB SMP/SMA mengikuti aturan tarif reguler unit.
+
+**Verifikasi:** Enam lifecycle HTTP reguler/PSB sampai kelulusan SD/SMP/SMA; regresi CLI/HTTP keuangan; race SPP/Komite/DU; 333 request matrix akses; refresh sesi; rekonsiliasi layar/Excel/PDF lintas unit; 15 PDF surat; browser pendaftaran/pembayaran/dropdown/kenaikan/keputusan otorisasi dengan verifier DB. Rincian, kegagalan alat, baseline dan batas kesiapan ada di `READINESS_AUDIT_20261001.md`. Helper tes memilih CSRF form yang benar dan memverifikasi server clone. Kesiapan target deployment terpisah.
+
 ## 2026-09-19 - Persiapan Railway privat
 
 **AI/Aktor:** Codex bersama pemilik proyek.

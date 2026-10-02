@@ -96,18 +96,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $message = 'Rombel berhasil diperbarui. Snapshot histori lama tetap dipertahankan.';
             }
         } elseif ($action === 'toggle') {
+            $targetStatus = (string)($_POST['target_active'] ?? '');
+            if (!in_array($targetStatus, ['0', '1'], true)) {
+                throw new RuntimeException('Status tujuan rombel tidak valid. Muat ulang halaman.');
+            }
             $koneksi->begin_transaction();
             $class = class_find($koneksi, $id, false, true);
             if (!$class || (int)$class['is_placeholder'] === 1) throw new RuntimeException('Rombel placeholder harus selalu aktif.');
-            if ((int)$class['is_active'] === 1) {
-                $stmt=$koneksi->prepare('SELECT COUNT(*) total FROM siswa WHERE master_kelas_id=? AND is_active=1');$stmt->bind_param('i',$id);$stmt->execute();$activeStudents=(int)$stmt->get_result()->fetch_assoc()['total'];$stmt->close();
-                if($activeStudents>0)throw new RuntimeException('Rombel masih dipakai '.$activeStudents.' siswa aktif dan belum dapat dinonaktifkan.');
+            $newStatus = (int)$targetStatus;
+            if ((int)$class['is_active'] === $newStatus) {
+                $koneksi->commit();
+                $message = 'Status rombel sudah sesuai. Tidak ada perubahan.';
+                $flashType = 'warning';
+            } else {
+                if ($newStatus === 0) {
+                    $stmt=$koneksi->prepare('SELECT COUNT(*) total FROM siswa WHERE master_kelas_id=? AND is_active=1');$stmt->bind_param('i',$id);$stmt->execute();$activeStudents=(int)$stmt->get_result()->fetch_assoc()['total'];$stmt->close();
+                    if($activeStudents>0)throw new RuntimeException('Rombel masih dipakai '.$activeStudents.' siswa aktif dan belum dapat dinonaktifkan.');
+                }
+                $stmt = $koneksi->prepare('UPDATE master_kelas SET is_active = ? WHERE id = ?');
+                $stmt->bind_param('ii', $newStatus, $id); $stmt->execute(); $stmt->close();
+                $koneksi->commit();
+                $message = 'Status rombel berhasil diubah.';
             }
-            $newStatus = (int)$class['is_active'] === 1 ? 0 : 1;
-            $stmt = $koneksi->prepare('UPDATE master_kelas SET is_active = ? WHERE id = ?');
-            $stmt->bind_param('ii', $newStatus, $id); $stmt->execute(); $stmt->close();
-            $koneksi->commit();
-            $message = 'Status rombel berhasil diubah.';
         } else {
             throw new RuntimeException('Aksi Master Kelas tidak dikenali.');
         }
@@ -282,12 +292,12 @@ $classFilterQuery = ['q_kelas' => $classSearch, 'tingkat_kelas' => $classLevelFi
             <?php foreach($promotionStudents as $index => $student):
               $studentNis = (string)$student['NO_INDUK'];
               $studentDiknas = trim((string)($student['NO_induk_diknas'] ?? ''));
-              $defaultTargetId = $currentPromotionLevel < $unitMaxLevel ? ($promotionTargetByCode[strtoupper((string)($student['kode_rombel'] ?? ''))] ?? 0) : 0;
-              $searchText = strtolower(trim($student['NAMA'] . ' ' . $studentNis . ' ' . $studentDiknas . ' ' . $student['kelas_label']));
+              $defaultTargetId = $currentPromotionLevel < $unitMaxLevel ? ($promotionTargetByCode[strtoupper((string)($student['promotion_kode_rombel'] ?? ''))] ?? 0) : 0;
+              $searchText = strtolower(trim($student['NAMA'] . ' ' . $studentNis . ' ' . $studentDiknas . ' ' . $student['kelas_label'] . ' ' . $student['kelas_aktif_label']));
             ?>
             <article class="promotion-student-row" data-promotion-student data-source-rombel="<?= htmlspecialchars($student['source_key']) ?>" data-search="<?= htmlspecialchars($searchText) ?>">
               <label class="promotion-student-check" for="promotion-student-<?= (int)$index ?>"><input type="checkbox" id="promotion-student-<?= (int)$index ?>" name="selected_students[]" value="<?= htmlspecialchars($studentNis) ?>"><span></span></label>
-              <label class="promotion-student-identity" for="promotion-student-<?= (int)$index ?>"><strong><?= htmlspecialchars($student['NAMA']) ?></strong><small>NIS <?= htmlspecialchars($studentNis) ?><?= $studentDiknas !== '' ? ' · NIS Diknas ' . htmlspecialchars($studentDiknas) : '' ?></small></label>
+              <label class="promotion-student-identity" for="promotion-student-<?= (int)$index ?>"><strong><?= htmlspecialchars($student['NAMA']) ?></strong><small>NIS <?= htmlspecialchars($studentNis) ?><?= $studentDiknas !== '' ? ' · NIS Diknas ' . htmlspecialchars($studentDiknas) : '' ?><?= $student['kelas_aktif_label'] !== '' && $student['kelas_aktif_label'] !== $student['kelas_label'] ? ' · Rombel aktif ' . htmlspecialchars($student['kelas_aktif_label']) : '' ?></small></label>
               <span class="kelas-badge"><?= htmlspecialchars($student['kelas_label']) ?></span>
               <?php if($currentPromotionLevel < $unitMaxLevel): ?>
               <div class="promotion-target-field"><label for="promotion-target-<?= (int)$index ?>">Rombel Tujuan</label><select class="field-input field-select" id="promotion-target-<?= (int)$index ?>" name="target_master_kelas_id[<?= htmlspecialchars($studentNis) ?>]" disabled><option value="">Pilih rombel</option><?php foreach($promotionTargets as $target): ?><option value="<?= (int)$target['id'] ?>" <?= $defaultTargetId === (int)$target['id'] ? 'selected' : '' ?>><?= htmlspecialchars($target['label']) ?></option><?php endforeach; ?></select></div>
@@ -333,7 +343,7 @@ $classFilterQuery = ['q_kelas' => $classSearch, 'tingkat_kelas' => $classLevelFi
       <div class="table-container"><table class="payment-table responsive-table"><thead><tr><th>No</th><th>Label</th><th>Tingkat</th><th>Status</th><th class="text-center">Siswa Aktif</th><th class="text-center">Histori</th><th>Aksi</th></tr></thead><tbody>
       <?php if(!$classPageRows): ?><tr><td colspan="7"><div class="empty-state"><p>Rombel tidak ditemukan</p><span>Ubah pencarian atau filter yang dipilih.</span></div></td></tr><?php else: foreach($classPageRows as $i=>$class): $label=class_label($class); ?>
         <tr><td data-label="No"><?= $classOffset+$i+1 ?></td><td data-label="Label"><strong><?= htmlspecialchars($label) ?></strong></td><td data-label="Tingkat"><span class="kelas-badge"><?= (int)$class['tingkat']===0?'PSB':'Kelas '.(int)$class['tingkat'] ?></span></td><td data-label="Status"><span class="master-status <?= (int)$class['is_active']===1?'is-active':'is-inactive' ?>"><?= (int)$class['is_placeholder']===1?'Placeholder':((int)$class['is_active']===1?'Aktif':'Nonaktif') ?></span></td><td data-label="Siswa Aktif" class="text-center"><?= number_format((int)$class['siswa_count']) ?></td><td data-label="Histori" class="text-center"><?= number_format((int)$class['history_count']) ?></td><td data-label="Aksi" class="aksi-col">
-        <?php if((int)$class['is_placeholder']!==1): ?><a class="btn-tbl btn-tbl-edit" href="master_kelas.php?edit=<?= (int)$class['id'] ?>">Edit</a><form method="post" style="display:inline"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_master_kelas']) ?>"><input type="hidden" name="aksi" value="toggle"><input type="hidden" name="id" value="<?= (int)$class['id'] ?>"><button class="btn-tbl btn-tbl-toggle" type="submit"><?= (int)$class['is_active']===1?'Nonaktifkan':'Aktifkan' ?></button></form><?php else: ?><span class="payment-auto-note">Dikelola sistem</span><?php endif; ?>
+        <?php if((int)$class['is_placeholder']!==1): ?><a class="btn-tbl btn-tbl-edit" href="master_kelas.php?edit=<?= (int)$class['id'] ?>">Edit</a><form method="post" style="display:inline"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_master_kelas']) ?>"><input type="hidden" name="aksi" value="toggle"><input type="hidden" name="id" value="<?= (int)$class['id'] ?>"><input type="hidden" name="target_active" value="<?= (int)$class['is_active']===1?'0':'1' ?>"><button class="btn-tbl btn-tbl-toggle" type="submit"><?= (int)$class['is_active']===1?'Nonaktifkan':'Aktifkan' ?></button></form><?php else: ?><span class="payment-auto-note">Dikelola sistem</span><?php endif; ?>
         </td></tr>
       <?php endforeach; endif; ?>
       </tbody></table></div>

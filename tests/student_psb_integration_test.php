@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . "/http_form_scope.php";
 require_once __DIR__ . '/../koneksi.php';
 
 function student_psb_assert(bool $condition, string $message): void {
@@ -32,7 +33,8 @@ function student_psb_page(string $baseUrl, array &$cookies, string $query=''): a
 }
 
 function student_psb_csrf(string $html): string {
-    if (!preg_match('/name="csrf_token" value="([a-f0-9]+)"/', $html, $m)) {
+    if (!preg_match('/<form\b[^>]*\bid="form-master-siswa"[^>]*>(.*?)<\/form>/s', $html, $form)
+        || !preg_match('/name="csrf_token" value="([a-f0-9]+)"/', $form[1], $m)) {
         throw new RuntimeException('Token CSRF Master Siswa tidak ditemukan.');
     }
     return $m[1];
@@ -49,6 +51,7 @@ if (getenv('SPP_TEST_ALLOW_MUTATION') !== '1' || !str_starts_with(DB_NAME, 'db_s
 }
 
 $baseUrl = getenv('SPP_TEST_BASE_URL') ?: 'http://127.0.0.1:8097';
+spp_test_assert_http_clone($baseUrl, DB_NAME);
 $password = (string)getenv('SPP_TEST_ADMIN_PASSWORD');
 if ($password === '') throw new RuntimeException('SPP_TEST_ADMIN_PASSWORD wajib untuk tes HTTP.');
 $created = [];

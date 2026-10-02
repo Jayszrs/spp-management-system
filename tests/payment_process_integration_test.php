@@ -7,6 +7,7 @@
 require_once __DIR__ . '/../koneksi.php';
 require_once __DIR__ . '/../includes/spp_billing.php';
 require_once __DIR__ . '/../includes/komite_billing.php';
+require_once __DIR__ . '/http_form_scope.php';
 
 function payment_process_assert(bool $condition, string $message): void {
     if (!$condition) throw new RuntimeException($message);
@@ -53,7 +54,7 @@ function payment_process_flash(string $baseUrl, array &$cookies, string $pagePat
 function payment_process_csrf(string $baseUrl, int $paymentId, array &$cookies): string {
     $page = payment_process_request($baseUrl . '/pembayaran/edit.php?id=' . $paymentId, [], $cookies);
     payment_process_assert($page['status'] === 200, 'Halaman edit admin tidak dapat dibuka.');
-    if (!preg_match('/name="csrf_token" value="([a-f0-9]+)"/', $page['body'], $match)) {
+    if (!preg_match('/name="csrf_token" value="([a-f0-9]+)"/', spp_test_form_scope($page['body'], 'spp_action'), $match)) {
         throw new RuntimeException('Token CSRF pembayaran tidak ditemukan.');
     }
     return $match[1];
@@ -62,7 +63,7 @@ function payment_process_csrf(string $baseUrl, int $paymentId, array &$cookies):
 function payment_process_input_tokens(string $baseUrl, array &$cookies): array {
     $page = payment_process_request($baseUrl . '/pembayaran/form.php', [], $cookies);
     payment_process_assert($page['status'] === 200, 'Form input pembayaran tidak dapat dibuka.');
-    payment_process_assert(preg_match('/name="csrf_token" value="([a-f0-9]{64})"/', $page['body'], $csrf) === 1,
+    payment_process_assert(preg_match('/name="csrf_token" value="([a-f0-9]{64})"/', spp_test_form_scope($page['body'], 'spp_action'), $csrf) === 1,
         'Token CSRF input pembayaran tidak tersedia.');
     payment_process_assert(preg_match('/name="request_key" value="([a-f0-9]{32})"/', $page['body'], $key) === 1,
         'Kunci idempotensi input pembayaran tidak tersedia.');
@@ -119,6 +120,7 @@ if ($testPassword === '') {
 }
 
 $baseUrl = getenv('SPP_TEST_BASE_URL') ?: 'http://127.0.0.1/sppaman/spp-management-system';
+spp_test_assert_http_clone($baseUrl, DB_NAME);
 $password = $testPassword;
 
 if (spp_billing_schema_ready($koneksi)) {
@@ -194,7 +196,7 @@ if (spp_billing_schema_ready($koneksi)) {
         payment_process_assert(abs(spp_deposit_balance($koneksi,$nis))<.001,'Saldo titipan setelah pemakaian tidak nol.');
 
         $editPage = payment_process_request($baseUrl . '/pembayaran/edit.php?id=' . (int)$second['id'], [], $cookies);
-        payment_process_assert($editPage['status'] === 200 && preg_match('/name="csrf_token" value="([a-f0-9]+)"/', $editPage['body'], $csrf) === 1, 'Form edit SPP admin atau token CSRF tidak tersedia.');
+        payment_process_assert($editPage['status'] === 200 && preg_match('/name="csrf_token" value="([a-f0-9]+)"/', spp_test_form_scope($editPage['body'], 'spp_action'), $csrf) === 1, 'Form edit SPP admin atau token CSRF tidak tersedia.');
         $edit = payment_process_request($baseUrl . '/pembayaran/proses.php', [
             'aksi'=>'update', 'id'=>(int)$second['id'], 'csrf_token'=>$csrf[1], 'no_induk'=>$nis,
             'tanggal_bayar'=>date('Y-m-d H:i:s'), 'bulan_bayar'=>'09', 'tahun_bayar'=>(string)$start,

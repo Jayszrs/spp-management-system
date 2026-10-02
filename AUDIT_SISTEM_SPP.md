@@ -1,5 +1,7 @@
 # Audit dan Baseline SistemSPP
 
+> **Pembaruan 2 Oktober 2026:** migrasi lokal sudah terpasang dengan izin pemilik. Temuan lanjutan dan regresi lintas SD/SMP/SMA telah dituntaskan pada clone; status lokal **siap terbatas dengan syarat**. [Audit kesiapan terkini](documentation/READINESS_AUDIT_20261001.md) adalah rujukan status; seluruh pernyataan/baseline bertanggal sebelumnya di bawah adalah bukti historis, termasuk migrasi yang ketika itu belum diterapkan dan aturan Komite yang disederhanakan. Komite mandiri kini dijelaskan dengan prasyarat SPP pada audit/konteks terbaru.
+
 > **Pembaruan 2026-10-01:** Dokumen ini menyimpan baseline dan temuan **historis 9 September**, termasuk daftar risiko sebagaimana ditemukan saat itu. Status kesiapan, baseline `db_spp` terkini, bukti tes baru, temuan yang sudah diperbaiki pada working tree, serta prasyarat migrasi ada pada [audit kesiapan 1 Oktober](documentation/READINESS_AUDIT_20261001.md). Jangan memakai daftar risiko di bawah sebagai daftar masalah yang semuanya masih terbuka hari ini, atau menganggap perbaikan working tree sudah terpasang pada database utama.
 
 > **Perbaikan 2026-09-30:** Tiga temuan rekap historis dan urutan SPP dari [audit alur operasional](documentation/OPERATIONAL_FLOW_AUDIT_20260930.md) telah diperbaiki dan diuji pada database disposable. Rincian hasil, termasuk satu siklus HTTP dari kelas 1 sampai lulus, ada di dokumen tersebut.

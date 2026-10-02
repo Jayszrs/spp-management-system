@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . "/http_form_scope.php";
 /** A student identifier with an academic placement must not be renamed and orphan its history. */
 if (PHP_SAPI !== 'cli'
     || getenv('SPP_TEST_ALLOW_MUTATION') !== '1'
@@ -31,6 +32,7 @@ function student_nis_http(string $url, ?array $post, string $sessionId): array {
 }
 
 $base = rtrim((string)getenv('SPP_HTTP_BASE'), '/');
+spp_test_assert_http_clone($base, DB_NAME);
 $expectUnsafe = in_array('--expect-unsafe', $argv, true);
 $originalNis = (string)random_int(9700000000, 9799999999);
 $changedNis = (string)random_int(9700000000, 9799999999);
@@ -67,7 +69,9 @@ try {
     student_nis_assert(str_contains($page, 'value="' . $originalNis . '"')
         && str_contains($page, 'UJI NIS RIWAYAT'),
         'Server HTTP tidak menunjukkan fixture clone; permintaan POST dibatalkan.');
-    student_nis_assert(preg_match('/name="csrf_token" value="([a-f0-9]+)"/', $page, $match) === 1, 'Token CSRF tidak ditemukan.');
+    student_nis_assert(preg_match('/<form\b[^>]*\bid="form-master-siswa"[^>]*>(.*?)<\/form>/s', $page, $studentForm) === 1
+        && preg_match('/name="csrf_token" value="([a-f0-9]+)"/', $studentForm[1], $match) === 1,
+        'Token CSRF form Data Siswa tidak ditemukan.');
     if (!$expectUnsafe) {
         student_nis_assert(preg_match('/id="nis-baru"[^>]*\breadonly\b/', $page) === 1,
             'Form edit masih menawarkan perubahan langsung nomor induk.');

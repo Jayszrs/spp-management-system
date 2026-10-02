@@ -1,3 +1,110 @@
+# Status kesiapan operasional SistemSPP - penutupan 2 Oktober 2026
+
+> **Rujukan status terkini untuk Laragon lokal.** Bagian pertama ini menggantikan keputusan checkpoint sebelumnya. Bagian **Arsip checkpoint sebelum penutupan** mempertahankan bukti historis; kalimat di sana tentang migrasi yang belum dijalankan, database hanya dibaca, atau tes yang belum lengkap berlaku pada waktu checkpoint itu.
+
+## Keputusan terkini
+
+**Siap terbatas dengan syarat untuk operasional lokal pada cakupan yang diuji.** Migrasi lokal sudah terpasang dan temuan aplikasi terbaru sudah diperbaiki serta diuji ulang. Tidak ada temuan keuangan/integritas baru yang masih gagal dalam rangkaian penerimaan ini. Sebelum data sekolah sungguhan digunakan, admin harus menyetujui master/tarif, memastikan akun dan unit sesuai, menjalankan checklist singkat di bawah pada salinan, dan menyiapkan backup rutin yang bisa dipulihkan. Ini bukan klaim seluruh kemungkinan use case atau keamanan mutlak. Deployment Railway/server lain belum dinilai dengan pengujian target.
+
+**Versi:** branch `audit/readiness-20261001`, kode dasar `2368c83` di atas `origin/main` `7647608`, ditambah perubahan dan tes dalam commit yang memuat pembaruan dokumen ini. Identitas paket dapat dirunut dengan `git log -1` dan `git show <commit>:documentation/READINESS_AUDIT_20261001.md`. Waktu pemeriksaan: 2 Oktober 2026, Asia/Jakarta. PHP 8.3.33, MySQL 8.4.3, Laragon. Tidak diperlukan migrasi tambahan dari perbaikan aplikasi dalam paket penutupan ini.
+
+## Database utama, migrasi, dan backup
+
+Pemilik telah mengizinkan perubahan skema pada database dummy `db_spp`. Empat wrapper migrasi telah disimulasikan pada salinan lalu diterapkan pada utama: pengaman transaksi, catatan tabungan, CHECK/trigger, dan foreign key. **Jangan mengulang migrasi hanya karena bagian arsip menyebutnya belum diterapkan.** Urutan, otorisasi dan pemulihan ada di [runbook migrasi](READINESS_MIGRATION_RUNBOOK_20261001.md).
+
+Pemeriksaan akhir baca saja pada utama: `health=ok`, `keuangan_request` siap, dua kolom/view jurnal siap, **19 CHECK dan dua trigger cocok**, **64/64 FK cocok**, dan **14 pemeriksaan integritas bernilai nol**. Total fisik semua unit sebelum/sesudah tetap:
+
+| Ukuran | Nilai | Ukuran | Nilai |
+| --- | ---: | --- | ---: |
+| Siswa | 222 | Penempatan | 210 |
+| SPP / Komite | 2.520 / 2.520 | DU / Biaya Lain | 210 / 16 |
+| Header pembayaran | 1.037 | Total penerimaan header | Rp579.620.000 |
+| Alokasi SPP / detail Komite | 982 / 982 | Detail DU | 107 |
+| Rekening / saldo tabungan | 12 / Rp1.050.000 | Jurnal masuk / keluar | 12 / 6 |
+
+Tidak ada siswa, tagihan atau pembayaran uji pada utama. Angka VIEW SD (150 siswa/1.002 pembayaran) bukan angka semua unit. Master kelas tersedia pada **ketiga** unit; pembacaan VIEW tanpa konteks unit tidak boleh disimpulkan sebagai master SMP/SMA hilang.
+
+Backup dipertahankan di luar Git:
+
+- Pra-migrasi: `C:\laragon\backups\spp-management-system\db_spp_before_authorized_readiness_migration_20261002_0514.sql`, 1.398.718 byte; SHA-256 `C885992603B5B3E55FDF450DD5FC8B97CF1914EC4A13ADA53815B98DBBEB5759`.
+- Pasca-migrasi sebelum penerimaan: `C:\laragon\backups\spp-management-system\db_spp_after_readiness_migration_acceptance_20261002.sql`, 1.412.033 byte; SHA-256 `767FD31948399DABA9E0906A8BB8341B2D546AEB1643220BDC2F2661E98AF3AE`, 16:34:45 +07:00. Dump tidak berisi pemilihan database melalui `USE`/`CREATE DATABASE`.
+
+## Temuan terbaru dan regresi penutup
+
+| Temuan / risiko | Reproduksi dan penyebab | Perbaikan dan bukti | Status |
+| --- | --- | --- | --- |
+| SPP belum terbit tampak lunas; pembatalan menambah tunggakan - sedang | Penempatan ada tanpa tagihan, atau seluruh tagihan cancelled; total nol disimpulkan Lunas dan nominal cancelled ikut piutang. | Bedakan Tidak Ditagihkan/Dibatalkan; keluarkan cancelled dari piutang tanpa menghapus histori. `report_spp_unbilled_status_test.php`, ekspor lintas unit. | Diperbaiki |
+| Penerimaan dua kelas digabung - tinggi untuk rekap kelas | Satu NIS membayar sebelum/sesudah kenaikan; pengelompokan hanya berdasarkan NIS. | Pisahkan berdasarkan NIS dan snapshot kelas transaksi; `report_receipt_class_snapshot_test.php`, layar/Excel/PDF menerima dua kelas dengan nominal 100+150. | Diperbaiki |
+| Tarif tujuan tidak selaras - sedang | Siswa dinaikkan sebelum master tarif tujuan diterbitkan; snapshot/student masih tarif lama. | Sinkronkan snapshot aktif yang belum dibayar dan tarif siswa pada simpan/terbit master. Riwayat pindah/lulus serta snapshot berbayar dilindungi; `spp_billing_integration_test.php`, `student_tariff_after_promotion_http_test.php`, tes tarif historis. | Diperbaiki |
+| Pindah rombel 5A ke 5B tetap diarahkan ke 6A - sedang | Tagihan asal telah dibayar sehingga histori 5A wajib dipertahankan; default tujuan mengambil kode histori. | Peserta/tahap tetap dari tahun asal; default rombel tujuan memakai rombel aktif pada tingkat yang sama. `class_rombel_transfer_promotion_test.php` pada clone terpisah menjaga tagihan 5A dan membuat tujuan 6B sekali. | Diperbaiki |
+| Kiriman ulang membalik status - sedang | POST toggle membalik nilai sekarang; request sama dua kali mengaktifkan kembali. | Kirim `target_active` eksplisit untuk siswa, rombel, Biaya Lain; replay menjadi no-op. `endpoint_toggle_replay_http_test.php`. | Diperbaiki |
+| Penerbitan ulang Biaya Lain merusak sisa pembayaran - tinggi | Kiriman formulir yang sama atau penerbitan ulang tagihan berbayar menghitung ulang kewajiban. | Kunci formulir sekali pakai dan pertahankan sisa penerbitan yang masih terbuka. `other_fee_publish_replay_http_test.php` memeriksa pembayaran, total dan audit. | Diperbaiki |
+| Hapus master bersamaan dengan penerbitan - tinggi | Penghapusan menghitung relasi sebelum menunggu transaksi penerbitan; master terhapus setelah tagihan dibuat. | Lock master yang sama sebelum cek relasi; `other_fee_delete_publish_race_http_test.php` membuktikan master terpakai ditolak, master kosong bisa dihapus. | Diperbaiki |
+| **Komite ganda pada dua kasir - tinggi** | Dua kunci request berbeda, Komite sama dan SPP belum terbit; scalar SUM memakai snapshot Repeatable Read lama setelah menunggu lock. Kedua header berhasil pada reproduksi. | Lock tagihan kemudian baca detail pembayaran dengan current read `FOR UPDATE`. `academic_payment_race_http_test.php`: tepat satu pembayaran pada masing-masing skenario SPP+Komite, Komite mandiri, DU cicilan; total Rp880.000 dan cleanup cocok. Tes edit tetap mengecualikan header yang diedit. | Diperbaiki |
+| Token tes berasal dari navigasi; server latihan belum selalu diverifikasi - cacat alat | Regex pertama mengambil token logout/unit, bukan form tindakan. | `http_form_scope.php` memilih form tindakan dan memeriksa identitas database server loopback sebelum mutasi; dua server konkurensi harus sama dengan clone CLI. Tes terkait diulang setelah perubahan helper. | Alat diperbaiki |
+
+## Aturan bisnis yang menjadi dasar verifikasi
+
+- Status laporan Aktif/Arsip/Semua berarti status siswa **sekarang**; kelas dan tarif laporan historis berarti penempatan/tagihan pada tahun yang dilaporkan. Status penempatan `pindah` bukan alasan mengarsipkan siswa aktif. Periode sebelum penempatan pertama tidak direkonstruksi.
+- Peserta kenaikan dan kelulusan berasal dari penempatan tahun asal. Kelas aktif berubah segera; penempatan tujuan hanya sekali. Siswa baru kelas akhir hasil kenaikan tidak kembali diluluskan pada proses yang sama.
+- SPP wajib satu periode tertua yang masih terutang. **Jika SPP dan Komite periode yang sama sama-sama masih terutang, keduanya harus dilunasi bersama.** Komite dapat dibayar sendiri ketika SPP belum diterbitkan, nol/ditanggung PSB/potongan penuh/dibatalkan, atau sudah lunas. Kalimat umum "Komite dapat dibayar sendiri" pada arsip tidak menghapus prasyarat ini.
+- PSB menanggung SPP kelas 1 SD sesuai aturan yang terpasang. PSB masuk kelas 7 SMP atau 10 SMA **tidak** otomatis menanggung SPP. Pangkal/PSB/DU dapat dicicil sesuai sisa; Komite dibayar lunas per bulan. Tabungan terpisah dari penerimaan sekolah, titipan terpakai tidak menambah kas baru.
+
+## Bukti penerimaan setelah perubahan digabung
+
+Semua mutasi memakai `db_spp_audit_mainmigration_20261002` yang dipulihkan dan dimigrasi, atau clone rombel milik audit; flag tes wajib dan server 8840/8841 diverifikasi menuju clone yang sama. Tes dijalankan berurutan pada database bersama. Dua permintaan pada skenario race memang berjalan serentak melalui dua proses HTTP.
+
+| Cakupan | Hasil dan tes | Batas |
+| --- | --- | --- |
+| Enam perjalanan siswa | Reguler dan PSB, masing-masing SD/SMP/SMA, dari pendaftaran tingkat pertama sampai lulus: `full_student_lifecycle_http_test.php`, `psb_to_regular_http_test.php` dengan unit 1/2/3. Identitas, tarif, penerbitan, pembayaran, histori dan rekap diperiksa pada beberapa tahun. Setelah enam skenario: 228 siswa, 234 penempatan, 2.808 SPP/Komite, 1.176 pembayaran, Rp642.150.000; 14 invariant nol. | Reguler membayar tahun pertama lalu menguji kenaikan dengan utang tahun berikutnya; jalur PSB menguji pembayaran bulanan berikutnya. Tanggal/tahun virtual hanya aktif pada clone dengan flag. Bukan seluruh variasi potongan. |
+| Pembayaran dan saldo | Input/edit/penolakan hapus SPP, DU lintas tahun, Komite, titipan/struk; approve/reject/cancel/hapus kasir; replay dan race Pangkal/PSB/opsional/tabungan/titipan; catatan tabungan/XSS/Excel; nominal nol. `payment_process_integration_test.php`, `du_payment_integration_test.php`, `payment_role_access_test.php`, `financial_mutation_guard_http_test.php`, `savings_note_http_test.php`, `zero_payment_http_test.php`, `report_finance_http_regression_test.php`. | Tiap tes memeriksa database, tidak hanya respons sukses; kombinasi edit/hapus serentak seluruh komponen belum dieksplorasi. |
+| Tagihan sama dua kasir | SPP+Komite Juli, Komite mandiri Agustus, DU 600 ribu dari tagihan satu juta: hanya satu header per skenario, tidak overpay. `academic_payment_race_http_test.php`; biaya opsional/delete-publish diuji terpisah. | Bukan uji beban ratusan kasir. |
+| Akses dan sesi | `endpoint_access_matrix_http_test.php`: **333** request super admin/admin/kasir/bendahara - SD/SMP/SMA + anonim, CSRF salah, saldo lintas unit, edit dan POST siswa ID asing dengan CSRF sah. Fingerprint semua tabel tetap sama setelah request ditolak dan cleanup. `session_account_refresh_http_test.php` membuktikan akun nonaktif serta perubahan role/unit berlaku pada sesi lama. Replay: status/master/keuangan dan halaman kenaikan lama. | Matriks endpoint penting di bawah, bukan pentest semua URL/payload. |
+| Laporan historis dan keuangan | `historical_reports_after_promotion_test.php`, `report_crossunit_exports_http_test.php`: Status Pembayaran, SPP Tahun Ajaran, Per Item SPP/Komite, Riwayat Tagihan, tahun kosong, penerimaan/setoran dan total seluruh unit cocok dengan sumber, layar, Excel, PDF terpilih. Tahun asal/tujuan, kelulusan, Aktif/Arsip/Semua, rombel, cancelled dan sebelum penempatan pertama dicakup. DU/rekap kas/struk/titipan lewat regresi keuangan HTTP. | PDF biner diperiksa teks dan nominal, bukan hanya HTML preview; bukan seluruh rentang tanggal atau tiap desain cetak. |
+| Surat kepala sekolah | `principal_letter_pdf_binary_test.py`: **15/15** kombinasi unit/status/satu rombel/satu tingkat/semua, sumber/layar/Excel/preview/PDF cocok; nama dan NIS tidak muncul di surat. | Cetak fisik belum diuji; render visual yang sudah dicatat pada checkpoint dipertahankan. |
+| Browser Chrome | `enrollment_browser_flow.js` reguler/PSB/duplikat; `payment_browser_flow.js` dropdown DU tanpa siswa/tanpa tagihan/tunggakan, input/edit/titipan/struk; `promotion_browser_flow.js` lulus kelas 6, dua kenaikan kelas 5 terpisah dan halaman lama; **`authorization_browser_flow.js`** kasir mengajukan, admin approve/reject, kasir cancel. Verifier PHP membuktikan nominal akhir Rp200 dan tiga status keputusan. | Interaksi browser penuh memakai SD; SMP/SMA diuji melalui HTTP dan ekspor. |
+| Regresi CLI | Komite, SPP, urutan/multiunit kenaikan, histori kelulusan, tarif berbayar, modular/DU/riwayat/surat, status belum terbit dan snapshot penerimaan lulus. `student_psb_integration_test.php`, `student_nis_history_http_test.php`, `student_tariff_after_promotion_http_test.php`, GET master DU dan CSRF unit lulus. | Hasil checkpoint awal 33 CLI/14 HTTP tetap bukti historis, bukan dijumlahkan sebagai suite baru. |
+
+Akhir rangkaian sebelum cleanup clone: **240 siswa, 250 penempatan, 2.892 SPP, 2.926 Komite, 217 DU, 1.180 pembayaran, Rp643.050.200**, serta 14 invariant nol. Ini data fixture clone, bukan data sekolah atau baseline utama.
+
+### Matriks endpoint penting
+
+| Endpoint | Peran/metode dan bukti tambahan |
+| --- | --- |
+| `siswa/daftar.php` | Admin/kasir, POST CSRF; browser daftar/edit NIS ditolak; explicit status replay; POST ID asing dengan token sah tidak menulis. |
+| `master_kelas.php` | Admin/kasir, POST CSRF; tahap asal/rombel tujuan/transaksi; tiga unit lifecycle; halaman lama dan replay ditolak. |
+| `master_spp.php`, `master_daftar_ulang.php` | Admin/kasir, POST CSRF; terbit sesuai penempatan/tahun formulir, GET tidak menerbitkan; tes tarif/histori/rollback dan lifecycle. |
+| `master_biaya_lain.php` | Admin/kasir, POST CSRF; kunci formulir penerbitan, status eksplisit, lock delete-publish dan pembayaran terlindungi. |
+| `pembayaran/proses.php` | Admin/kasir, POST CSRF; request key, validasi uang/urutan, transaksi/lock; kasir edit/hapus harus otorisasi. |
+| `otorisasi_transaksi.php` dan aksi persetujuan | Admin memutuskan, kasir pengajuan sendiri/cancel, bendahara baca; POST CSRF, keputusan/status/snapshot; HTTP dan browser membuktikan hasil. |
+| `tabungan/proses.php`, `pembayaran/titipan_spp.php` | Tabungan admin/kasir; refund titipan admin; POST CSRF/request key/locksaldo; race/replay dan unit diuji. |
+| `tabungan/get_saldo.php` | Baca admin/kasir; anonim 401, bendahara 403, saldo unit asing tidak terbuka. |
+| `role_management.php`, `unit_switch.php`, `logout.php` | Role management super admin; perpindahan unit/keluar POST token; matrix guard dan refresh sesi. |
+
+### Kegagalan alat yang dipisahkan dari bug aplikasi
+
+Percobaan fixture tahun 2096 pada pembayaran ditolak batas tahun input; fixture saldo SD awal ternyata tidak tersedia; tes surat sempat bertabrakan dengan suite HTTP yang memutasi clone; satu percobaan detail Komite NULL ditolak constraint; dua rerun awal kurang variabel password/URL. Fixture/setup diperbaiki atau percobaan yang tidak berlaku dibuang; surat dan tes terkait diulang **berurutan** dan lulus. Tidak ada perubahan ekspektasi untuk menghalalkan pelompatan tunggakan atau pembayaran ganda.
+
+Batch pembuatan clone baru tambahan ditolak peninjauan otomatis dengan alasan `blocked by policy`. Tidak diulang lewat jalur lain; enam skenario memakai clone migrasi yang identitasnya sudah terverifikasi, NIS per skenario terpisah, dan invariant akhir diperiksa. Ini dicatat agar tidak mengklaim enam database fresh terpisah.
+
+## Batas tersisa dan checklist penggunaan nyata
+
+1. Verifikasi kelas/rombel, tahun aktif, tarif/potongan dan aturan PSB/Komite bersama admin sekolah; hasil lokal mengikuti kontrak yang ditulis di atas.
+2. Pada salinan, jalankan satu input, cicilan DU, titipan, struk, rekap dan otorisasi dengan akun yang benar; cocokkan uang fisik dengan rekapan.
+3. Uji printer, ukuran kertas, browser/perangkat petugas, backup terjadwal dan restore ke lingkungan terpisah. Restore database lokal telah disimulasikan; pemulihan layanan produksi dan waktu henti belum diukur.
+4. Deployment publik memerlukan audit host, TLS, hak DB, konfigurasi secret, backup, sesi dan proteksi login. Login legacy MD5 masih diterima untuk upgrade hash; audit ini tidak membuktikan throttling/login-CSRF/pentest menyeluruh. Jangan membuka server latihan ke jaringan publik.
+5. Perubahan bisnis atau kode berikutnya memerlukan rerun tes yang terdampak. Konkurensi seluruh kombinasi edit/hapus, data legacy sebelum histori pertama, dan seluruh URL/payload belum tercakup; jangan merekonstruksi kelas lama.
+
+## Lingkungan dan pengiriman
+
+Server milik audit port 8840/8841 dihentikan setelah executable, PID dan command line diverifikasi. Dua clone `db_spp_audit_mainmigration_20261002` dan `db_spp_audit_rombel_20261002` dihapus setelah identitas serta fixture diperiksa; inventaris `db_spp%` kembali hanya `db_spp`. Backup tetap dipertahankan. Artefak QA yang penghapusannya ditolak peninjauan otomatis (termasuk `tmp/pdfqa_deps`, `tmp/pdfqa_pycache.pyc`, `tmp/pdfs/principal_recheck`, serta `reportmatrix_debug.php`/log QA di luar repository) dibiarkan dan tidak dihapus lewat jalur lain; tidak dimasukkan Git. Layanan port 18097 yang kepemilikannya belum terverifikasi dipertahankan.
+
+Fetch terakhir tidak membawa perubahan baru: HEAD dan remote branch audit sama pada dasar `2368c83`; `origin/main` tetap `7647608` (sembilan commit sudah menjadi leluhur branch audit). Tidak ada konflik atau fitur teman yang ditimpa. Paket penutupan ditujukan ke branch `audit/readiness-20261001`. Pemeriksaan akhir: **35 file PHP** baru/diubah lolos lint, JavaScript browser otorisasi lolos `node --check`, Python PDF dijalankan sukses, dan `git diff --check` bersih. `http_clone_guard_test.php` membuktikan server yang cocok diterima, tetapi clone salah/database utama/host publik/flag hilang ditolak sebelum POST.
+
+---
+
+# Arsip checkpoint sebelum penutupan - bukan status terkini
+
 # Audit kesiapan operasional SistemSPP — 1–2 Oktober 2026
 
 > **Status dokumen: hasil audit kode pada branch review.** Ini adalah catatan bukti untuk perubahan pada branch review, bukan pernyataan bahwa rilis sudah siap. [Audit 9 September](../AUDIT_SISTEM_SPP.md) dan [audit alur 30 September](OPERATIONAL_FLOW_AUDIT_20260930.md) menyimpan riwayat pemeriksaan; angka dan status di sana tidak otomatis berlaku pada database atau kode hari ini. Tes pada clone, pembersihan database latihan, fetch Git, dan audit ulang baca-saja database utama telah dilakukan; persetujuan migrasi dan bukti yang masih terbuka tetap menjadi gerbang rilis.

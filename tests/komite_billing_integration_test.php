@@ -44,6 +44,8 @@ try {
     $stmt=$koneksi->prepare("INSERT INTO bayar(NO_INDUK,KELAS,BULAN,TAHUN,TGL_BYR,U_KOMITE,total_jumlah,payment_link_version) VALUES(?,?,'10','2195','2195-10-01 08:00:00',15000,15000,1)");
     $stmt->bind_param('ss',$nis,$level);$stmt->execute();$paymentId=(int)$koneksi->insert_id;$stmt->close();
     komite_save_payment($koneksi,$paymentId,$bill,15000);
+    komite_test_assert((float)komite_bill($koneksi,$nis,'10','2195',true,$paymentId)['paid']===0.0,'Edit menghitung kembali pembayaran yang sedang diedit.');
+    komite_test_assert((float)komite_bill($koneksi,$nis,'10','2195',true)['paid']===15000.0,'Current read tidak menghitung pembayaran Komite tersimpan.');
     komite_test_assert(komite_pair_gap($koneksi,$nis,'10','2195')==='','Komite pelengkap tidak menutup pasangan SPP.');
     $rate=komite_sync_student_rate($koneksi,$nis,20000,$placementId);
     komite_test_assert($rate['updated']===8,'Perubahan tarif tidak hanya memperbarui tagihan belum dibayar.');

@@ -117,11 +117,79 @@ function spp_write_audit(mysqli $db, ?int $masterYearId, ?string $noInduk, strin
     $stmt->execute(); $stmt->close();
 }
 
+/** Keep an unpaid active placement and the student's displayed rate in step with its year master. */
+function spp_sync_active_placement_rates(mysqli $db, int $yearId, array $rates, ?array $selectedNis = null): void {
+    if ($selectedNis !== null && !$selectedNis) return;
+    $studentFilter = $selectedNis === null ? '' : ' AND sta.no_induk IN (' . implode(',', array_fill(0, count($selectedNis), '?')) . ')';
+    $stmt = $db->prepare("SELECT sta.id,sta.no_induk,sta.kelas,sta.spp_covered_by_psb,
+          sta.spp_perbulan_snapshot,s.potongan_spp_persen,s.SPP_PERBULAN,s.KELAS AS active_class,
+          NOT EXISTS(SELECT 1 FROM siswa_tahun_ajaran newer JOIN tahun_ajaran newer_year
+            ON newer_year.id=newer.tahun_ajaran_id
+            WHERE newer.no_induk=sta.no_induk AND newer_year.label>ta.label) AS latest
+        FROM siswa_tahun_ajaran sta
+        JOIN tahun_ajaran ta ON ta.id=sta.tahun_ajaran_id
+        JOIN siswa s ON s.NO_INDUK=sta.no_induk
+        WHERE sta.tahun_ajaran_id=? AND sta.status='aktif' AND s.is_active=1
+          AND CAST(sta.kelas AS UNSIGNED) " . unit_level_between_sql() . $studentFilter . "
+        ORDER BY sta.no_induk FOR UPDATE");
+    $params = array_merge([$yearId], $selectedNis ?? []);
+    $stmt->bind_param('i' . str_repeat('s', count($selectedNis ?? [])), ...$params);
+    $stmt->execute();
+    $placements = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+    $stmt->close();
+    if (!$placements) return;
+
+    $year = $db->prepare('SELECT CAST(LEFT(label,4) AS UNSIGNED) AS start_year FROM tahun_ajaran WHERE id=?');
+    $year->bind_param('i', $yearId); $year->execute();
+    $startYear = (int)($year->get_result()->fetch_assoc()['start_year'] ?? 0); $year->close();
+    $endYear = $startYear + 1;
+
+    $monthSql = "CASE LOWER(b.BULAN)
+      WHEN 'januari' THEN 1 WHEN 'februari' THEN 2 WHEN 'maret' THEN 3 WHEN 'april' THEN 4
+      WHEN 'mei' THEN 5 WHEN 'juni' THEN 6 WHEN 'juli' THEN 7 WHEN 'agustus' THEN 8
+      WHEN 'september' THEN 9 WHEN 'oktober' THEN 10 WHEN 'november' THEN 11 WHEN 'desember' THEN 12
+      ELSE CAST(b.BULAN AS UNSIGNED) END";
+    $paid = $db->prepare("SELECT
+        EXISTS(SELECT 1 FROM bayar b WHERE b.NO_INDUK=? AND b.U_SPP>0
+          AND ((CAST(b.TAHUN AS UNSIGNED)=? AND {$monthSql} BETWEEN 7 AND 12)
+            OR (CAST(b.TAHUN AS UNSIGNED)=? AND {$monthSql} BETWEEN 1 AND 6)))
+        OR EXISTS(SELECT 1 FROM spp_alokasi a JOIN spp_alokasi_batch ab ON ab.id=a.batch_id
+          JOIN tagihan_spp ts ON ts.id=a.tagihan_spp_id
+          WHERE ts.penempatan_id=? AND ab.status='active') AS has_payment");
+    $updatePlacement = $db->prepare("UPDATE siswa_tahun_ajaran SET spp_perbulan_snapshot=? WHERE id=? AND status='aktif'");
+    $updateStudent = $db->prepare('UPDATE siswa SET SPP_PERBULAN=? WHERE NO_INDUK=? AND is_active=1');
+    foreach ($placements as $placement) {
+        $level = (int)$placement['kelas'];
+        $base = (float)($rates[$level] ?? 0);
+        if ($base <= .001) continue;
+        $net = spp_net_tariff($base, (float)$placement['potongan_spp_persen'])['net'];
+        $snapshot = (int)$placement['spp_covered_by_psb'] === 1 ? 0.0 : $net;
+        $placementId = (int)$placement['id'];
+        $nis = (string)$placement['no_induk'];
+        $paid->bind_param('siii', $nis, $startYear, $endYear, $placementId);
+        $paid->execute();
+        $hasPayment = (int)($paid->get_result()->fetch_assoc()['has_payment'] ?? 0) === 1;
+        if (!$hasPayment && abs((float)$placement['spp_perbulan_snapshot'] - $snapshot) > .001) {
+            $updatePlacement->bind_param('di', $snapshot, $placementId);
+            $updatePlacement->execute();
+        }
+        if ((int)$placement['latest'] === 1 && (int)$placement['active_class'] === $level
+            && abs((float)$placement['SPP_PERBULAN'] - $net) > .001) {
+            $updateStudent->bind_param('ds', $net, $nis);
+            $updateStudent->execute();
+        }
+    }
+    $paid->close();
+    $updatePlacement->close();
+    $updateStudent->close();
+}
+
 /** Menyimpan tarif dan menyelaraskan hanya tagihan yang belum pernah dialokasikan. */
 function spp_master_save_rates(mysqli $db, int $masterYearId, array $rates): array {
-    $stmt = $db->prepare('SELECT status FROM master_spp_tahun WHERE id=? FOR UPDATE');
+    $stmt = $db->prepare('SELECT status,tahun_ajaran_id FROM master_spp_tahun WHERE id=? FOR UPDATE');
     $stmt->bind_param('i', $masterYearId); $stmt->execute();
-    $status = (string)($stmt->get_result()->fetch_assoc()['status'] ?? ''); $stmt->close();
+    $master = $stmt->get_result()->fetch_assoc(); $stmt->close();
+    $status = (string)($master['status'] ?? '');
     if ($status === '' || $status === 'closed') throw new RuntimeException('Tahun SPP sudah ditutup atau tidak tersedia.');
     $changed = 0; $updatedBills = 0; $lockedBills = 0;
     [$firstLevel, $lastLevel] = unit_level_bounds();
@@ -158,6 +226,7 @@ function spp_master_save_rates(mysqli $db, int $masterYearId, array $rates): arr
         $changed++;
         spp_write_audit($db, $masterYearId, null, 'ubah_tarif', ['tingkat'=>$level,'nominal'=>(float)$old['nominal_dasar']], ['tingkat'=>$level,'nominal'=>$new,'tagihan_diubah'=>$levelUpdated,'tagihan_terkunci'=>$levelLocked], count($bills));
     }
+    spp_sync_active_placement_rates($db, (int)$master['tahun_ajaran_id'], $rates);
     return ['rates_changed'=>$changed,'bills_updated'=>$updatedBills,'bills_locked'=>$lockedBills];
 }
 
@@ -185,6 +254,7 @@ function spp_publish_students(mysqli $db, int $masterYearId, array $students, ar
     foreach($rates as $level=>$rate) if($rate<=0) throw new RuntimeException('Lengkapi tarif dasar kelas '.$level.' sebelum menerbitkan.');
     $selected=[]; foreach($students as $nis){$nis=trim((string)$nis);if($nis!=='')$selected[$nis]=true;}
     if(!$selected) throw new RuntimeException('Pilih minimal satu siswa untuk penerbitan SPP.');
+    spp_sync_active_placement_rates($db, (int)$master['tahun_ajaran_id'], $rates, array_keys($selected));
     $periods=spp_academic_periods((string)$master['label']);
     $created=0;$skipped=0;$ineligible=[];
     $find=$db->prepare("SELECT sta.id,sta.no_induk,sta.kelas,sta.master_kelas_id,sta.kelas_rombel_snapshot,sta.spp_covered_by_psb,sta.komite_mulai_bulan,s.potongan_spp_persen,s.is_active

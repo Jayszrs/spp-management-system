@@ -89,11 +89,16 @@ function class_students_for_manual_step(mysqli $db, int $level, string $targetYe
     $sourceYear = class_previous_academic_year_label($targetYear);
     $stmt = $db->prepare("SELECT s.NO_INDUK, s.NO_induk_diknas, s.NAMA, sta.kelas AS KELAS,
         sta.master_kelas_id, s.SPP_PERBULAN, s.POMG, mk.tingkat, mk.kode_rombel,
+        CASE WHEN active_mk.id IS NULL THEN COALESCE(mk.kode_rombel,'')
+             WHEN active_mk.tingkat=CAST(sta.kelas AS UNSIGNED)
+               AND active_mk.is_placeholder=0 AND active_mk.is_active=1
+             THEN active_mk.kode_rombel ELSE '' END AS promotion_kode_rombel,
         COALESCE(mk.is_placeholder,1) AS is_placeholder, sta.kelas_rombel_snapshot
         FROM siswa_tahun_ajaran sta
         JOIN tahun_ajaran ta ON ta.id=sta.tahun_ajaran_id
         JOIN siswa s ON s.NO_INDUK=sta.no_induk AND s.is_active=1
         LEFT JOIN master_kelas mk ON mk.id=sta.master_kelas_id
+        LEFT JOIN master_kelas active_mk ON active_mk.id=s.master_kelas_id
         LEFT JOIN siswa_tahun_ajaran next_sta ON next_sta.no_induk=sta.no_induk
           AND next_sta.tahun_ajaran_id=(SELECT id FROM tahun_ajaran WHERE label=? LIMIT 1)
         WHERE ta.label=? AND sta.status='aktif' AND next_sta.id IS NULL
@@ -103,7 +108,11 @@ function class_students_for_manual_step(mysqli $db, int $level, string $targetYe
     $stmt->execute();
     $rows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
     $stmt->close();
-    foreach ($rows as &$row) $row['kelas_label'] = (string)($row['kelas_rombel_snapshot'] ?: class_label($row));
+    foreach ($rows as &$row) {
+        $row['kelas_label'] = (string)($row['kelas_rombel_snapshot'] ?: class_label($row));
+        $activeCode = strtoupper(trim((string)$row['promotion_kode_rombel']));
+        $row['kelas_aktif_label'] = $activeCode !== '' ? (string)(int)$row['KELAS'] . $activeCode : '';
+    }
     unset($row);
     return $rows;
 }
@@ -399,7 +408,7 @@ function class_process_year_promotion(mysqli $db, string $targetYear): array {
             $noInduk = (string)$student['NO_INDUK'];
             $targetClassId = 0;
             if ($level !== $last) {
-                $code = strtoupper((string)($student['kode_rombel'] ?? ''));
+                $code = strtoupper((string)($student['promotion_kode_rombel'] ?? ''));
                 $targetClassId = $targetByCode[$code] ?? 0;
                 if ($targetClassId <= 0) {
                     $skipped++;

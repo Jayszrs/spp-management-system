@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . "/http_form_scope.php";
 
 /** HTTP regression for editing a promoted student with a different destination-year tariff. */
 session_start();
@@ -12,6 +13,7 @@ if (getenv('SPP_TEST_ALLOW_MUTATION') !== '1' || !str_starts_with(DB_NAME, 'db_s
 $password = (string)getenv('SPP_TEST_ADMIN_PASSWORD');
 if ($password === '') throw new RuntimeException('SPP_TEST_ADMIN_PASSWORD is required.');
 $baseUrl = rtrim((string)(getenv('SPP_TEST_BASE_URL') ?: 'http://127.0.0.1:8766'), '/');
+spp_test_assert_http_clone($baseUrl, DB_NAME);
 
 function promoted_tariff_assert(bool $condition, string $message): void {
     if (!$condition) throw new RuntimeException($message);
@@ -105,7 +107,9 @@ try {
     $page = promoted_tariff_request($baseUrl . '/siswa/daftar.php?edit=' . $studentId, null, $cookies);
     promoted_tariff_assert($page['status'] === 200, 'Form edit Data Siswa gagal dibuka.');
     promoted_tariff_assert(str_contains($page['body'], 'TA ' . $newYear . ' · tarif dasar'), 'Pratinjau tidak memilih tahun tujuan.');
-    promoted_tariff_assert(preg_match('/name="csrf_token" value="([a-f0-9]+)"/', $page['body'], $match) === 1, 'Token CSRF siswa tidak ada.');
+    promoted_tariff_assert(preg_match('/<form\b[^>]*\bid="form-master-siswa"[^>]*>(.*?)<\/form>/s', $page['body'], $studentForm) === 1
+        && preg_match('/name="csrf_token" value="([a-f0-9]+)"/', $studentForm[1], $match) === 1,
+        'Token CSRF form Data Siswa tidak ada.');
 
     $save = promoted_tariff_request($baseUrl . '/siswa/daftar.php', [
         'aksi' => 'update', 'id' => $studentId, 'csrf_token' => $match[1],

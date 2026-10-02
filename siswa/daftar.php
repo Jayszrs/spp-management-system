@@ -358,6 +358,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         if ($action === 'toggle_status') {
             $id = (int)($_POST['id'] ?? 0);
+            $targetStatus = (string)($_POST['target_active'] ?? '');
+            if (!in_array($targetStatus, ['0', '1'], true)) {
+                throw new RuntimeException('Status tujuan siswa tidak valid. Muat ulang halaman.');
+            }
             $koneksi->begin_transaction();
             $student = find_student($koneksi, $id, true);
             if (!$student) throw new RuntimeException('Data siswa tidak ditemukan.');
@@ -368,8 +372,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $isGraduate = (bool)$stmtGraduate->get_result()->fetch_row();
             $stmtGraduate->close();
             if ($isGraduate) throw new RuntimeException('Status lulusan tidak dapat diubah melalui arsip manual.');
+            $newStatus = (int)$targetStatus;
+            if ((int)$student['is_active'] === $newStatus) {
+                $koneksi->commit();
+                $_SESSION['flash'] = ['type' => 'warning', 'msg' => 'Status siswa sudah sesuai. Tidak ada perubahan.'];
+                student_redirect('daftar.php');
+            }
             $before = student_snapshot($student);
-            $newStatus = (int)$student['is_active'] === 1 ? 0 : 1;
             $stmt = $koneksi->prepare('UPDATE siswa SET is_active = ? WHERE id = ?');
             $stmt->bind_param('ii', $newStatus, $id);
             $stmt->execute();
@@ -750,7 +759,7 @@ $sppRatePreview = spp_current_effective_rate($koneksi, $previewLevel, $previewDi
                   <a class="btn-tbl btn-tbl-edit" href="<?= htmlspecialchars($editUrl) ?>">Edit</a>
                   <?php if(!$isGraduate): ?><form method="POST" action="daftar.php" style="display:inline" onsubmit="return confirm('<?= $student['is_active'] ? 'Arsipkan' : 'Pulihkan' ?> siswa <?= htmlspecialchars(addslashes($student['NAMA'])) ?>?')">
                     <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_student']) ?>" />
-                    <input type="hidden" name="aksi" value="toggle_status" /><input type="hidden" name="id" value="<?= (int)$student['id'] ?>" />
+                    <input type="hidden" name="aksi" value="toggle_status" /><input type="hidden" name="id" value="<?= (int)$student['id'] ?>" /><input type="hidden" name="target_active" value="<?= $student['is_active'] ? '0' : '1' ?>" />
                     <button type="submit" class="btn-tbl btn-tbl-toggle"><?= $student['is_active'] ? 'Arsipkan' : 'Pulihkan' ?></button>
                   </form><?php endif; ?>
                 </td>

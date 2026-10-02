@@ -27,7 +27,7 @@ $token = bin2hex(random_bytes(32));
 $_SESSION['csrf_master_kelas'] = $token;
 $_SERVER['REQUEST_METHOD'] = 'POST';
 $_SERVER['PHP_SELF'] = '/master_kelas.php';
-$_POST = ['aksi'=>'toggle', 'id'=>(string)$classId, 'csrf_token'=>$token];
+$_POST = ['aksi'=>'toggle', 'id'=>(string)$classId, 'target_active'=>'0', 'csrf_token'=>$token];
 
 register_shutdown_function(static function () use ($koneksi, $classId, $occupied): void {
     while (ob_get_level() > 0) ob_end_clean();
