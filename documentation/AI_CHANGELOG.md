@@ -13,6 +13,14 @@ File ini mencatat perubahan proyek secara reverse chronological. Baca [PROJECT_C
 - Jangan menghapus atau menulis ulang entri lama. Tambahkan entri koreksi bila diperlukan.
 - Perubahan implementasi dan entri changelog wajib masuk commit yang sama.
 
+## 2026-10-02 - Penggabungan hasil audit ke main
+
+- Aktor: Codex, atas permintaan pemilik untuk menjadikan seluruh hasil audit sebagai versi main.
+- Git: ambil perubahan origin terbaru, lalu gabungkan 11 commit `audit/readiness-20261001` sampai `6a95cc0` ke `main` dari `7647608` dengan fast-forward. Tidak ada divergensi atau konflik; kode aplikasi identik dengan branch audit. Branch audit dipertahankan sebagai referensi.
+- Perilaku/API: tidak ada perubahan implementasi tambahan; dokumentasi status penggabungan diselaraskan.
+- Database/migrasi: tidak ada perubahan atau penerapan ulang. Tetap 222 siswa, 1.018 pembayaran/Rp577.145.000; Tabungan 12 rekening/Rp1.050.000 dan jurnal 12 masuk/6 keluar.
+- Verifikasi: health CLI OK, HTTP 200 `ok`, 14 pemeriksaan integritas bersih. Hasil regresi yang tercatat pada audit berlaku karena kode aplikasi tidak berubah; batas siap terbatas dengan syarat tetap berlaku.
+
 ## 2026-10-02 - Penghapusan Titipan SPP, pembayaran langsung
 
 - Aktor: Codex; implementasi rencana pemilik pada branch `audit/readiness-20261001` di atas `ec3db42`. Main belum digabung.

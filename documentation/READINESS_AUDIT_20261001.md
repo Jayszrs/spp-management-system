@@ -4,7 +4,7 @@
 
 **Siap terbatas dengan syarat untuk Laragon lokal pada cakupan yang diuji.** Titipan SPP sudah dihapus dari kode dan database dummy `db_spp`, sesuai rencana pemilik. Aplikasi lokal kembali terbuka; HTTP `health.php` 200 `ok`, URL Titipan SPP lama 404. Modul Tabungan tetap berfungsi dan datanya utuh. Data sekolah sungguhan, cetak fisik, backup rutin dan deployment server lain tetap memerlukan pemeriksaan lingkungan masing-masing.
 
-Kode dasar `ec3db42`, branch `audit/readiness-20261001`; perubahan ini berada dalam commit yang memuat dokumen ini. `origin/main` `7647608` telah ditinjau, merupakan ancestor, dan tidak memiliki perubahan baru yang perlu digabung saat pemeriksaan. **Belum merge ke main.**
+**Sudah digabung ke `main` pada 2 Oktober 2026 atas permintaan pemilik.** Sebelas commit branch `audit/readiness-20261001`, sampai `6a95cc0`, digabung dengan fast-forward dari `7647608`; GitHub terbaru sudah diambil dan tidak ada perubahan main yang divergen atau konflik. Kode aplikasi pada main sama dengan branch audit. Setelah penggabungan, health CLI/HTTP kembali OK (HTTP 200), seluruh 14 pemeriksaan integritas bersih, dan baseline database serta Tabungan tetap sesuai tabel di bawah. Commit dokumentasi penggabungan tercatat pada riwayat main. Penilaian kesiapan dan batas pengujian tetap berlaku.
 
 ## Aturan aktif
 
@@ -57,7 +57,7 @@ Backup final pra-penerapan: `C:\laragon\backups\spp-management-system\db_spp_bef
 
 Artefak di luar Git: `remove_deposit_main_apply_20261002.log` (fingerprint seluruh tabel), `remove_deposit_main_fk_20261002.json`, dan `remove_deposit_regression_20261002.log` di folder backup yang sama. Log regresi juga mencatat kegagalan prasyarat awal; hasil ulang di atas menggantikannya. Backup, QA PDF/dependency, log dan layanan lama yang kepemilikannya belum terverifikasi dipertahankan. Penolakan otomatis pada satu perintah gabungan tidak menghapus artefak; perubahan kode dan tes kemudian dilakukan melalui langkah terpisah. Artefak yang penghapusannya ditolak pada audit lama tidak dicoba lewat jalur lain.
 
-Server latihan milik pengujian ini dan clone audit dihentikan/dihapus setelah verifikasi, dengan pemeriksaan identitas; maintenance utama telah dibuka setelah health/integritas/skema lulus. Hash commit/push tercatat pada riwayat Git branch audit.
+Server latihan milik pengujian ini dan clone audit dihentikan/dihapus setelah verifikasi, dengan pemeriksaan identitas; maintenance utama telah dibuka setelah health/integritas/skema lulus. Riwayat commit audit kini tersedia pada `main`; branch audit dipertahankan sebagai referensi.
 
 ## Arsip sebelum penghapusan Titipan SPP
 

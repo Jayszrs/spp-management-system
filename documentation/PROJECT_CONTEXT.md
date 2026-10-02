@@ -2,7 +2,7 @@
 
 SistemSPP adalah aplikasi administrasi pembayaran sekolah berbasis PHP, JavaScript, dan MySQL (`mysqli`). Dokumen ini merangkum alur aktif. Untuk rincian teknis, kode dan schema adalah sumber kebenaran; [AI_CHANGELOG.md](./AI_CHANGELOG.md) adalah arsip perubahan, bukan panduan operasional.
 
-> **Status 2 Oktober 2026 setelah penghapusan Titipan SPP:** migrasi lokal `db_spp` sudah diterapkan, dengan 18 CHECK, dua trigger tarif dan 61 FK. Utama: 222 siswa, 1.018 pembayaran, Rp577.145.000 penerimaan. Tabungan tetap 12 rekening/Rp1.050.000; fingerprint rekening dan kedua jurnal tidak berubah. [Audit kesiapan](./READINESS_AUDIT_20261001.md) tetap menilai **siap terbatas dengan syarat** untuk Laragon pada cakupan yang diuji. Belum digabung ke main; deployment target dinilai terpisah. Prosedur backup/pemulihan ada di [runbook](./READINESS_MIGRATION_RUNBOOK_20261001.md).
+> **Status 2 Oktober 2026 setelah penghapusan Titipan SPP:** migrasi lokal `db_spp` sudah diterapkan, dengan 18 CHECK, dua trigger tarif dan 61 FK. Utama: 222 siswa, 1.018 pembayaran, Rp577.145.000 penerimaan. Tabungan tetap 12 rekening/Rp1.050.000; fingerprint rekening dan kedua jurnal tidak berubah. [Audit kesiapan](./READINESS_AUDIT_20261001.md) tetap menilai **siap terbatas dengan syarat** untuk Laragon pada cakupan yang diuji. Seluruh commit audit sampai `6a95cc0` sudah digabung ke `main` tanpa konflik; health dan integritas diperiksa ulang setelah penggabungan. Deployment target dinilai terpisah. Prosedur backup/pemulihan ada di [runbook](./READINESS_MIGRATION_RUNBOOK_20261001.md).
 
 ## Lingkungan
 
