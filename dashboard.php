@@ -119,10 +119,13 @@ $exportSetoranExcelUrl = 'laporan/export_global.php?template=setoran&format=exce
             <strong><?= $reportUnitId === 0 ? 'Seluruh unit sekolah' : 'Unit ' . htmlspecialchars(unit_label(unit_active_id())) ?></strong>
             <span><?= $reportUnitId === 0 ? 'Ringkasan keuangan SD, SMP, dan SMA hari ini.' : 'Ringkasan keuangan unit operasional hari ini.' ?></span>
           </div>
-          <nav class="dashboard-scope-options" aria-label="Pilih cakupan rekap">
-            <?php if(unit_active_id() !== 0): ?><a href="dashboard.php?unit=active" onclick="unitSwitchReportScope({value:'active'});return false" class="dashboard-scope-option<?= $reportUnitId !== 0 ? ' is-selected' : '' ?>"<?= $reportUnitId !== 0 ? ' aria-current="page"' : '' ?>>Unit <?= htmlspecialchars(unit_label(unit_active_id())) ?></a><?php endif; ?>
-            <a href="dashboard.php?unit=all" onclick="unitSwitchReportScope({value:'all'});return false" class="dashboard-scope-option<?= $reportUnitId === 0 ? ' is-selected' : '' ?>"<?= $reportUnitId === 0 ? ' aria-current="page"' : '' ?>>Semua Unit</a>
-          </nav>
+          <form action="unit_switch.php" method="post" class="dashboard-scope-options dashboard-unit-switch-form" aria-label="Pilih cakupan rekap">
+            <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_unit_switch'], ENT_QUOTES, 'UTF-8') ?>">
+            <input type="hidden" name="next" value="<?= htmlspecialchars($_SERVER['SCRIPT_NAME'] ?? '/dashboard.php', ENT_QUOTES, 'UTF-8') ?>">
+            <?php foreach ([1 => 'SD', 2 => 'SMP', 3 => 'SMA', 0 => 'Semua Unit'] as $scopeId => $scopeLabel): ?>
+            <button type="submit" name="unit_id" value="<?= $scopeId ?>" class="dashboard-scope-option<?= $reportUnitId === $scopeId ? ' is-selected' : '' ?>" aria-pressed="<?= $reportUnitId === $scopeId ? 'true' : 'false' ?>"><?= $scopeLabel ?></button>
+            <?php endforeach; ?>
+          </form>
         </div>
         <?php endif; ?>
         <div class="dashboard-closing-hero">

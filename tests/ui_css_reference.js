@@ -1,4 +1,4 @@
-// Reference design, with only the retired SPP deposit selectors removed.
+// Reference design with retired selectors removed and explicitly approved UI adaptations.
 // Parsing selector branches preserves shared targets, pseudo classes and media rules.
 const path = require('node:path');
 const { execFileSync } = require('node:child_process');
@@ -63,6 +63,28 @@ function referenceCss() {
       vertical-align: middle;
       white-space: nowrap;
     }`);
+  });
+  // Approved four-button Dashboard scope control, including the mobile two-row layout.
+  root.walkRules('.dashboard-scope-card', rule => {
+    if (rule.parent.type === 'root') rule.nodes.find(node => node.prop === 'display').after({ prop: 'flex-wrap', value: 'wrap' });
+  });
+  root.walkRules('.dashboard-scope-options', rule => {
+    if (rule.parent.type === 'root') {
+      rule.nodes.find(node => node.prop === 'grid-template-columns').value = 'repeat(4, minmax(0, 1fr))';
+      const minimum = rule.nodes.find(node => node.prop === 'min-width');
+      minimum.value = '360px';
+      minimum.after({ prop: 'margin', value: '0' });
+    } else {
+      rule.append({ prop: 'grid-template-columns', value: 'repeat(2, minmax(0, 1fr))' });
+      rule.after('.dashboard-scope-option { min-height: 44px; }');
+    }
+  });
+  root.walkRules('.dashboard-scope-option', rule => {
+    if (rule.parent.type !== 'root') return;
+    rule.nodes.find(node => node.prop === 'border-radius').after({ prop: 'border', value: '0' });
+    rule.nodes.find(node => node.prop === 'border').after({ prop: 'background', value: 'transparent' });
+    rule.nodes.find(node => node.prop === 'font-size').after({ prop: 'font-family', value: 'inherit' });
+    rule.nodes.find(node => node.prop === 'white-space').after({ prop: 'cursor', value: 'pointer' });
   });
   return root.toString();
 }

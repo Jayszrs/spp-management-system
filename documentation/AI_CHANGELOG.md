@@ -13,6 +13,15 @@ File ini mencatat perubahan proyek secara reverse chronological. Baca [PROJECT_C
 - Jangan menghapus atau menulis ulang entri lama. Tambahkan entri koreksi bila diperlukan.
 - Perubahan implementasi dan entri changelog wajib masuk commit yang sama.
 
+## 2026-10-03 - Empat tombol akses cepat cakupan Dashboard
+
+- Aktor: Codex, implementasi rencana pemilik pada `main` di atas `f16d06d`.
+- Perilaku: kartu Cakupan Rekap menampilkan SD, SMP, SMA dan Semua Unit melalui formulir POST/CSRF ke endpoint pergantian unit yang sama dengan sidebar. Pilihan memperbarui sesi, rekap, palette dan sidebar, lalu kembali ke Dashboard tanpa query lama. URL baca `dashboard.php?unit=all` tetap tersedia tanpa mengubah sesi. Form khusus pemilih unit tetap dapat digunakan dalam mode baca gabungan.
+- Tampilan: empat tombol sejajar di desktop, dua baris di ponsel dengan target sentuh minimal 44px; pilihan aktif memakai warna tema unit. Acuan regresi CSS hanya mengizinkan perubahan komponen Dashboard ini selain penyesuaian sebelumnya.
+- Database/API/migrasi: tidak ada perubahan kontrak endpoint, skema atau data utama. Pengujian memakai clone baru `db_spp_audit_dashboard_scope_20261003`; fingerprint seluruh 32 tabel utama dan clone tetap sama setelah tes. Utama tetap 1.018 pembayaran/Rp577.145.000; data Tabungan termasuk dalam pembandingan fingerprint.
+- Verifikasi: `all_units_http_test.php` lulus untuk CSRF, role/sesi, penolakan tulis gabungan dan gate transaksi. `all_units_browser_test.js` lulus, termasuk Semua Unit → SD → SMP → SMA → Semua Unit, jumlah gabungan, tautan ekspor dan URL lama. Pemeriksaan langsung Chromium mencakup 24 kasus (empat cakupan × dua tema × viewport 1440/2560/390), susunan tombol, tidak ada overflow dan kesesuaian nominal/jumlah transaksi dengan query tabel sumber. Respons ekspor PDF preview/Excel empat cakupan, lint dua PHP, sintaks JS dan parser/acuan CSS lulus.
+- Bukti lokal: screenshot dan hasil pemeriksaan ada di `C:\laragon\backups\spp-management-system\dashboard_scope_20261003`. Pengambilan screenshot menonaktifkan transisi selama pengujian agar perubahan viewport selesai sebelum diukur. Backup dipertahankan; server dan clone khusus paket ini dibersihkan setelah identitas serta fingerprint diverifikasi.
+
 ## 2026-10-03 - Ukuran pill unit mengikuti Role Management
 
 - Aktor: Codex, implementasi permintaan pemilik pada `main` di atas `a84c6c6`.

@@ -146,7 +146,7 @@ document.addEventListener('DOMContentLoaded', function () {
   var main=document.querySelector('main');
   if(main){var note=document.createElement('div');note.className='alert alert-info';note.textContent='Semua Unit: tampilan baca. Pilih SD, SMP, atau SMA untuk transaksi atau perubahan data.';var content=main.querySelector('.page-content');if(content)content.prepend(note);else main.querySelector('.topbar')?.after(note)}
   document.querySelectorAll('form[method="post" i]').forEach(function(form){
-    if(form.classList.contains('sidebar-unit-form') || form.action.includes('logout.php'))return;
+    if(form.classList.contains('sidebar-unit-form') || form.classList.contains('dashboard-unit-switch-form') || form.action.includes('logout.php'))return;
     form.querySelectorAll('input,select,textarea,button').forEach(function(control){control.disabled=true});
     form.hidden=true;form.style.setProperty('display','none','important');
     var editor=form.closest('.master-modern-form');if(editor){editor.hidden=true;editor.style.setProperty('display','none','important')}

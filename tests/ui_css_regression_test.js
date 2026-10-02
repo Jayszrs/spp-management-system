@@ -17,7 +17,7 @@ function canonical(source) {
   const ast = cssTree.parse(source);
   return cssTree.generate(ast);
 }
-assert.equal(canonical(css), canonical(referenceCss()), 'All retained design rules must match 7647608 plus the logout button and compact unit pill adaptations');
+assert.equal(canonical(css), canonical(referenceCss()), 'All retained design rules must match 7647608 plus the approved logout, unit pill and Dashboard scope adaptations');
 assert.match(css, /data-palette="sma"/);
 assert.match(css, /data-palette="smp"/);
 assert.match(css, /\.savings-print/);

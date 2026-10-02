@@ -41,7 +41,23 @@ const ids=JSON.parse(fs.readFileSync(process.env.SPP_UI_IDS_FILE,'utf8'));
  await page.goto(new URL('/pembayaran/form.php',base).href);await Promise.all([page.waitForNavigation(),page.locator('#sidebar-unit-select').selectOption('2')]);assert.equal(await page.locator('#form-bayar').count(),1);
  await page.locator('#du-selector-trigger').click();assert.equal(await page.locator('#du-selector-menu').isVisible(),true);
  await page.goto(new URL('/dashboard.php',base).href);
- await Promise.all([page.waitForNavigation(),page.locator('.dashboard-scope-option',{hasText:'Semua Unit'}).click()]);
- assert.equal(await page.locator('#sidebar-unit-select').inputValue(),'0','Dashboard scope did not persist');
- assert.deepEqual(errors,[]);console.log('OK: all-unit persistence, read-only controls, explicit transaction choice, receipts/books and DU dropdown');
+ const scopeTotals={};
+ for(const unit of [0,1,2,3,0]){
+  assert.deepEqual(await page.locator('.dashboard-scope-option').evaluateAll(buttons=>buttons.map(b=>b.value)),['1','2','3','0']);
+  const button=page.locator('.dashboard-scope-option[value="'+unit+'"]');assert.equal(await button.isEnabled(),true);
+  await Promise.all([page.waitForNavigation(),button.click()]);
+  assert.equal(new URL(page.url()).search,'','Scope switch must clear the old query');
+  assert.equal(await page.locator('#sidebar-unit-select').inputValue(),String(unit),'Dashboard scope did not persist');
+  assert.equal(await page.locator('.dashboard-scope-option[aria-pressed="true"]').count(),1);
+  assert.equal(await page.locator('.dashboard-scope-option.is-selected').getAttribute('value'),String(unit));
+  assert.equal(await page.locator('html').getAttribute('data-palette'),{0:'super',1:'sd',2:'smp',3:'sma'}[unit]);
+  scopeTotals[unit]=await page.locator('.dashboard-mini-stat strong').evaluateAll(nodes=>nodes.map(n=>Number(n.textContent.replace(/\D/g,''))));
+  for(const exportLink of await page.locator('.dashboard-action-strip a[href*="export_global.php"]').evaluateAll(nodes=>nodes.map(n=>n.href))){assert.equal(new URL(exportLink).searchParams.get('unit'),unit===0?'all':'active');}
+ }
+ for(let component=0;component<3;component++){assert.equal(scopeTotals[0][component],[1,2,3].reduce((sum,unit)=>sum+scopeTotals[unit][component],0),'Combined Dashboard total differs from its units');}
+ await page.goto(new URL('/dashboard.php?unit=all',base).href);
+ await Promise.all([page.waitForNavigation(),page.locator('.dashboard-scope-option[value="2"]').click()]);
+ assert.equal(new URL(page.url()).search,'');assert.equal(await page.locator('#sidebar-unit-select').inputValue(),'2');
+ await page.goto(new URL('/dashboard.php?unit=all',base).href);assert.equal(await page.locator('.dashboard-scope-option.is-selected').getAttribute('value'),'0');assert.equal(await page.locator('#sidebar-unit-select').inputValue(),'2','Legacy read URL must not mutate the session');
+ assert.deepEqual(errors,[]);console.log('OK: all-unit persistence, Dashboard four-unit switches/totals/exports/legacy URL, read-only controls, explicit transaction choice, receipts/books and DU dropdown');
 }finally{await browser.close()}})().catch(e=>{console.error(e.stack);process.exitCode=1});
