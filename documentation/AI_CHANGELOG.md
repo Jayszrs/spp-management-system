@@ -13,6 +13,14 @@ File ini mencatat perubahan proyek secara reverse chronological. Baca [PROJECT_C
 - Jangan menghapus atau menulis ulang entri lama. Tambahkan entri koreksi bila diperlukan.
 - Perubahan implementasi dan entri changelog wajib masuk commit yang sama.
 
+## 2026-10-03 - Ukuran pill unit mengikuti Role Management
+
+- Aktor: Codex, implementasi permintaan pemilik pada `main` di atas `a84c6c6`.
+- Perilaku: badge SD/SMP/SMA dari `unit_record_badge()` memakai kelas khusus dengan lebar mengikuti teks, padding 5px/10px, font 13px dan pembulatan seperti pill Unit Role Management. Warna badge data tetap memakai warna sebelumnya; pill kelas dan tema unit tetap sama. Selector khusus juga mencegah gaya teks sekunder Riwayat Tabungan mengecilkan badge.
+- Database/migrasi/kompatibilitas: tidak ada perubahan skema, API bisnis atau data. Sampel HTML halaman dibaca dalam transaksi database read-only lalu di-rollback; tidak ada transaksi pembayaran atau Tabungan yang ditulis.
+- Verifikasi: lint PHP helper, parser CSS dan pembandingan seluruh aturan desain terhadap acuan dengan satu tambahan gaya pill, serta pemeriksaan sintaks dua JS terkait lulus. Chromium memeriksa 36 kasus render HTML aktual (delapan halaman dan halaman kedua Daftar Ulang, dua tema, viewport 1440/390). Dimensi SD/SMP/SMA cocok dengan pill Role Management; ukuran/warna/font pill kelas tetap sama. Screenshot sebelum/sesudah desktop/ponsel terang/gelap diperiksa. Artefak lokal ada di `C:\laragon\backups\spp-management-system\unit_pill_20261003`.
+- Catatan: pemeriksaan browser memakai snapshot HTML dengan skrip aplikasi dinonaktifkan; paket ini mengubah ukuran badge dan tidak mengulang pengujian alur transaksi. Acuan regresi CSS hanya menambahkan aturan badge khusus; aturan desain lainnya tetap diperiksa penuh.
+
 ## 2026-10-03 - Semua Unit untuk baca data dan rekap
 
 - Aktor: Codex, implementasi rencana pemilik pada `main` di atas `c8f5ac9`.

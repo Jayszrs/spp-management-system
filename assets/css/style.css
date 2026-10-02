@@ -11673,6 +11673,20 @@ html body .report-template-shell .report-global-filter-form.report-filter-tungga
 .account-unit-filter label { color: var(--text-secondary); font-weight: 700; }
 .account-unit-filter select { width: min(240px, 100%); }
 .unit-pill { display: inline-block; padding: 5px 10px; border-radius: 999px; background: var(--accent-glow); color: var(--accent); font-weight: 800; }
+span.unit-record-pill {
+  display: inline-block;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: rgba(245, 158, 11, .10);
+  box-shadow: inset 0 0 0 1px rgba(245, 158, 11, .25);
+  color: var(--orange);
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.6;
+  vertical-align: middle;
+  white-space: nowrap;
+}
 .account-activate-form { margin: 0; }
 .topbar-unit {
   display: inline-flex; align-items: center; gap: 7px; max-width: 220px; min-width: 0;

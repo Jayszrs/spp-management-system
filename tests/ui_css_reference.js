@@ -47,6 +47,23 @@ function referenceCss() {
       rule.append({ prop, value });
     }
   });
+  // Approved compact unit badges: Role Management dimensions, existing data badge colors.
+  root.walkRules('.unit-pill', rule => {
+    rule.after(`span.unit-record-pill {
+      display: inline-block;
+      padding: 5px 10px;
+      border-radius: 999px;
+      background: rgba(245, 158, 11, .10);
+      box-shadow: inset 0 0 0 1px rgba(245, 158, 11, .25);
+      color: var(--orange);
+      font-family: 'Inter', system-ui, sans-serif;
+      font-size: 13px;
+      font-weight: 800;
+      line-height: 1.6;
+      vertical-align: middle;
+      white-space: nowrap;
+    }`);
+  });
   return root.toString();
 }
 

@@ -160,5 +160,5 @@ function unit_record_badge(array $row): string {
         if($students===null){$students=[];foreach($GLOBALS['koneksi']->query('SELECT NO_INDUK,unit_id FROM siswa')->fetch_all(MYSQLI_ASSOC) as $s)$students[$s['NO_INDUK']]=(int)$s['unit_id'];}
         $unitId=$students[$row['NO_INDUK']??$row['no_induk']??$row['nis']??'']??0;
     }
-    return $unitId>0?'<span class="kelas-badge" data-unit="'.$unitId.'">'.unit_label($unitId).'</span> ':'';
+    return $unitId>0?'<span class="unit-record-pill" data-unit="'.$unitId.'">'.unit_label($unitId).'</span> ':'';
 }
