@@ -1,6 +1,6 @@
 # Reset Baseline Demo
 
-Reset ini hanya untuk **clone disposable** bernama `db_spp_audit_*` atau `db_spp_test_*`. Skrip menghapus siswa, pembayaran, tagihan, tabungan, titipan SPP, dan audit terkait. Akun operator, Master Kelas, Master Biaya Lain, dan struktur database dipertahankan. Jangan gunakan pada database sekolah, termasuk `db_spp` atau database Railway yang aktif.
+Reset ini hanya untuk **clone disposable** bernama `db_spp_audit_*` atau `db_spp_test_*`. Skrip menghapus siswa, pembayaran, tagihan, tabungan dan audit terkait. Akun operator, Master Kelas, Master Biaya Lain, dan struktur database dipertahankan. Jangan gunakan pada database sekolah, termasuk `db_spp` atau database Railway yang aktif.
 
 Sebelum menjalankan, buat clone dari backup yang sesuai dan pastikan nama target pada koneksi. Jalankan dari CLI dengan `SPP_DB_NAME` eksplisit dan `SPP_TEST_ALLOW_MUTATION=1`:
 
@@ -11,10 +11,10 @@ php sql/run_legacy_sql.php --script=reset_demo_students_and_finance.sql --apply 
 php sql/run_legacy_sql.php --script=seed_students_psb.sql --apply --confirm-script=seed_students_psb.sql
 ```
 
-Periksa hasil: 150 siswa aktif, 144 reguler, 6 PSB, 30 siswa dengan sisa Pangkal, 1.728 tagihan SPP, 1.728 tagihan Komite, 144 tagihan Daftar Ulang, dan nol pembayaran/mutasi/titipan. Untuk data laporan demo, jalankan hanya jika pembayaran masih nol:
+Periksa hasil: 150 siswa aktif, 144 reguler, 6 PSB, 30 siswa dengan sisa Pangkal, 1.728 tagihan SPP, 1.728 tagihan Komite, 144 tagihan Daftar Ulang, dan nol pembayaran dan mutasi. Untuk data laporan demo, jalankan hanya jika pembayaran masih nol:
 
 ```powershell
 php sql/run_legacy_sql.php --script=seed_demo_payments.sql --apply --confirm-script=seed_demo_payments.sql
 ```
 
-Hasilnya harus 1.000 pembayaran tanpa mutasi Tabungan. Jika clone pernah menerima transaksi baru, buat ulang clone lalu ulangi urutan dari awal. Jalur `sql/*.sql` lama sengaja menolak impor langsung; jangan impor berkas `sql/definitions/` secara manual. Daftar dan kategori semua skrip lama ada di [operasi SQL legacy](LEGACY_SQL_OPERATIONS.md).
+Hasilnya harus 988 pembayaran tanpa mutasi Tabungan. Jika clone pernah menerima transaksi baru, buat ulang clone lalu ulangi urutan dari awal. Jalur `sql/*.sql` lama sengaja menolak impor langsung; jangan impor berkas `sql/definitions/` secara manual. Daftar dan kategori semua skrip lama ada di [operasi SQL legacy](LEGACY_SQL_OPERATIONS.md).

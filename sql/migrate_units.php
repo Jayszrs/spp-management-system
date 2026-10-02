@@ -22,7 +22,7 @@ function unit_migration_table(mysqli $db, string $name): ?string {
 $tables = [
     'master_kelas','siswa','siswa_audit_log','bayar','transaksi_otorisasi',
     'bayar_spp_periode','master_spp_tahun','master_spp_tarif','tagihan_spp',
-    'spp_alokasi_batch','spp_alokasi','titipan_spp_mutasi','spp_audit_log',
+    'spp_alokasi_batch','spp_alokasi','spp_audit_log',
     'master_biaya_lain','tagihan_biaya_lain','tagihan_biaya_lain_audit_log',
     'bayar_biaya_lain','tahun_ajaran','siswa_tahun_ajaran','tagihan_komite',
     'bayar_komite','daftar_ulang','tagihan_daftar_ulang','daftar_ulang_audit_log',

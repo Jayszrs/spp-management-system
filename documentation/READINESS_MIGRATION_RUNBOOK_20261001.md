@@ -1,3 +1,48 @@
+# Runbook terkini ? penghapusan Titipan SPP, 2 Oktober 2026
+
+## Hasil lokal
+
+Pembersihan dummy `db_spp` telah diterapkan atas otorisasi pemilik. Aplikasi kembali terbuka, HTTP health 200 `ok`, URL Titipan SPP lama 404. Utama: **222 siswa, 1.018 pembayaran, Rp577.145.000 penerimaan**, Tabungan **12 rekening/Rp1.050.000**, 12 jurnal masuk/6 keluar. Tabel lain dan pembayaran/alokasi biasa memiliki fingerprint sama. Skema: 61 FK, 18 CHECK/dua trigger, 14 invariant bersih. Rincian bukti ada di [audit terkini](READINESS_AUDIT_20261001.md).
+
+Backup pra-penerapan yang sudah dipulihkan dan diuji:
+`C:\laragon\backups\spp-management-system\db_spp_before_remove_spp_deposit_final_20261002_182220.sql`
+SHA-256 `254E17AD132E380576BF5D30E1F97B6AB07B08D486B1F7F53D58A23447CF95DA`.
+Backup pertama 17:48 tetap disimpan; hash `813954DDFD4E19463AAB29A6EADA24F8C41D8E912020F378DA6B85E164698226`.
+
+## Kontrak migrasi CLI
+
+`php sql/remove_spp_deposit.php` adalah pemeriksaan baca saja. `--apply` memerlukan gate clone/flag atau gate utama/backup baru. Skrip mengharapkan **data dummy yang tepat telah diaudit**, yaitu 19 header/batch/mutasi senilai Rp2.475.000 dengan fingerprint terpasang. Jangan menggunakannya untuk menghapus saldo sekolah lain secara otomatis. Jika baseline/fingerprint/relasi berbeda, hentikan dan audit target baru.
+
+Skrip menolak titipan terpakai, header campuran, antrean pending, relasi belum dipetakan, perubahan data audit atau skema parsial. Data dibersihkan dalam transaksi; DDL MySQL dilakukan sesudah commit dengan tahap tercatat. Semua tabel lain, pembayaran/alokasi langsung serta Tabungan diverifikasi melalui fingerprint. Instalasi baru tidak membuat fitur titipan; nama legacy `add_spp_billing_and_deposit.sql` kini hanya definisi billing langsung.
+
+## Penerapan terkontrol pada target yang sesuai
+
+1. Audit database dan identitas service. Buat dump baru di luar repo dengan `--single-transaction --routines --triggers --result-file`, verifikasi hash/ukuran; backup gate utama maksimal satu jam.
+2. Pulihkan backup ke clone bernama `db_spp_audit_*`, dengan `SPP_TEST_ALLOW_MUTATION=1`. Jalankan pemeriksaan, `--apply`, rerun, integritas/skema dan regresi. `tests/remove_spp_deposit_migration_test.php` menerima path backup terverifikasi melalui `SPP_TEST_RETIREMENT_BACKUP`, `SPP_TEST_RETIREMENT_BACKUP_SHA256`, serta `SPP_TEST_MYSQL_BIN`.
+3. Khusus aplikasi Laragon ini, tulis marker `tmp/financial_migration.lock` dengan isi `remove_spp_deposit_20261002` setelah memastikan tidak ada transaksi HTTP yang masih berjalan. `koneksi.php` memblokir HTTP `db_spp` dengan 503; clone/CLI dan proyek lain tetap tersedia. Di target lain, siapkan blokir penulisan yang setara dan otorisasi tersendiri.
+4. Dengan otorisasi pemilik dan `SPP_DB_NAME=db_spp`, jalankan:
+
+   ```powershell
+   $env:SPP_ALLOW_MAIN_MIGRATION = '1'
+   php sql/remove_spp_deposit.php --apply --confirm-main=db_spp --backup-file=C:\path\backup-baru.sql
+   ```
+
+5. Simpan output setiap tahap di luar Git. Setelah sukses, jalankan `tests/readiness_integrity_audit.php`, `sql/audit_foreign_keys.php`, `sql/restore_multiunit_checks.php`, `health.php`, dan audit penghapusan tanpa `--apply`. Bandingkan count/penerimaan serta fingerprint Tabungan dengan sebelum migrasi.
+6. Hapus hanya marker milik migrasi ini setelah semua pemeriksaan lulus. Periksa health HTTP, URL lama 404 dan aplikasi dapat dibuka. Hentikan server/clone latihan yang identitasnya telah diperiksa; pertahankan backup.
+
+## Pemulihan bila gagal
+
+- Kegagalan preflight terjadi sebelum commit: rollback mempertahankan data, jangan memaksa menghapus.
+- Jika muncul `DATA_COMMITTED` lalu error DDL/verifikasi: **pertahankan maintenance**. DDL tidak di-rollback bersama data. Jangan meneruskan memakai schema setengah berubah.
+- Pulihkan dump penuh yang sudah diuji pada identitas database yang benar; terapkan versi aplikasi sebelum penghapusan (`ec3db42`) bersama skema lama. Pulihkan melalui prosedur DBA untuk target yang disetujui, bukan reset demo. Verifikasi baseline lama 1.037/Rp579.620.000, Tabungan dan health sebelum membuka penulisan.
+- Tes clone membuktikan restore setelah kegagalan yang disuntikkan sesudah commit data. Rerun pada skema bersih hanya melaporkan sudah bersih; skema parsial memerlukan restore terlebih dahulu.
+
+Deployment server lain belum dianggap siap hanya karena Laragon lulus. Pada instalasi kosong gunakan bootstrap schema baru; jangan impor schema fresh ke database lama.
+
+## Arsip sebelum penghapusan Titipan SPP
+
+> Seluruh bagian di bawah merupakan bukti historis sebelum pembersihan. Baseline, jumlah constraint, fitur titipan dan keputusan saat itu tidak menggantikan status terbaru di atas.
+
 # Runbook dan catatan penerapan skema kesiapan operasional
 
 **Status 2 Oktober 2026: migrasi skema lokal `db_spp` telah dijalankan setelah pemilik mengizinkan perubahan pada database dummy ini.** Dokumen ini mencatat urutan dan hasil penerapan; perintah `--apply` tidak perlu diulang untuk keadaan yang sudah cocok. DDL MySQL melakukan commit implisit. Pengujian target deployment, pemulihan layanan, dan keputusan siap operasional masih memerlukan pemeriksaan tersendiri.

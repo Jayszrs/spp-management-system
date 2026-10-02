@@ -448,7 +448,7 @@ FROM (
   UNION ALL
   SELECT 'siswa.potongan_spp_persen', EXISTS(SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='siswa' AND COLUMN_NAME='potongan_spp_persen')
   UNION ALL
-  SELECT 'bayar.U_TITIPAN_SPP', EXISTS(SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='bayar' AND COLUMN_NAME='U_TITIPAN_SPP')
+  SELECT 'retired_spp_deposit_absent', NOT EXISTS(SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND COLUMN_NAME IN ('U_TITIPAN_SPP','gunakan_titipan','titipan_digunakan','titipan_baru','nominal_dari_titipan')) AND NOT EXISTS(SELECT 1 FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME LIKE 'titipan_spp_mutasi%')
   UNION ALL
   SELECT 'table.master_spp_tahun', EXISTS(SELECT 1 FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='master_spp_tahun')
   UNION ALL
@@ -459,8 +459,6 @@ FROM (
   SELECT 'table.spp_alokasi_batch', EXISTS(SELECT 1 FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='spp_alokasi_batch')
   UNION ALL
   SELECT 'table.spp_alokasi', EXISTS(SELECT 1 FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='spp_alokasi')
-  UNION ALL
-  SELECT 'table.titipan_spp_mutasi', EXISTS(SELECT 1 FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='titipan_spp_mutasi')
   UNION ALL
   SELECT 'table.spp_audit_log', EXISTS(SELECT 1 FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='spp_audit_log')
   UNION ALL

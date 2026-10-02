@@ -30,7 +30,7 @@ $key = bin2hex(random_bytes(16));
 $db->begin_transaction();
 try {
     $stmt = $db->prepare("INSERT INTO keuangan_request(request_key,unit_id,aksi,operator_id)
-        VALUES(?,1,'titipan_pengembalian',1)");
+        VALUES(?,1,'tabungan_masuk',1)");
     $stmt->bind_param('s', $key);
     $stmt->execute();
     $stmt->close();

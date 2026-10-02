@@ -22,7 +22,7 @@ function financial_request_assert_ready(mysqli $db): void {
     $expected = [
         'request_key' => ['char(32)', 'NO'],
         'unit_id' => ['tinyint unsigned', 'NO'],
-        'aksi' => ["enum('pembayaran','tabungan_masuk','tabungan_keluar','titipan_pengembalian')", 'NO'],
+        'aksi' => ["enum('pembayaran','tabungan_masuk','tabungan_keluar')", 'NO'],
         'operator_id' => ['int', 'NO'],
         'referensi_id' => ['bigint', 'YES'],
         'dibuat_pada' => ['timestamp', 'NO'],
@@ -66,7 +66,7 @@ function financial_request_reserve(mysqli $db, string $key, string $action, int 
     if (!preg_match('/^[a-f0-9]{32}$/D', $key)) {
         throw new RuntimeException('Formulir transaksi kedaluwarsa. Muat ulang halaman dan coba lagi.');
     }
-    if (!in_array($action, ['pembayaran', 'tabungan_masuk', 'tabungan_keluar', 'titipan_pengembalian'], true) || $actorId <= 0) {
+    if (!in_array($action, ['pembayaran', 'tabungan_masuk', 'tabungan_keluar'], true) || $actorId <= 0) {
         throw new RuntimeException('Identitas transaksi tidak valid.');
     }
     financial_request_assert_ready($db);

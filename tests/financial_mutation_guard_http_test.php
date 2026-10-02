@@ -80,12 +80,6 @@ function guard_bill_paid(mysqli $db, int $billId): float {
     $paid = (float)$stmt->get_result()->fetch_assoc()['paid']; $stmt->close();
     return $paid;
 }
-function guard_titipan_balance(mysqli $db, string $nis): float {
-    $stmt = $db->prepare("SELECT COALESCE(SUM(CASE WHEN jenis IN ('masuk','koreksi_masuk') THEN nominal ELSE -nominal END),0) saldo FROM titipan_spp_mutasi WHERE no_induk=?");
-    $stmt->bind_param('s', $nis); $stmt->execute();
-    $saldo = (float)$stmt->get_result()->fetch_assoc()['saldo']; $stmt->close();
-    return $saldo;
-}
 function guard_parallel(array $requests): array {
     $multi = curl_multi_init(); $handles = [];
     foreach ($requests as $request) {
@@ -245,25 +239,6 @@ try {
     guard_assert(guard_count($koneksi, 'transaksi_k', $nis) === $beforeWithdrawals + 1 && guard_balance($koneksi, $nis) === 100000.0,
         'Dua kasir menarik dana melebihi saldo.');
 
-    $kind = 'masuk'; $date = date('Y-m-d H:i:s'); $method = 'Tunai'; $operator = '1'; $note = 'Saldo untuk uji pengembalian'; $deposit = 500000.0;
-    $stmt = $koneksi->prepare('INSERT INTO titipan_spp_mutasi(no_induk,jenis,nominal,tanggal,sistem_pembayaran,user_id,keterangan) VALUES(?,?,?,?,?,?,?)');
-    $stmt->bind_param('ssdssss', $nis, $kind, $deposit, $date, $method, $operator, $note); $stmt->execute(); $stmt->close();
-    $refundData = ['no_induk'=>$nis, 'nominal'=>'100000', 'metode'=>'Tunai', 'keterangan'=>'Uji pengembalian'];
-    $refundForm = guard_form($base, '/pembayaran/titipan_spp.php', $first); $keys[] = $refundForm['request_key'];
-    guard_http($base . '/pembayaran/titipan_spp.php', $refundData + ['request_key'=>$refundForm['request_key']], $first);
-    guard_assert(guard_titipan_balance($koneksi, $nis) === 500000.0, 'Pengembalian tanpa CSRF mengubah saldo.');
-    guard_http($base . '/pembayaran/titipan_spp.php', $refundData + $refundForm, $first);
-    guard_http($base . '/pembayaran/titipan_spp.php', $refundData + $refundForm, $first);
-    guard_assert(guard_titipan_balance($koneksi, $nis) === 400000.0, 'Replay pengembalian menggandakan kas keluar.');
-    $refundA = guard_form($base, '/pembayaran/titipan_spp.php', $first);
-    $refundB = guard_form($secondBase, '/pembayaran/titipan_spp.php', $second);
-    $keys[] = $refundA['request_key']; $keys[] = $refundB['request_key'];
-    $refundData['nominal'] = '300000';
-    $refundPair = guard_parallel([
-        [$base . '/pembayaran/titipan_spp.php', $refundData + $refundA, $first],
-        [$secondBase . '/pembayaran/titipan_spp.php', $refundData + $refundB, $second],
-    ]);
-    guard_assert(guard_titipan_balance($koneksi, $nis) === 100000.0, 'Dua kasir menarik Titipan SPP melebihi saldo: ' . json_encode($refundPair));
 } catch (Throwable $error) {
     $failure = $error;
 } finally {
@@ -272,7 +247,6 @@ try {
         $stmt->bind_param('s', $key); $stmt->execute(); $stmt->close();
     }
     $stmt = $koneksi->prepare('DELETE FROM spp_audit_log WHERE no_induk=?'); $stmt->bind_param('s',$nis); $stmt->execute(); $stmt->close();
-    $stmt = $koneksi->prepare('DELETE FROM titipan_spp_mutasi WHERE no_induk=?'); $stmt->bind_param('s',$nis); $stmt->execute(); $stmt->close();
     $stmt = $koneksi->prepare('DELETE FROM bayar_biaya_lain WHERE tagihan_biaya_lain_id=?'); $stmt->bind_param('i',$billId); $stmt->execute(); $stmt->close();
     $stmt = $koneksi->prepare('DELETE FROM bayar WHERE NO_INDUK=?'); $stmt->bind_param('s',$nis); $stmt->execute(); $stmt->close();
     $stmt = $koneksi->prepare('DELETE FROM tagihan_biaya_lain WHERE id=?'); $stmt->bind_param('i',$billId); $stmt->execute(); $stmt->close();

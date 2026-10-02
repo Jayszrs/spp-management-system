@@ -68,7 +68,7 @@ $stmt = $koneksi->prepare("
     SELECT s.NO_INDUK, s.NO_induk_diknas, s.NAMA,
            COALESCE(NULLIF(b.kelas_rombel_snapshot,''),NULLIF(b.KELAS,''),s.KELAS) AS KELAS,
            b.BULAN, b.TAHUN,
-           b.U_PANGKAL, b.U_PSB, b.U_SPP, b.U_TITIPAN_SPP, b.U_KOMITE,
+           b.U_PANGKAL, b.U_PSB, b.U_SPP, b.U_KOMITE,
            b.sistem_pembayaran, b.total_jumlah, b.TGL_BYR
     FROM bayar b JOIN siswa s ON s.NO_INDUK = b.NO_INDUK
     WHERE b.TGL_BYR >= ? AND b.TGL_BYR < ? $studentWhere
@@ -81,7 +81,7 @@ $stmt->close();
 
 $stmtKomponen = $koneksi->prepare("
     SELECT SUM(U_PANGKAL) AS pangkal, SUM(U_PSB) AS psb,
-           SUM(U_SPP) AS spp, SUM(U_TITIPAN_SPP) AS titipan_spp,
+           SUM(U_SPP) AS spp,
            SUM(U_KOMITE) AS komite, SUM(potong_spp) AS potongan_spp
     FROM bayar b JOIN siswa s ON s.NO_INDUK = b.NO_INDUK
     WHERE b.TGL_BYR >= ? AND b.TGL_BYR < ? $studentWhere
@@ -94,7 +94,7 @@ $stmtKomponen->close();
 $komponen_rows = [];
 $komponenMap = [
     'Uang Pangkal' => 'pangkal', 'Uang PSB' => 'psb',
-    'Uang SPP' => 'spp', 'Titipan SPP' => 'titipan_spp', 'Uang Komite' => 'komite'
+    'Uang SPP' => 'spp', 'Uang Komite' => 'komite'
 ];
 foreach ($komponenMap as $nama => $key) {
     if ((float)($komponenTetap[$key] ?? 0) > 0) {

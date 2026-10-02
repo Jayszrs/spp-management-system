@@ -55,7 +55,6 @@ function transaction_authorization_snapshot(mysqli $db, int $paymentId): array
         'bayar_komite' => ['bayar_id', 'id'],
         'bayar_spp_periode' => ['bayar_id', 'bayar_id'],
         'spp_alokasi_batch' => ['bayar_id', 'id'],
-        'titipan_spp_mutasi' => ['bayar_id', 'id'],
         'transaksi_m' => ['bayar_id', 'id'],
     ];
     foreach ($relations as $table => [$column, $order]) {
@@ -93,7 +92,7 @@ function transaction_authorization_payload(array $source, string $action): array
         'uang_pangkal','uang_psb','uang_spp','uang_komite','uang_du','potongan_spp',
         'tabungan_wajib','total_jumlah','catatan','kelas_du','tahun_ajaran_du',
         'tagihan_daftar_ulang_id','du_expected_total','du_expected_paid',
-        'gunakan_titipan_spp','spp_action',
+
     ];
     $payload = ['aksi' => 'update'];
     foreach ($allowed as $key) {

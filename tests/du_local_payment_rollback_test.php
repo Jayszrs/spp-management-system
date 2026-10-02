@@ -83,7 +83,7 @@ function du_local_run_case(mysqli $db, array $candidate, bool $withMonthly,
 
         $paymentId = du_local_insert_header($db, $nis, $kelas, $month, $year, $du, $spp, $komite);
         if ($spp > 0) {
-            spp_allocate_payment($db, $nis, $paymentId, $month, $year, $spp, false,
+            spp_allocate_payment($db, $nis, $paymentId, $month, $year, $spp,
                 date('Y-m-d H:i:s'), 'Tunai', 'UJI-ROLLBACK');
         }
         komite_save_payment($db, $paymentId, $komiteBill, $komite);

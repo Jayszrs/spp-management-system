@@ -33,7 +33,7 @@ function race_http(string $url, ?array $data, array &$cookies): array {
 function race_form(string $base, array &$cookies): array {
     $page = race_http($base . '/pembayaran/form.php', null, $cookies);
     race_assert($page['status'] === 200, 'Cashier form unavailable.');
-    $form = spp_test_form_scope($page['body'], 'spp_action');
+    $form = spp_test_form_scope($page['body'], 'no_induk');
     race_assert(preg_match('/name="csrf_token" value="([a-f0-9]{64})"/', $form, $csrf) === 1
         && preg_match('/name="request_key" value="([a-f0-9]{32})"/', $form, $key) === 1, 'Form guards missing.');
     return ['csrf_token' => $csrf[1], 'request_key' => $key[1]];
@@ -145,7 +145,7 @@ try {
     }
     $totals = $koneksi->query("SELECT SUM(U_SPP) spp,SUM(U_KOMITE) komite,SUM(total_jumlah) cash FROM bayar WHERE NO_INDUK IN ('{$nis}','{$komiteNis}')")->fetch_assoc();
     $du = (float)$koneksi->query("SELECT SUM(jumlah) FROM bayar_du WHERE no_induk='{$nis}'")->fetch_row()[0];
-    $allocation = (float)$koneksi->query("SELECT SUM(a.nominal_dari_bayar+a.nominal_dari_titipan) FROM spp_alokasi a JOIN spp_alokasi_batch b ON b.id=a.batch_id WHERE b.no_induk='{$nis}' AND b.status='active'")->fetch_row()[0];
+    $allocation = (float)$koneksi->query("SELECT SUM(a.nominal_dari_bayar) FROM spp_alokasi a JOIN spp_alokasi_batch b ON b.id=a.batch_id WHERE b.no_induk='{$nis}' AND b.status='active'")->fetch_row()[0];
     race_assert((float)$totals['spp'] === 250000.0 && (float)$totals['komite'] === 30000.0
         && $du === 600000.0 && $allocation === 250000.0 && (float)$totals['cash'] === 880000.0,
         'Header, component details, and allocations differ after concurrent requests.');

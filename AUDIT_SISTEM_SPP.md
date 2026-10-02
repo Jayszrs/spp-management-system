@@ -1,3 +1,5 @@
+> **Pembaruan 2 Oktober 2026:** Titipan SPP telah dihapus dari aplikasi dan database dummy lokal. Penyebutan/pengujian titipan di dokumen ini adalah bukti historis. Aturan pembayaran dan baseline terkini mengikuti [audit kesiapan](documentation/READINESS_AUDIT_20261001.md). Tabungan tetap dipertahankan.
+
 # Audit dan Baseline SistemSPP
 
 > **Pembaruan 2 Oktober 2026:** migrasi lokal sudah terpasang dengan izin pemilik. Temuan lanjutan dan regresi lintas SD/SMP/SMA telah dituntaskan pada clone; status lokal **siap terbatas dengan syarat**. [Audit kesiapan terkini](documentation/READINESS_AUDIT_20261001.md) adalah rujukan status; seluruh pernyataan/baseline bertanggal sebelumnya di bawah adalah bukti historis, termasuk migrasi yang ketika itu belum diterapkan dan aturan Komite yang disederhanakan. Komite mandiri kini dijelaskan dengan prasyarat SPP pada audit/konteks terbaru.

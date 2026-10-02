@@ -46,7 +46,6 @@ try {
         $components = [];
         $map = [
             'U_SPP' => 'SPP',
-            'U_TITIPAN_SPP' => 'Titipan SPP',
             'U_PANGKAL' => 'Pangkal',
             'U_PSB' => 'PSB',
             'U_KOMITE' => 'Komite (' . (report_months()[report_month_code((string)$payment['BULAN'])] ?? (string)$payment['BULAN']) . ' ' . $payment['TAHUN'] . ')',

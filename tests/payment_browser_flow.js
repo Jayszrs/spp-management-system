@@ -148,44 +148,19 @@ async function submit(page, button = '#btn-input') {
     await openForm(page);
     await student(page, 'BROWSER BAYAR TUNGGAKAN', '9988111001');
     await period(page, '08');
-    await page.locator('#spp-record-deposit-button').click();
-    assert.equal(await page.locator('#spp-action').inputValue(), 'titipan');
-    await fillMoney(page, '#spp-input', 100000);
-    await page.locator('#btn-input').click();
-    await page.locator('#spp-warning-overlay.show').waitFor({ state: 'visible' });
-    assert.match(await page.locator('#spp-warning-message').innerText(), /titipan/i);
-    await Promise.all([
-      page.waitForNavigation({ waitUntil: 'domcontentloaded' }),
-      page.locator('#spp-warning-close').click(),
-    ]);
-    assert.equal(state().payments.length, 2, 'Explicit SPP deposit was not saved.');
-    assert.equal(Number(state().deposit_balance), 100000);
-    await page.goto(new URL(`/pembayaran/edit.php?id=${state().payments[1].id}`, base).href);
-    assert.equal(await page.locator('#spp-action').inputValue(), 'titipan');
-    assert.equal(await page.locator('#gunakan-titipan-spp').inputValue(), '0');
-
-    await openForm(page);
-    await student(page, 'BROWSER BAYAR TUNGGAKAN', '9988111001');
-    await period(page, '08');
+    assert.equal(await page.locator('#spp-record-deposit-button, #spp-use-deposit-button').count(), 0);
     await fillMoney(page, '#komite-input', 100000);
-    await fillMoney(page, '#spp-input', 150000);
-    await page.locator('#spp-use-deposit-button').click();
-    await page.locator('#spp-deposit-modal:not([hidden])').waitFor({ state: 'visible' });
-    assert.match(await page.locator('#spp-deposit-modal-summary').innerText(), /Titipan terpakai Rp 100\.000/);
-    await page.locator('#spp-deposit-confirm').click();
-    assert.equal(await page.locator('#gunakan-titipan-spp').inputValue(), '1');
-    assert.equal(Number(await page.locator('#hidden-total').inputValue()), 250000);
+    await fillMoney(page, '#spp-input', 250000);
+    assert.equal(Number(await page.locator('#hidden-total').inputValue()), 350000);
     await submit(page);
-    assert.equal(state().payments.length, 3, 'August payment using deposit was not saved.');
-    assert.equal(Number(state().deposit_balance), 0);
-    await page.goto(new URL(`/pembayaran/edit.php?id=${state().payments[2].id}`, base).href);
-    assert.equal(await page.locator('#spp-action').inputValue(), 'bayar');
-    assert.equal(await page.locator('#gunakan-titipan-spp').inputValue(), '1');
+    assert.equal(state().payments.length, 2, 'August direct payment was not saved.');
+    await page.goto(new URL(`/pembayaran/edit.php?id=${state().payments[1].id}`, base).href);
+    assert.equal(await page.locator('#gunakan-titipan-spp').count(), 0);
 
-    await page.goto(new URL(`/laporan/cetak_struk.php?id=${state().payments[2].id}`, base).href);
+    await page.goto(new URL(`/laporan/cetak_struk.php?id=${state().payments[1].id}`, base).href);
     assert.match(await page.locator('body').innerText(), /SPP Agustus 2026/);
     assert.deepEqual(errors, [], `Browser JavaScript errors: ${errors.join('; ')}`);
-    console.log('OK: Chrome cashier input, historical DU dropdown, oldest SPP warning, edit, deposit and receipts.');
+    console.log('OK: Chrome cashier input, historical DU dropdown, oldest SPP warning, edit, direct payments and receipts.');
   } finally {
     await browser.close();
   }

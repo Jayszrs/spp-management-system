@@ -30,9 +30,6 @@ $allNavItems = [
    '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M4 4.5A2.5 2.5 0 0 1 6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5z"/><path d="M9 7h6M9 11h6"/>',
    ['admin', 'kasir'], 'Pembayaran'],
 
-  ['pembayaran/titipan_spp.php', 'Titipan SPP',
-   '<path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>',
-   ['admin', 'bendahara', 'kasir'], 'Pembayaran'],
 
   ['otorisasi_transaksi.php', $role === 'kasir' ? 'Pengajuan Saya' : ($role === 'bendahara' ? 'Riwayat Otorisasi' : 'Otorisasi Transaksi'),
    '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/>',
@@ -101,7 +98,6 @@ $shortLabels = [
   'Input Pembayaran'  => 'Input',
   'Riwayat Pembayaran' => 'Riwayat',
   'Riwayat Daftar Ulang' => 'Riwayat DU',
-  'Titipan SPP' => 'Titipan',
   'Otorisasi Transaksi' => 'Otorisasi',
   'Pengajuan Saya' => 'Pengajuan',
   'Riwayat Otorisasi' => 'Riwayat',

@@ -13,6 +13,15 @@ File ini mencatat perubahan proyek secara reverse chronological. Baca [PROJECT_C
 - Jangan menghapus atau menulis ulang entri lama. Tambahkan entri koreksi bila diperlukan.
 - Perubahan implementasi dan entri changelog wajib masuk commit yang sama.
 
+## 2026-10-02 - Penghapusan Titipan SPP, pembayaran langsung
+
+- Aktor: Codex; implementasi rencana pemilik pada branch `audit/readiness-20261001` di atas `ec3db42`. Main belum digabung.
+- Hapus menu/endpoint/saldo/modal/penggunaan/pengembalian/laporan Titipan SPP, field status dan snapshot baru. URL lama 404; request lama pencatatan/penggunaan ditolak tanpa transaksi baru. Satu bulan SPP harus tepat sisa tagihan, dengan urutan tertua dan pasangan Komite tetap berlaku.
+- Pembayaran tahun tujuan menunggu penempatan hasil kenaikan resmi dan penerbitan tagihan. Konfirmasi periode mendatang, snapshot kelas/tarif, dan isolasi unit tetap dipakai.
+- Migrasi CLI `sql/remove_spp_deposit.php`: audit bawaan, apply eksplisit dengan gate backup, preflight/fingerprint, transaksi data terpisah dari DDL, verifikasi semua tabel lain. Schema instalasi, definisi legacy, guard enum, seed dan tes diselaraskan.
+- Database dummy lokal: hapus tepat 19 header/batch/mutasi tidak terpakai senilai Rp2.475.000. Pembayaran 1.037 menjadi 1.018; penerimaan Rp579.620.000 menjadi Rp577.145.000. Siswa/penempatan/tagihan/alokasi normal utuh. Tabungan 12 rekening/Rp1.050.000, 12 jurnal masuk/6 keluar; ketiga fingerprint tetap sama.
+- Verifikasi: enam lifecycle reguler/PSB SD/SMP/SMA, pembayaran tepat/kurang/lebih, urutan lintas tahun, edit/hapus/otorisasi/replay, race SPP/Komite/DU dan Tabungan, 307 request akses, browser pembayaran/pendaftaran/kenaikan/otorisasi, rekonsiliasi layar/Excel/PDF, 15 PDF surat, fresh install, seed 988, restore backup/kegagalan preflight/DDL/rerun. Utama health OK, 14 invariant nol, 61 FK dan 18 CHECK/dua trigger cocok. Bukti dan batas ada di audit/runbook terbaru.
+
 ## 2026-10-02 - Penutupan regresi kesiapan lokal
 
 **AI/Aktor:** Codex bersama pemilik proyek.

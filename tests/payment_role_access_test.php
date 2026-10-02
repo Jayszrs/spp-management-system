@@ -140,7 +140,7 @@ try {
     role_test_assert(role_test_request($baseUrl . '/master_spp.php', [], $adminCookies)['status'] === 200, 'Administrator tidak dapat membuka Master Penerbitan SPP.');
     $edit = role_test_request($baseUrl . '/pembayaran/edit.php?id=' . $paymentId, [], $adminCookies);
     role_test_assert($edit['status'] === 200, 'Administrator tidak dapat membuka edit pembayaran.');
-    role_test_assert((bool)preg_match('/name="csrf_token" value="([a-f0-9]+)"/', spp_test_form_scope($edit['body'], 'spp_action'), $match), 'Token CSRF admin tidak ditemukan.');
+    role_test_assert((bool)preg_match('/name="csrf_token" value="([a-f0-9]+)"/', spp_test_form_scope($edit['body'], 'no_induk'), $match), 'Token CSRF admin tidak ditemukan.');
     $token = $match[1];
     $updatedAmount = 150.0;
     $update = role_test_request($baseUrl . '/pembayaran/proses.php', [
@@ -155,7 +155,7 @@ try {
 
     $cashier1 = role_test_login($baseUrl, 'kasir1', $testPassword);
     $cashierEdit = role_test_request($baseUrl . '/pembayaran/edit.php?id=' . $paymentId, [], $cashier1);
-    role_test_assert((bool)preg_match('/name="csrf_token" value="([a-f0-9]+)"/', spp_test_form_scope($cashierEdit['body'], 'spp_action'), $cashierMatch), 'Token CSRF kasir tidak ditemukan.');
+    role_test_assert((bool)preg_match('/name="csrf_token" value="([a-f0-9]+)"/', spp_test_form_scope($cashierEdit['body'], 'no_induk'), $cashierMatch), 'Token CSRF kasir tidak ditemukan.');
     $cashierToken = $cashierMatch[1];
     $requestEdit = role_test_request($baseUrl . '/pembayaran/proses.php', [
         'aksi'=>'update', 'id'=>$paymentId, 'no_induk'=>$nis, 'uang_pangkal'=>200,
@@ -215,7 +215,7 @@ try {
     role_test_assert((int)$koneksi->query('SELECT COUNT(*) total FROM transaksi_otorisasi WHERE id='.(int)$pending['id']." AND status='approved'")->fetch_assoc()['total'] === 1, 'Audit persetujuan edit tidak tersimpan.');
 
     $cashier2Edit = role_test_request($baseUrl . '/pembayaran/edit.php?id=' . $paymentId, [], $cashier2);
-    role_test_assert((bool)preg_match('/name="csrf_token" value="([a-f0-9]+)"/', spp_test_form_scope($cashier2Edit['body'], 'spp_action'), $cashier2Match), 'Token kasir dua tidak ditemukan.');
+    role_test_assert((bool)preg_match('/name="csrf_token" value="([a-f0-9]+)"/', spp_test_form_scope($cashier2Edit['body'], 'no_induk'), $cashier2Match), 'Token kasir dua tidak ditemukan.');
     role_test_request($baseUrl . '/pembayaran/proses.php', [
         'aksi'=>'update', 'id'=>$paymentId, 'no_induk'=>$nis, 'uang_pangkal'=>225,
         'bulan_bayar'=>$month, 'tahun_bayar'=>$year, 'tanggal_bayar'=>$date,
@@ -233,7 +233,7 @@ try {
 
     $cashier3 = role_test_login($baseUrl, 'kasir3', $testPassword);
     $cashier3Edit = role_test_request($baseUrl . '/pembayaran/edit.php?id=' . $paymentId, [], $cashier3);
-    role_test_assert((bool)preg_match('/name="csrf_token" value="([a-f0-9]+)"/', spp_test_form_scope($cashier3Edit['body'], 'spp_action'), $cashier3Match), 'Token kasir tiga tidak ditemukan.');
+    role_test_assert((bool)preg_match('/name="csrf_token" value="([a-f0-9]+)"/', spp_test_form_scope($cashier3Edit['body'], 'no_induk'), $cashier3Match), 'Token kasir tiga tidak ditemukan.');
     role_test_request($baseUrl . '/pembayaran/proses.php', [
         'aksi'=>'update', 'id'=>$paymentId, 'no_induk'=>$nis, 'uang_pangkal'=>230,
         'bulan_bayar'=>$month, 'tahun_bayar'=>$year, 'tanggal_bayar'=>$date,
@@ -255,7 +255,7 @@ try {
 
     $cashier4 = role_test_login($baseUrl, 'kasir4', $testPassword);
     $cashier4Edit = role_test_request($baseUrl . '/pembayaran/edit.php?id=' . $paymentId, [], $cashier4);
-    role_test_assert((bool)preg_match('/name="csrf_token" value="([a-f0-9]+)"/', spp_test_form_scope($cashier4Edit['body'], 'spp_action'), $cashier4Match), 'Token kasir empat tidak ditemukan.');
+    role_test_assert((bool)preg_match('/name="csrf_token" value="([a-f0-9]+)"/', spp_test_form_scope($cashier4Edit['body'], 'no_induk'), $cashier4Match), 'Token kasir empat tidak ditemukan.');
     role_test_request($baseUrl . '/pembayaran/proses.php', [
         'aksi'=>'hapus', 'id'=>$paymentId, 'csrf_token'=>$cashier4Match[1],
         'authorization_reason'=>'Uji snapshot transaksi yang sudah berubah.',

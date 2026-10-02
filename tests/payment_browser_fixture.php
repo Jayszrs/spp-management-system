@@ -33,8 +33,8 @@ try {
     payment_browser_assert(payment_browser_scalar($koneksi, 'SELECT DATABASE()') === DB_NAME,
         'Connection does not match the named audit clone.');
     if ($action === 'state') {
-        $payments = $koneksi->query("SELECT id,U_SPP,U_KOMITE,U_TITIPAN_SPP,total_jumlah,BULAN FROM bayar WHERE NO_INDUK='{$arrearsNis}' ORDER BY id")->fetch_all(MYSQLI_ASSOC);
-        echo json_encode(['payments' => $payments, 'deposit_balance' => spp_deposit_balance($koneksi, $arrearsNis)], JSON_THROW_ON_ERROR) . PHP_EOL;
+        $payments = $koneksi->query("SELECT id,U_SPP,U_KOMITE,total_jumlah,BULAN FROM bayar WHERE NO_INDUK='{$arrearsNis}' ORDER BY id")->fetch_all(MYSQLI_ASSOC);
+        echo json_encode(['payments' => $payments, 'direct_payment' => true], JSON_THROW_ON_ERROR) . PHP_EOL;
     } elseif ($action === 'setup') {
         $passwordFile = (string)getenv('SPP_TEST_ADMIN_PASSWORD_FILE');
         payment_browser_assert($passwordFile !== '' && is_file($passwordFile), 'Test admin password file is required.');
@@ -108,31 +108,26 @@ try {
         $koneksi->commit();
         echo "OK: browser payment fixture created on audit clone.\n";
     } else {
-        $payments = $koneksi->query("SELECT id,U_SPP,U_KOMITE,U_TITIPAN_SPP,total_jumlah,BULAN FROM bayar WHERE NO_INDUK='{$arrearsNis}' ORDER BY id")->fetch_all(MYSQLI_ASSOC);
-        payment_browser_assert(count($payments) === 3, 'Expected exactly three browser payments.');
+        $payments = $koneksi->query("SELECT id,U_SPP,U_KOMITE,total_jumlah,BULAN FROM bayar WHERE NO_INDUK='{$arrearsNis}' ORDER BY id")->fetch_all(MYSQLI_ASSOC);
+        payment_browser_assert(count($payments) === 2, 'Expected exactly two browser payments.');
         payment_browser_assert((float)$payments[0]['U_SPP'] === 250000.0
             && (float)$payments[0]['U_KOMITE'] === 100000.0
             && (float)$payments[0]['total_jumlah'] === 550000.0
             && $payments[0]['BULAN'] === '07', 'Edited July payment has wrong amounts.');
-        payment_browser_assert((float)$payments[1]['U_TITIPAN_SPP'] === 100000.0
-            && (float)$payments[1]['total_jumlah'] === 100000.0, 'Deposit payment was not recorded separately.');
-        payment_browser_assert((float)$payments[2]['U_SPP'] === 150000.0
-            && (float)$payments[2]['U_KOMITE'] === 100000.0
-            && (float)$payments[2]['total_jumlah'] === 250000.0
-            && $payments[2]['BULAN'] === '08', 'August payment did not combine cash and deposit correctly.');
+        payment_browser_assert((float)$payments[1]['U_SPP'] === 250000.0
+            && (float)$payments[1]['U_KOMITE'] === 100000.0
+            && (float)$payments[1]['total_jumlah'] === 350000.0
+            && $payments[1]['BULAN'] === '08', 'August cash payment is incorrect.');
         $firstId = (int)$payments[0]['id'];
         $du = $koneksi->query("SELECT d.jumlah,t.tahun_ajaran_snapshot FROM bayar_du d JOIN tagihan_daftar_ulang t ON t.id=d.tagihan_daftar_ulang_id WHERE d.bayar_id={$firstId}")->fetch_assoc();
         payment_browser_assert($du && (float)$du['jumlah'] === 200000.0
             && $du['tahun_ajaran_snapshot'] === $previous, 'Edited Daftar Ulang did not stay on the historical bill.');
-        payment_browser_assert(abs(spp_deposit_balance($koneksi, $arrearsNis)) < .001,
-            'Deposit balance did not return to zero after August allocation.');
-        $allocation = $koneksi->query("SELECT COALESCE(SUM(a.nominal_dari_bayar),0) cash,COALESCE(SUM(a.nominal_dari_titipan),0) deposit FROM spp_alokasi a JOIN spp_alokasi_batch b ON b.id=a.batch_id WHERE b.bayar_id={$payments[2]['id']} AND b.status='active'")->fetch_assoc();
-        payment_browser_assert((float)$allocation['cash'] === 150000.0 && (float)$allocation['deposit'] === 100000.0,
-            'August SPP allocation did not split cash and deposit.');
+        $allocation = $koneksi->query("SELECT COALESCE(SUM(a.nominal_dari_bayar),0) cash FROM spp_alokasi a JOIN spp_alokasi_batch b ON b.id=a.batch_id WHERE b.bayar_id={$payments[1]['id']} AND b.status='active'")->fetch_assoc();
+        payment_browser_assert((float)$allocation['cash']===250000.0,'August allocation must use only direct cash.');
         payment_browser_assert((int)payment_browser_scalar($koneksi,
             "SELECT COUNT(*) FROM bayar WHERE NO_INDUK IN ('{$currentNis}','{$emptyNis}')") === 0,
             'No-arrear or no-bill students gained unexpected payments.');
-        echo "OK: Chrome payment/edit/DU/deposit allocations match database and historical bill.\n";
+        echo "OK: Chrome payment/edit/DU/direct cash allocations match database and historical bill.\n";
     }
 } catch (Throwable $error) {
     if ($action === 'setup') {

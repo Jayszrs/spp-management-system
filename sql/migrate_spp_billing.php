@@ -39,22 +39,20 @@ try {
     $placements->close();$insertBill->close();
 
     $payments=$koneksi->query("SELECT id,NO_INDUK,TGL_BYR,BULAN,TAHUN,user_id,sistem_pembayaran,U_SPP FROM bayar WHERE U_SPP>0 ORDER BY TGL_BYR,id FOR UPDATE")->fetch_all(MYSQLI_ASSOC);
-    $findBill=$koneksi->prepare("SELECT ts.id,ts.nominal_tagihan,COALESCE(SUM(CASE WHEN ab.status='active' THEN a.nominal_dari_bayar+a.nominal_dari_titipan ELSE 0 END),0) paid FROM tagihan_spp ts LEFT JOIN spp_alokasi a ON a.tagihan_spp_id=ts.id LEFT JOIN spp_alokasi_batch ab ON ab.id=a.batch_id WHERE ts.no_induk=? AND ts.bulan=? AND ts.tahun=? GROUP BY ts.id LIMIT 1 FOR UPDATE");
-    $insertBatch=$koneksi->prepare("INSERT INTO spp_alokasi_batch(no_induk,bayar_id,tanggal,user_id,uang_baru,titipan_baru) VALUES(?,?,?,?,?,?)");
-    $insertAllocation=$koneksi->prepare("INSERT INTO spp_alokasi(batch_id,tagihan_spp_id,nominal_dari_bayar,nominal_dari_titipan) VALUES(?,?,?,0)");
-    $insertDeposit=$koneksi->prepare("INSERT INTO titipan_spp_mutasi(no_induk,batch_id,bayar_id,jenis,nominal,tanggal,sistem_pembayaran,user_id,keterangan) VALUES(?,?,?,'masuk',?,?,?,?,?)");
-    $updatePayment=$koneksi->prepare('UPDATE bayar SET U_SPP=?,U_TITIPAN_SPP=? WHERE id=?');
-    $allocated=0;$deposited=0;
+    $findBill=$koneksi->prepare("SELECT ts.id,ts.nominal_tagihan,COALESCE(SUM(CASE WHEN ab.status='active' THEN a.nominal_dari_bayar ELSE 0 END),0) paid FROM tagihan_spp ts LEFT JOIN spp_alokasi a ON a.tagihan_spp_id=ts.id LEFT JOIN spp_alokasi_batch ab ON ab.id=a.batch_id WHERE ts.no_induk=? AND ts.bulan=? AND ts.tahun=? GROUP BY ts.id LIMIT 1 FOR UPDATE");
+    $insertBatch=$koneksi->prepare("INSERT INTO spp_alokasi_batch(no_induk,bayar_id,tanggal,user_id,uang_baru) VALUES(?,?,?,?,?)");
+    $insertAllocation=$koneksi->prepare("INSERT INTO spp_alokasi(batch_id,tagihan_spp_id,nominal_dari_bayar) VALUES(?,?,?)");
+    $allocated=0;
     foreach($payments as $payment){
         $nis=(string)$payment['NO_INDUK'];$month=str_pad((string)(int)$payment['BULAN'],2,'0',STR_PAD_LEFT);$calendarYear=(string)$payment['TAHUN'];$amount=(float)$payment['U_SPP'];
         $findBill->bind_param('sss',$nis,$month,$calendarYear);$findBill->execute();$bill=$findBill->get_result()->fetch_assoc();
-        $remaining=$bill?max(0,(float)$bill['nominal_tagihan']-(float)$bill['paid']):0;$toBill=min($amount,$remaining);$toDeposit=max(0,$amount-$toBill);$paymentId=(int)$payment['id'];$date=(string)$payment['TGL_BYR'];$user=(string)$payment['user_id'];
-        $insertBatch->bind_param('sissdd',$nis,$paymentId,$date,$user,$amount,$toDeposit);$insertBatch->execute();$batchId=(int)$koneksi->insert_id;
-        if($toBill>.001){$billId=(int)$bill['id'];$insertAllocation->bind_param('iid',$batchId,$billId,$toBill);$insertAllocation->execute();$allocated++;}
-        if($toDeposit>.001){$method=(string)$payment['sistem_pembayaran'];$note=$bill?'Kelebihan pembayaran SPP hasil migrasi':'Pembayaran SPP lama tanpa tagihan yang cocok';$insertDeposit->bind_param('siidssss',$nis,$batchId,$paymentId,$toDeposit,$date,$method,$user,$note);$insertDeposit->execute();$deposited++;}
-        $updatePayment->bind_param('ddi',$toBill,$toDeposit,$paymentId);$updatePayment->execute();
+        $remaining=$bill?max(0,(float)$bill['nominal_tagihan']-(float)$bill['paid']):0;
+        if(!$bill || $remaining<=.001 || abs($amount-$remaining)>.001) throw new RuntimeException('Pembayaran lama tidak cocok dengan satu sisa tagihan; periksa sebelum migrasi. ID '.$payment['id']);
+        $paymentId=(int)$payment['id'];$date=(string)$payment['TGL_BYR'];$user=(string)$payment['user_id'];
+        $insertBatch->bind_param('sissd',$nis,$paymentId,$date,$user,$amount);$insertBatch->execute();$batchId=(int)$koneksi->insert_id;
+        $billId=(int)$bill['id'];$insertAllocation->bind_param('iid',$batchId,$billId,$amount);$insertAllocation->execute();$allocated++;
     }
-    $findBill->close();$insertBatch->close();$insertAllocation->close();$insertDeposit->close();$updatePayment->close();
+    $findBill->close();$insertBatch->close();$insertAllocation->close();
     $koneksi->commit();
-    echo "Migrasi selesai. Tagihan dibuat: $billsCreated; pembayaran dialokasikan: $allocated; menjadi titipan: $deposited.\n";
+    echo "Migrasi selesai. Tagihan dibuat: $billsCreated; pembayaran dialokasikan: $allocated.\n";
 } catch(Throwable $e){$koneksi->rollback();fwrite(STDERR,'Migrasi gagal: '.$e->getMessage()."\n");exit(1);}

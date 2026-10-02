@@ -133,7 +133,7 @@ try {
         $stmt->bind_param('ssssssdd', $nis, $levelText, $date, $sppMonth, $sppYear, $operator, $sppAmount, $sppAmount);
         $stmt->execute();
         $sppPaymentId = (int)$koneksi->insert_id; $stmt->close();
-        $allocation = spp_allocate_payment($koneksi, $nis, $sppPaymentId, $sppMonth, $sppYear, $sppAmount, false, $date, 'Tunai', $operator);
+        $allocation = spp_allocate_payment($koneksi, $nis, $sppPaymentId, $sppMonth, $sppYear, $sppAmount, $date, 'Tunai', $operator);
         assert_unit((int)$allocation['bill_count']===1, "Pembayaran SPP unit {$unit} gagal.");
         $ownSnapshot = transaction_authorization_snapshot($koneksi, $sppPaymentId);
         assert_unit((int)$ownSnapshot['data']['payment']['id']===$sppPaymentId, 'Otorisasi tidak menemukan transaksi unit sendiri.');

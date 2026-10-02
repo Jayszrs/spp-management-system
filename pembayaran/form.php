@@ -50,7 +50,7 @@ $siswa_sql = "
               AND tdu_o.tahun_ajaran_snapshot<='$activeAcademicYearSql'
             GROUP BY tdu_o.id,tdu_o.nominal_tagihan
             HAVING tdu_o.nominal_tagihan-COALESCE(SUM(bd_o.jumlah),0)>.001
-        ) OR EXISTS(SELECT 1 FROM tagihan_spp ts_o LEFT JOIN spp_alokasi a_o ON a_o.tagihan_spp_id=ts_o.id LEFT JOIN spp_alokasi_batch ab_o ON ab_o.id=a_o.batch_id WHERE ts_o.no_induk=s.NO_INDUK AND ts_o.status='open' GROUP BY ts_o.id HAVING MIN(ts_o.nominal_tagihan)-COALESCE(SUM(CASE WHEN ab_o.status='active' THEN a_o.nominal_dari_bayar+a_o.nominal_dari_titipan ELSE 0 END),0)>.001)
+        ) OR EXISTS(SELECT 1 FROM tagihan_spp ts_o LEFT JOIN spp_alokasi a_o ON a_o.tagihan_spp_id=ts_o.id LEFT JOIN spp_alokasi_batch ab_o ON ab_o.id=a_o.batch_id WHERE ts_o.no_induk=s.NO_INDUK AND ts_o.status='open' GROUP BY ts_o.id HAVING MIN(ts_o.nominal_tagihan)-COALESCE(SUM(CASE WHEN ab_o.status='active' THEN a_o.nominal_dari_bayar ELSE 0 END),0)>.001)
           OR EXISTS(SELECT 1 FROM tagihan_komite tk_o LEFT JOIN bayar_komite bk_o ON bk_o.tagihan_komite_id=tk_o.id WHERE tk_o.no_induk=s.NO_INDUK AND tk_o.status='open' GROUP BY tk_o.id HAVING MIN(tk_o.nominal_tagihan)-COALESCE(SUM(bk_o.nominal),0)>.001))
     )
     ORDER BY s.NAMA ASC
@@ -142,7 +142,7 @@ unset($_SESSION['payment_draft']);
   <meta name="description" content="Form input transaksi pembayaran siswa." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="../assets/css/style.css?v=duselector7" />
+  <link rel="stylesheet" href="../assets/css/style.css?v=duselector8" />
   <!-- Prevent theme flash -->
   <script>(function(){var t=localStorage.getItem('spp_theme')||'light';document.documentElement.setAttribute('data-theme',t);})();</script>
 </head>
@@ -325,11 +325,6 @@ unset($_SESSION['payment_draft']);
 
           <!-- Rincian Pembayaran -->
           <div class="section-divider"><span>Rincian Pembayaran</span></div>
-          <section class="spp-deposit-banner" id="spp-deposit-banner" hidden aria-live="polite">
-            <div><span>Saldo Titipan SPP</span><strong id="spp-deposit-balance">Rp 0</strong><small id="spp-deposit-capacity">Pilih siswa untuk melihat saldo.</small></div>
-            <button type="button" class="btn btn-ghost" id="spp-use-deposit-button">Gunakan Titipan</button>
-          </section>
-          <div class="spp-deposit-action"><button type="button" class="btn btn-ghost" id="spp-record-deposit-button">Catat Titipan SPP</button><span id="spp-action-context" aria-live="polite"></span></div>
           <div class="alert alert-warning payment-overpaid-alert" id="payment-overpaid-alert" hidden></div>
           <div class="alert alert-warning payment-input-overlimit-alert" id="payment-input-overlimit-alert" hidden></div>
           <div class="table-container">
@@ -423,8 +418,6 @@ unset($_SESSION['payment_draft']);
           </template>
 
           <input type="hidden" id="potongan-spp" name="potongan_spp" value="0" />
-          <input type="hidden" id="gunakan-titipan-spp" name="gunakan_titipan_spp" value="0" />
-          <input type="hidden" id="spp-action" name="spp_action" value="bayar" />
 
           <input type="hidden" id="catatan" name="catatan" value="">
           <div class="section-divider"><span>History Transaksi Siswa</span></div>
@@ -479,8 +472,6 @@ unset($_SESSION['payment_draft']);
   </div>
 
   <?php include '../includes/spp_warning_modal.php'; ?>
-  <div class="spp-deposit-modal" id="spp-deposit-modal" hidden role="dialog" aria-modal="true" aria-labelledby="spp-deposit-modal-title">
-    <div class="spp-deposit-modal-card"><h3 id="spp-deposit-modal-title">Pratinjau Penggunaan Titipan</h3><p id="spp-deposit-modal-summary"></p><div id="spp-deposit-modal-lines" class="spp-deposit-preview-lines"></div><div class="action-bar"><button type="button" class="btn btn-primary" id="spp-deposit-confirm">Konfirmasi Penggunaan</button><button type="button" class="btn btn-ghost" id="spp-deposit-cancel">Batal</button></div></div>
   </div>
 
   <script>
@@ -496,7 +487,7 @@ unset($_SESSION['payment_draft']);
     ) ?>;
     window.paymentDraft = <?= json_encode($paymentDraft, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT) ?>;
   </script>
-  <script src="../assets/js/app.js?v=11.5"></script>
+  <script src="../assets/js/app.js?v=11.6"></script>
 </body>
 </html>
 

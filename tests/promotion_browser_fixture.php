@@ -24,8 +24,10 @@ function promotion_browser_assert(bool $condition, string $message): void {
 $database = (string)$koneksi->query('SELECT DATABASE()')->fetch_row()[0];
 promotion_browser_assert($database === DB_NAME, 'Koneksi tidak menuju clone yang diminta.');
 
-$sourceYear = '2098/2099';
-$targetYear = '2099/2100';
+$sourceYear = (string)(getenv('SPP_TEST_PROMOTION_SOURCE_YEAR') ?: '2098/2099');
+promotion_browser_assert(preg_match('/^(\d{4})\/(\d{4})$/D',$sourceYear,$yearParts)===1
+    && (int)$yearParts[2]===(int)$yearParts[1]+1,'Tahun sumber fixture tidak valid.');
+$targetYear = $yearParts[2].'/'.((int)$yearParts[2]+1);
 $students = [
     '9988000001' => ['name' => 'UJI BROWSER LULUS', 'level' => 6],
     '9988000002' => ['name' => 'UJI BROWSER NAIK SATU', 'level' => 5],

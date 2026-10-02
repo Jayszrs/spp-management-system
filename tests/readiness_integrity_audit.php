@@ -50,7 +50,7 @@ $checks = [
         LEFT JOIN (SELECT bayar_id,SUM(jumlah) total_du FROM bayar_du GROUP BY bayar_id) d ON d.bayar_id=b.id
         WHERE ABS(COALESCE(b.total_jumlah,0)-(
             COALESCE(b.U_PANGKAL,0)+COALESCE(b.U_PSB,0)+COALESCE(b.U_SPP,0)
-            +COALESCE(b.U_TITIPAN_SPP,0)+COALESCE(b.U_KOMITE,0)
+            +COALESCE(b.U_KOMITE,0)
             +COALESCE(b.U_LAIN,0)+COALESCE(d.total_du,0)
             -COALESCE(b.potong_spp,0)
         ))>0.01",
@@ -78,7 +78,7 @@ $checks = [
         LEFT JOIN spp_alokasi_batch b ON b.id=a.batch_id
         GROUP BY t.id,t.nominal_tagihan
         HAVING COALESCE(SUM(CASE WHEN b.status='active'
-            THEN a.nominal_dari_bayar+a.nominal_dari_titipan ELSE 0 END),0)>t.nominal_tagihan+0.01
+            THEN a.nominal_dari_bayar ELSE 0 END),0)>t.nominal_tagihan+0.01
     ) x",
     'komite_melebihi_tagihan' => "SELECT COUNT(*) FROM (
         SELECT t.id FROM tagihan_komite t LEFT JOIN bayar_komite p ON p.tagihan_komite_id=t.id

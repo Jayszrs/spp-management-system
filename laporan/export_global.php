@@ -73,7 +73,7 @@ if($template==='tunggakan-siswa'&&in_array($format,['preview','print','pdf'],tru
     $pdf->stream('surat-tunggakan-kepala-sekolah-'.str_replace('-','',$today).'.pdf',['Attachment'=>($_GET['download']??'')==='1']);
     exit;
 }
-$isCashRecap=in_array($template,['setoran','kas-tabungan','titipan-spp'],true);$isSavingsCashRecap=$template==='kas-tabungan';$isSppDepositRecap=$template==='titipan-spp';
+$isCashRecap=in_array($template,['setoran','kas-tabungan'],true);$isSavingsCashRecap=$template==='kas-tabungan';
 $billingGroups=$template==='riwayat-tagihan'?report_billing_history_group_students($report['rows']):[];
 $billingColumns=$template==='riwayat-tagihan'?report_billing_history_component_columns($billingGroups):[];
 $billingColumnWidth=$billingColumns?57/count($billingColumns):0;
@@ -135,21 +135,14 @@ thead{display:table-header-group}tfoot{display:table-row-group}tr{page-break-ins
 <?php if($template==='riwayat-tagihan'&&$moneyTotals): ?><table class="billing-export-overview"><tr><?php foreach($moneyTotals as $total): ?><td><span><?= report_e($total['label']) ?></span><strong><?= report_money($total['value']) ?></strong></td><?php endforeach; ?></tr></table><?php endif; ?>
 <?php if($isCashRecap):
   $componentRows=$report['component_rows']??($report['component_summary']??[]);
-  $componentTitle=$isSppDepositRecap?'Ringkasan Titipan SPP':($isSavingsCashRecap?'Arus Tabungan':'Komponen Pembayaran');
-  $componentTotalLabel=$isSppDepositRecap?'Saldo Akhir':($isSavingsCashRecap?'Mutasi Bersih':'Total Pembayaran');
-  $summaryTitle=$isSppDepositRecap?'Rangkuman Titipan':($isSavingsCashRecap?'Jumlah Transaksi':'Metode Pembayaran');
+  $componentTitle=$isSavingsCashRecap?'Arus Tabungan':'Komponen Pembayaran';
+  $componentTotalLabel=$isSavingsCashRecap?'Mutasi Bersih':'Total Pembayaran';
+  $summaryTitle=$isSavingsCashRecap?'Jumlah Transaksi':'Metode Pembayaran';
   $summaryItems=$isSavingsCashRecap
       ? array_map(static fn($item)=>['label'=>$item['label'],'value'=>$item['value'],'type'=>'count'],$report['transaction_summary']??[])
       : array_map(static fn($item)=>['label'=>$item['metode'],'value'=>$item['nominal'],'type'=>'money'],$report['method_summary']??[]);
-  if($isSppDepositRecap){
-    $summaryItems=[];
-    foreach(['saldo_awal'=>'Saldo Awal','penerimaan'=>'Penerimaan','penggunaan'=>'Dipakai SPP','pengembalian'=>'Pengembalian','koreksi_masuk'=>'Koreksi Masuk','koreksi_keluar'=>'Koreksi Keluar','mutasi_operator_lain'=>'Mutasi Operator Lain'] as $key=>$label){
-      $amount=(float)($report['deposit_summary'][$key]??0);
-      if(in_array($key,['saldo_awal','penerimaan','penggunaan','pengembalian'],true)||abs($amount)>.001)$summaryItems[]=['label'=>$label,'value'=>$amount,'type'=>'money'];
-    }
-  }
-  $totalLabel=$isSppDepositRecap?'SALDO AKHIR':($isSavingsCashRecap?'MUTASI BERSIH':'TOTAL SETORAN');
-  $totalValue=$isSppDepositRecap?(float)($report['deposit_summary']['saldo_akhir']??0):($isSavingsCashRecap?(float)($report['mutasi_bersih']??0):(float)($report['total_setoran']??$report['component_total']??0));
+  $totalLabel=$isSavingsCashRecap?'MUTASI BERSIH':'TOTAL SETORAN';
+  $totalValue=$isSavingsCashRecap?(float)($report['mutasi_bersih']??0):(float)($report['total_setoran']??$report['component_total']??0);
 ?><h3><?= report_e($componentTitle) ?></h3><table class="data report-component-table"><thead><tr><th>No</th><th><?= report_e($componentTitle) ?></th><th>Nominal</th></tr></thead><tbody><?php if(!$componentRows): ?><tr><td colspan="3" style="text-align:center">Tidak ada transaksi pada filter terpilih.</td></tr><?php else: foreach($componentRows as $index=>$component): ?><tr><td class="report-number"><?= $index+1 ?></td><td><?= export_safe_text($component['komponen']) ?></td><td class="money <?= (float)$component['nominal']<0?'negative':'' ?>"><?= report_money($component['nominal']) ?></td></tr><?php endforeach; endif; ?></tbody><tfoot><tr><th colspan="2"><?= report_e($componentTotalLabel) ?></th><th class="money <?= (float)($report['component_total']??0)<0?'negative':'' ?>"><?= report_money($report['component_total']??0) ?></th></tr></tfoot></table><h3><?= report_e($summaryTitle) ?></h3><table class="data"><thead><tr><th>Ringkasan</th><th>Nilai</th></tr></thead><tbody><?php foreach($summaryItems as $item): ?><tr><td><?= export_safe_text($item['label']) ?></td><td class="money"><?= $item['type']==='money'?report_money($item['value']):number_format((int)$item['value']) ?></td></tr><?php endforeach; ?></tbody></table><table class="data total-table"><caption><?= report_e($totalLabel) ?></caption><tbody><tr><th><?= report_e(ucwords(strtolower($totalLabel))) ?></th><td class="money <?= $totalValue<0?'negative':'' ?>"><?= report_money($totalValue) ?></td></tr></tbody></table><?php endif; ?>
 <?php if(!$isCashRecap): ?>
 <?php if($template==='riwayat-tagihan'): ?>

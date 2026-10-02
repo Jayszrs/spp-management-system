@@ -200,9 +200,9 @@ function demo_payments(mysqli $db, string $code, array $regular, array $psb, arr
             'NO_INDUK'=>$student['nis'],'KELAS'=>(string)$student['grade'],'master_kelas_id'=>$student['class_id'],
             'kelas_rombel_snapshot'=>$student['class_label'], 'U_PANGKAL'=>$amounts['pangkal']??0,
             'U_PSB'=>$amounts['psb']??0,'U_SPP'=>$amounts['spp']??0,
-            'U_KOMITE'=>$amounts['komite']??0,'U_TITIPAN_SPP'=>$amounts['titipan']??0,
+            'U_KOMITE'=>$amounts['komite']??0,
             'U_LAIN'=>$amounts['lain']??0,'KETERANGAN'=>$key,'TGL_BYR'=>$time,
-            'BULAN'=>$kind==='spp'?'09':null,'TAHUN'=>$kind==='spp'?'2026':null,
+            'BULAN'=>$kind==='spp'?'07':null,'TAHUN'=>$kind==='spp'?'2026':null,
             'user_id'=>$operator,'sistem_pembayaran'=>$method,
             'th_ajaran'=>$kind==='du'?'2026/2027':null,'kelas_du'=>$kind==='du'?(string)$student['grade']:null,
             'LAIN_LAIN1'=>$extra['fee_name']??null,'JUMLAH1'=>$amounts['lain']??0,
@@ -210,13 +210,13 @@ function demo_payments(mysqli $db, string $code, array $regular, array $psb, arr
         ];
         $paymentId = demo_insert($db,'bayar',$data);
         if ($kind==='spp') {
-            demo_insert($db,'bayar_spp_periode',['bayar_id'=>$paymentId,'no_induk'=>$student['nis'],'bulan'=>'09','tahun'=>'2026']);
+            demo_insert($db,'bayar_spp_periode',['bayar_id'=>$paymentId,'no_induk'=>$student['nis'],'bulan'=>'07','tahun'=>'2026']);
             $batch = demo_insert($db,'spp_alokasi_batch',[
                 'no_induk'=>$student['nis'],'bayar_id'=>$paymentId,'tanggal'=>$time,'user_id'=>$operator,
                 'uang_baru'=>$amounts['spp'],'komite_required'=>1,
             ]);
-            $sppBill=demo_one($db,"SELECT id FROM tagihan_spp WHERE no_induk=? AND tahun='2026' AND bulan='09'",[$student['nis']]);
-            $komiteBill=demo_one($db,"SELECT id FROM tagihan_komite WHERE no_induk=? AND tahun='2026' AND bulan='09'",[$student['nis']]);
+            $sppBill=demo_one($db,"SELECT id FROM tagihan_spp WHERE no_induk=? AND tahun='2026' AND bulan='07'",[$student['nis']]);
+            $komiteBill=demo_one($db,"SELECT id FROM tagihan_komite WHERE no_induk=? AND tahun='2026' AND bulan='07'",[$student['nis']]);
             demo_insert($db,'spp_alokasi',['batch_id'=>$batch,'tagihan_spp_id'=>$sppBill['id'],'nominal_dari_bayar'=>$amounts['spp']]);
             demo_insert($db,'bayar_komite',['bayar_id'=>$paymentId,'tagihan_komite_id'=>$komiteBill['id'],'nominal'=>$amounts['komite']]);
         } elseif ($kind==='du') {
@@ -233,18 +233,11 @@ function demo_payments(mysqli $db, string $code, array $regular, array $psb, arr
             demo_insert($db,'bayar_biaya_lain',['bayar_id'=>$paymentId,'master_biaya_lain_id'=>$feeId,
                 'tagihan_biaya_lain_id'=>$bill,'nama_biaya_snapshot'=>$extra['fee_name'],
                 'nominal_snapshot'=>$amounts['lain'],'urutan'=>1,'legacy_key'=>'demo']);
-        } elseif ($kind==='titipan') {
-            $batch=demo_insert($db,'spp_alokasi_batch',['no_induk'=>$student['nis'],'bayar_id'=>$paymentId,
-                'tanggal'=>$time,'user_id'=>$operator,'uang_baru'=>$amounts['titipan'],'titipan_baru'=>$amounts['titipan']]);
-            demo_insert($db,'titipan_spp_mutasi',['no_induk'=>$student['nis'],'batch_id'=>$batch,'bayar_id'=>$paymentId,
-                'jenis'=>'masuk','nominal'=>$amounts['titipan'],'tanggal'=>$time,'sistem_pembayaran'=>$method,
-                'user_id'=>$operator,'keterangan'=>'DEMO Titipan SPP '.$code]);
         }
     };
     for ($number=1; $number<=6; $number++) {
         $student=$regular[$number-1];
-        $factor=$number%2===0 ? .5 : 1;
-        $add('spp',$number,$student,['spp'=>$student['spp']*$factor,'komite'=>$student['komite']*$factor]);
+        $add('spp',$number,$student,['spp'=>$student['spp'],'komite'=>$student['komite']]);
     }
     for ($number=1; $number<=3; $number++) $add('du',$number,$regular[$number-1],['du'=>$regular[$number-1]['du']*($number===2?.5:1)]);
     $add('pangkal',1,$regular[0],['pangkal'=>$profile['pangkal']/2]);
@@ -254,7 +247,6 @@ function demo_payments(mysqli $db, string $code, array $regular, array $psb, arr
         $add('lain',$number,$regular[$number-1],['lain'=>$number===5?$amount/2:$amount],
             ['fee_label'=>$label,'fee_name'=>'DEMO '.$label.' '.$code,'fee_amount'=>$amount]);
     }
-    for ($number=1; $number<=3; $number++) $add('titipan',$number,$regular[$number+4],['titipan'=>75000]);
 }
 
 function demo_savings(mysqli $db, int $unitId, string $asOfText): void {

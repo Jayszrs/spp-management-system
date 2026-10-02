@@ -61,28 +61,21 @@ try {
 
     $start = '2026-07-01';$end = '2027-02-28';
     $query = http_build_query(['tanggal_awal'=>$start,'tanggal_akhir'=>$end,'bulan'=>'02','tahun'=>'2027']);
-    $stats = $koneksi->query("SELECT COALESCE(SUM(total_jumlah),0) total,COALESCE(SUM(U_TITIPAN_SPP),0) titipan FROM bayar WHERE TGL_BYR >= '$start 00:00:00' AND TGL_BYR < '2027-03-01 00:00:00'")->fetch_assoc();
+    $stats = $koneksi->query("SELECT COALESCE(SUM(total_jumlah),0) total FROM bayar WHERE TGL_BYR >= '$start 00:00:00' AND TGL_BYR < '2027-03-01 00:00:00'")->fetch_assoc();
     $du = $koneksi->query("SELECT COALESCE(SUM(d.jumlah),0) total FROM bayar_du d JOIN bayar b ON b.id=d.bayar_id WHERE b.TGL_BYR >= '$start 00:00:00' AND b.TGL_BYR < '2027-03-01 00:00:00'")->fetch_assoc();
-    finance_http_assert((float)$du['total'] > 0 && (float)$stats['titipan'] > 0, 'Fixture clone tidak memuat Daftar Ulang dan Titipan SPP.');
+    finance_http_assert((float)$du['total'] > 0, 'Fixture clone tidak memuat Daftar Ulang.');
     $totalText = number_format((float)$stats['total'],0,',','.');
     $duText = number_format((float)$du['total'],0,',','.');
-    $titipanText = number_format((float)$stats['titipan'],0,',','.');
     $base = rtrim((string)getenv('SPP_HTTP_BASE'), '/').'/';
 
     $index = finance_http_ok(finance_http_get($base.'laporan/index.php?'.$query,$sessionId),'Laporan Umum');
     finance_http_assert(str_contains($index, 'Daftar Ulang') && str_contains($index, $duText)
-        && str_contains($index, 'Titipan SPP') && str_contains($index, $titipanText)
+        && !str_contains($index, 'Titipan SPP')
         && str_contains($index, $totalText), 'Komponen Laporan Umum tidak cocok dengan total transaksi.');
     $excel = finance_http_ok(finance_http_get($base.'laporan/export_excel.php?download=1&'.$query,$sessionId),'Excel Laporan Umum');
     finance_http_assert(str_contains($excel, '<td>Daftar Ulang</td><td>'.$duText.'</td>')
-        && str_contains($excel, '<td>Titipan SPP</td><td>'.$titipanText.'</td>')
+        && !str_contains($excel, 'Titipan SPP')
         && str_contains($excel, $totalText), 'Rincian Excel tidak cocok dengan komponen dan total transaksi.');
-    $depositExport=finance_http_ok(finance_http_get($base.'laporan/export_global.php?'.http_build_query(['template'=>'titipan-spp','format'=>'excel','download'=>'1','tanggal_awal'=>'2027-02-01','tanggal_akhir'=>'2027-02-28']),$sessionId),'Excel Titipan SPP');
-    finance_http_assert(str_contains($depositExport,'Ringkasan Titipan SPP')
-        && str_contains($depositExport,'Saldo Akhir')
-        && !str_contains($depositExport,'TOTAL SETORAN'),
-        'Excel Titipan SPP salah memberi label saldo sebagai setoran kas.');
-
     $unpaid = finance_http_ok(finance_http_get($base.'laporan/index.php?'.http_build_query(['jenis_laporan'=>'belum_biaya_lain','tanggal_awal'=>$start,'tanggal_akhir'=>$end]),$sessionId),'Biaya Lain belum lunas');
     $count = $koneksi->query("SELECT COUNT(*) total FROM (SELECT t.id FROM tagihan_biaya_lain t JOIN siswa s ON s.NO_INDUK=t.no_induk LEFT JOIN bayar_biaya_lain d ON d.tagihan_biaya_lain_id=t.id WHERE t.status='open' AND s.is_active=1 GROUP BY t.id,t.nominal_tagihan HAVING t.nominal_tagihan>COALESCE(SUM(d.nominal_snapshot),0)) x")->fetch_assoc();
     finance_http_assert(str_contains($unpaid, number_format((int)$count['total']).' siswa/tagihan'),

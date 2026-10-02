@@ -166,7 +166,6 @@ $stmt = $koneksi->prepare("
            COALESCE(SUM(b.U_PANGKAL), 0) AS pangkal,
            COALESCE(SUM(b.U_PSB), 0) AS psb,
            COALESCE(SUM(b.U_SPP), 0) AS spp,
-           COALESCE(SUM(b.U_TITIPAN_SPP), 0) AS titipan_spp,
            COALESCE(SUM(b.U_KOMITE), 0) AS komite,
            COALESCE(SUM(b.potong_spp), 0) AS potongan_spp,
            COALESCE(SUM(b.total_jumlah), 0) AS total
@@ -303,8 +302,8 @@ if (!$isUnpaidReport) {
             FROM (
                 SELECT s.NO_INDUK, s.NO_induk_diknas, s.NAMA, ts.kelas_rombel_snapshot AS KELAS,
                        ts.nominal_tagihan AS tagihan,
-                       COALESCE(SUM(CASE WHEN ab.status='active' THEN a.nominal_dari_bayar+a.nominal_dari_titipan ELSE 0 END),0) AS sudah_bayar,
-                       GREATEST(ts.nominal_tagihan-COALESCE(SUM(CASE WHEN ab.status='active' THEN a.nominal_dari_bayar+a.nominal_dari_titipan ELSE 0 END),0),0) AS sisa
+                       COALESCE(SUM(CASE WHEN ab.status='active' THEN a.nominal_dari_bayar ELSE 0 END),0) AS sudah_bayar,
+                       GREATEST(ts.nominal_tagihan-COALESCE(SUM(CASE WHEN ab.status='active' THEN a.nominal_dari_bayar ELSE 0 END),0),0) AS sisa
                 FROM tagihan_spp ts JOIN siswa s ON s.NO_INDUK=ts.no_induk
                 LEFT JOIN spp_alokasi a ON a.tagihan_spp_id=ts.id
                 LEFT JOIN spp_alokasi_batch ab ON ab.id=a.batch_id
@@ -563,7 +562,6 @@ $exportQuery = http_build_query([
                 'Uang Pangkal' => $bayar_recap['pangkal'],
                 'Uang PSB' => $bayar_recap['psb'],
                 'Uang SPP' => $bayar_recap['spp'],
-                'Titipan SPP' => $bayar_recap['titipan_spp'],
                 'Uang Komite' => $bayar_recap['komite'],
                 'Daftar Ulang' => $total_du_periode,
                 'Potongan SPP' => -(float)$bayar_recap['potongan_spp'],

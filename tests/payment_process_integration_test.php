@@ -54,7 +54,7 @@ function payment_process_flash(string $baseUrl, array &$cookies, string $pagePat
 function payment_process_csrf(string $baseUrl, int $paymentId, array &$cookies): string {
     $page = payment_process_request($baseUrl . '/pembayaran/edit.php?id=' . $paymentId, [], $cookies);
     payment_process_assert($page['status'] === 200, 'Halaman edit admin tidak dapat dibuka.');
-    if (!preg_match('/name="csrf_token" value="([a-f0-9]+)"/', spp_test_form_scope($page['body'], 'spp_action'), $match)) {
+    if (!preg_match('/name="csrf_token" value="([a-f0-9]+)"/', spp_test_form_scope($page['body'], 'no_induk'), $match)) {
         throw new RuntimeException('Token CSRF pembayaran tidak ditemukan.');
     }
     return $match[1];
@@ -63,7 +63,7 @@ function payment_process_csrf(string $baseUrl, int $paymentId, array &$cookies):
 function payment_process_input_tokens(string $baseUrl, array &$cookies): array {
     $page = payment_process_request($baseUrl . '/pembayaran/form.php', [], $cookies);
     payment_process_assert($page['status'] === 200, 'Form input pembayaran tidak dapat dibuka.');
-    payment_process_assert(preg_match('/name="csrf_token" value="([a-f0-9]{64})"/', spp_test_form_scope($page['body'], 'spp_action'), $csrf) === 1,
+    payment_process_assert(preg_match('/name="csrf_token" value="([a-f0-9]{64})"/', spp_test_form_scope($page['body'], 'no_induk'), $csrf) === 1,
         'Token CSRF input pembayaran tidak tersedia.');
     payment_process_assert(preg_match('/name="request_key" value="([a-f0-9]{32})"/', $page['body'], $key) === 1,
         'Kunci idempotensi input pembayaran tidak tersedia.');
@@ -92,7 +92,6 @@ function payment_process_cleanup_student(mysqli $db, string $nis): void {
         "DELETE FROM bayar_du WHERE bayar_id IN (SELECT id FROM bayar WHERE NO_INDUK=?)",
         "DELETE FROM bayar_biaya_lain WHERE bayar_id IN (SELECT id FROM bayar WHERE NO_INDUK=?)",
         "DELETE FROM keuangan_request WHERE aksi='pembayaran' AND referensi_id IN (SELECT id FROM bayar WHERE NO_INDUK=?)",
-        "DELETE FROM titipan_spp_mutasi WHERE no_induk=?",
         "DELETE FROM bayar WHERE NO_INDUK=?",
         "DELETE FROM tagihan_spp WHERE no_induk=?",
         "DELETE FROM tagihan_komite WHERE no_induk=?",
@@ -165,6 +164,11 @@ if (spp_billing_schema_ready($koneksi)) {
         $cookies = [];
         $login = payment_process_request($baseUrl . '/login.php', ['username'=>'admin','password'=>$password], $cookies);
         payment_process_assert($login['status'] === 302 && isset($cookies['PHPSESSID']), 'Login admin database test gagal.');
+        payment_process_assert(payment_process_request($baseUrl.'/pembayaran/titipan_spp.php', [], $cookies)['status']===404,'Retired endpoint still exists.');
+        $freshForm=payment_process_request($baseUrl.'/pembayaran/form.php',[],$cookies);
+        payment_process_assert(!str_contains($freshForm['body'],'Titipan SPP')&&!str_contains($freshForm['body'],'spp-deposit'),'Deposit UI remains on form.');
+        $statusPayload=payment_process_request($baseUrl.'/pembayaran/status_spp.php?'.http_build_query(['no_induk'=>$nis,'bulan'=>'07','tahun'=>$start]),[],$cookies);
+        payment_process_assert($statusPayload['status']===200&&!str_contains(strtolower($statusPayload['body']),'titipan'),'Status payload retains deposit fields.');
         $post = static function (string $month,float $money,float $komite=0,bool $useDeposit=false,string $action='bayar') use ($baseUrl, &$cookies, $nis, $start): array {
             return payment_process_request($baseUrl . '/pembayaran/proses.php', [
                 'aksi'=>'input', 'payment_plan'=>'monthly', 'no_induk'=>$nis,
@@ -184,19 +188,21 @@ if (spp_billing_schema_ready($koneksi)) {
         $withoutKomiteFlash=payment_process_flash($baseUrl,$cookies);
         payment_process_assert(str_contains($withoutKomiteFlash,'harus dibayar bersama Komite'),'SPP tanpa Komite tidak diblokir: '.$withoutKomiteFlash);
         payment_process_assert($post('07',250000,15000)['status']===302,'Pembayaran Juli gagal.');
-        $first=$koneksi->query("SELECT id,U_SPP,U_TITIPAN_SPP,U_KOMITE,total_jumlah FROM bayar WHERE NO_INDUK='{$nis}' ORDER BY id DESC LIMIT 1")->fetch_assoc();
+        $first=$koneksi->query("SELECT id,U_SPP,U_KOMITE,total_jumlah FROM bayar WHERE NO_INDUK='{$nis}' ORDER BY id DESC LIMIT 1")->fetch_assoc();
         payment_process_assert($first && (float)$first['U_SPP']===250000.0 && (float)$first['U_KOMITE']===15000.0 && (float)$first['total_jumlah']===265000.0,'SPP dan Komite Juli tidak dicatat tepat.');
         payment_process_assert($post('08',250000,15000)['status']===302,'Pembayaran Agustus gagal.');
-        payment_process_assert($post('09',100000,0,false,'titipan')['status']===302,'Titipan eksplisit gagal.');
-        $deposit=$koneksi->query("SELECT id,U_SPP,U_TITIPAN_SPP,total_jumlah FROM bayar WHERE NO_INDUK='{$nis}' ORDER BY id DESC LIMIT 1")->fetch_assoc();
-        payment_process_assert($deposit && (float)$deposit['U_SPP']===0.0 && (float)$deposit['U_TITIPAN_SPP']===100000.0,'Titipan tidak dicatat terpisah.');
-        payment_process_assert($post('09',150000,15000,true)['status']===302,'Penggunaan Titipan SPP gagal.');
-        $second=$koneksi->query("SELECT id,U_SPP,U_TITIPAN_SPP,U_KOMITE,total_jumlah FROM bayar WHERE NO_INDUK='{$nis}' ORDER BY id DESC LIMIT 1")->fetch_assoc();
-        payment_process_assert($second && (float)$second['U_SPP']===150000.0 && (float)$second['U_KOMITE']===15000.0 && (float)$second['total_jumlah']===165000.0,'Uang baru, Komite, dan titipan terpakai tercampur.');
-        payment_process_assert(abs(spp_deposit_balance($koneksi,$nis))<.001,'Saldo titipan setelah pemakaian tidak nol.');
+        $before=(int)$koneksi->query("SELECT COUNT(*) FROM bayar WHERE NO_INDUK='{$nis}'")->fetch_row()[0];
+        payment_process_assert($post('09',100000,0,false,'titipan')['status']===302,'Kiriman lama tidak ditolak.');
+        payment_process_assert($post('09',250000,15000,true)['status']===302,'Kiriman penggunaan lama tidak ditolak.');
+        payment_process_assert((int)$koneksi->query("SELECT COUNT(*) FROM bayar WHERE NO_INDUK='{$nis}'")->fetch_row()[0]===$before,'Kiriman lama menulis transaksi.');
+        payment_process_assert($post('09',100000,15000)['status']===302,'Nominal kurang tidak ditolak.');
+        payment_process_assert((int)$koneksi->query("SELECT COUNT(*) FROM bayar WHERE NO_INDUK='{$nis}'")->fetch_row()[0]===$before,'Nominal kurang menulis transaksi.');
+        payment_process_assert($post('09',250000,15000)['status']===302,'Pembayaran langsung September gagal.');
+        $second=$koneksi->query("SELECT id,U_SPP,U_KOMITE,total_jumlah FROM bayar WHERE NO_INDUK='{$nis}' ORDER BY id DESC LIMIT 1")->fetch_assoc();
+        payment_process_assert($second && (float)$second['U_SPP']===250000.0 && (float)$second['U_KOMITE']===15000.0 && (float)$second['total_jumlah']===265000.0,'Pembayaran langsung tidak tepat.');
 
         $editPage = payment_process_request($baseUrl . '/pembayaran/edit.php?id=' . (int)$second['id'], [], $cookies);
-        payment_process_assert($editPage['status'] === 200 && preg_match('/name="csrf_token" value="([a-f0-9]+)"/', spp_test_form_scope($editPage['body'], 'spp_action'), $csrf) === 1, 'Form edit SPP admin atau token CSRF tidak tersedia.');
+        payment_process_assert($editPage['status'] === 200 && preg_match('/name="csrf_token" value="([a-f0-9]+)"/', spp_test_form_scope($editPage['body'], 'no_induk'), $csrf) === 1, 'Form edit SPP admin atau token CSRF tidak tersedia.');
         $edit = payment_process_request($baseUrl . '/pembayaran/proses.php', [
             'aksi'=>'update', 'id'=>(int)$second['id'], 'csrf_token'=>$csrf[1], 'no_induk'=>$nis,
             'tanggal_bayar'=>date('Y-m-d H:i:s'), 'bulan_bayar'=>'09', 'tahun_bayar'=>(string)$start,
@@ -248,7 +254,7 @@ if (spp_billing_schema_ready($koneksi)) {
         fwrite(STDERR, 'FAILED: ' . $failure->getMessage() . PHP_EOL);
         exit(1);
     }
-    echo "OK: endpoint satu bulan, Komite wajib, titipan eksplisit, edit admin, dan struk periode.\n";
+    echo "OK: endpoint satu bulan, Komite wajib, kiriman lama ditolak, nominal tepat, edit admin, dan struk periode.\n";
     exit(0);
 }
 

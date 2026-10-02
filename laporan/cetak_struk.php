@@ -190,9 +190,7 @@ $primaryLines = [
 $sppReceiptLines=[];
 if($sppAllocation){
     $primaryLines[]=['Uang SPP Diterima Sekarang',(float)$sppAllocation['uang_baru']];
-    foreach($sppAllocation['allocations'] as $allocation)$sppReceiptLines[]=['SPP '.receipt_month($allocation['bulan']).' '.$allocation['tahun'],(float)$allocation['nominal_dari_bayar']+(float)$allocation['nominal_dari_titipan']];
-    if((float)$sppAllocation['titipan_digunakan']>0)$sppReceiptLines[]=['Titipan SPP Digunakan',(float)$sppAllocation['titipan_digunakan']];
-    if((float)$sppAllocation['titipan_baru']>0)$sppReceiptLines[]=['Titipan SPP Baru',(float)$sppAllocation['titipan_baru']];
+    foreach($sppAllocation['allocations'] as $allocation)$sppReceiptLines[]=['SPP '.receipt_month($allocation['bulan']).' '.$allocation['tahun'],(float)$allocation['nominal_dari_bayar']];
 }else{$primaryLines[]=['Uang SPP',$payment['U_SPP']];}
 $otherLines = [];
 foreach ($otherDetails as $detail) {
@@ -204,7 +202,6 @@ if ((float)$payment['potong_spp'] > 0) $otherLines[] = ['Potongan SPP', -(float)
 $otherLines = array_merge($sppReceiptLines,array_values(array_filter($otherLines, fn($line) => abs((float)$line[1]) >= 0.005)));
 
 $remainingLines = receipt_remaining_lines($koneksi, $payment, $otherDetails);
-if($sppAllocation)$remainingLines[]=['Saldo Titipan SPP',(float)$sppAllocation['balance_after']];
 $total = (float)$payment['total_jumlah'];
 $signer = $payment['operator_name'] ?: ($_SESSION['admin_nama'] ?? 'Bagian Keuangan');
 ?>
@@ -269,7 +266,7 @@ $signer = $payment['operator_name'] ?: ($_SESSION['admin_nama'] ?? 'Bagian Keuan
     <h1><?= receipt_e(unit_school_name(unit_active_id())) ?></h1>
     <p class="address">Perum Bekasi Griya Asri II, Blok E Jl.H.Nabrih Ds. Sumber Jaya Kp.Buwek Tambun Selatan Telp. 021.88363466</p>
     <div class="rule"></div>
-    <div class="document-title"><?= $sppAllocation && (float)$sppAllocation['uang_baru']<=.001 && (float)$sppAllocation['titipan_digunakan']>0 ? 'BUKTI PENGGUNAAN TITIPAN SPP' : 'SLIP PEMBAYARAN SEKOLAH' ?></div>
+    <div class="document-title">SLIP PEMBAYARAN SEKOLAH</div>
 
     <table class="info"><tr>
       <td><table class="mini">

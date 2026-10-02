@@ -42,7 +42,7 @@ async function submitStudent(page, nis, targetLabel = '') {
   try {
     const context = await browser.newContext({
       viewport: { width: 1440, height: 900 },
-      extraHTTPHeaders: { 'X-SPP-Test-Current-Year': '2098/2099' },
+      extraHTTPHeaders: { 'X-SPP-Test-Current-Year': process.env.SPP_TEST_PROMOTION_SOURCE_YEAR || '2098/2099' },
     });
     const page = await context.newPage();
     const errors = [];

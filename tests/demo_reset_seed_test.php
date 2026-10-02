@@ -63,7 +63,6 @@ try {
         (SELECT COUNT(*) FROM tagihan_daftar_ulang) daftar_ulang,
         (SELECT COUNT(*) FROM bayar) bayar,
         (SELECT COUNT(*) FROM transaksi_m)+(SELECT COUNT(*) FROM transaksi_k) mutasi,
-        (SELECT COUNT(*) FROM titipan_spp_mutasi) titipan,
         (SELECT COUNT(*) FROM tagihan_spp WHERE no_induk LIKE 'PSB%') spp_psb,
         (SELECT COUNT(*) FROM tagihan_komite WHERE no_induk LIKE 'PSB%') komite_psb")->fetch_assoc();
 
@@ -71,7 +70,7 @@ try {
     demo_seed_assert((int)$counts['reguler'] === 144 && (int)$counts['psb'] === 6, 'Komposisi siswa reguler/PSB salah.');
     demo_seed_assert((int)$counts['pangkal'] === 30, 'Tagihan Pangkal baseline harus hanya 30 siswa.');
     demo_seed_assert((int)$counts['spp'] === 1728 && (int)$counts['komite'] === 1728 && (int)$counts['daftar_ulang'] === 144, 'Jumlah tagihan baseline salah atau terduplikasi.');
-    demo_seed_assert((int)$counts['bayar'] === 0 && (int)$counts['mutasi'] === 0 && (int)$counts['titipan'] === 0, 'Baseline tidak boleh memiliki transaksi atau saldo titipan.');
+    demo_seed_assert((int)$counts['bayar'] === 0 && (int)$counts['mutasi'] === 0, 'Baseline tidak boleh memiliki transaksi.');
     demo_seed_assert((int)$counts['spp_psb'] === 0 && (int)$counts['komite_psb'] === 0, 'Siswa PSB tidak boleh memiliki tagihan bulanan.');
 
     echo "OK: reset demo dan seeder baseline 150 siswa tervalidasi.\n";

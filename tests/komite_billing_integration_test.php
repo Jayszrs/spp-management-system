@@ -36,7 +36,7 @@ try {
     try { komite_validate_spp_pair($koneksi,$nis,'10','2195',15000,false); throw new RuntimeException('Komite tanpa SPP diterima saat keduanya terutang.'); }
     catch(SppPaymentException $e) { komite_test_assert($e->status()['code']==='spp_required','Kode popup SPP belum dibayar tidak sesuai.'); }
     komite_test_assert(komite_pair_gap($koneksi,$nis,'10','2195')==='','Belum bayar keduanya tidak boleh dihitung sebagai pasangan timpang.');
-    spp_allocate_payment($koneksi,$nis,null,'10','2195',25000,false,'2195-10-01 07:00:00','Tunai','test');
+    spp_allocate_payment($koneksi,$nis,null,'10','2195',25000,'2195-10-01 07:00:00','Tunai','test');
     komite_test_assert(komite_pair_gap($koneksi,$nis,'10','2195')==='spp_only','Pembayaran SPP lama satu sisi tidak terdeteksi.');
     komite_validate_spp_pair($koneksi,$nis,'10','2195',15000,false); // Melengkapi pembayaran lama.
     komite_test_reject(fn()=>komite_validate_amount($koneksi,$nis,'10','2195',7500,false),'Komite parsial diterima.');

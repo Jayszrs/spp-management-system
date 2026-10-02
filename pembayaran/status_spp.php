@@ -50,7 +50,6 @@ try {
         ? spp_published_period_status($koneksi,$noInduk,$bulan,$tahun,$editId)
         : spp_payment_status($koneksi, $noInduk, $bulan, $tahun, $editId, false, $allowInactive);
     if (spp_billing_schema_ready($koneksi)) {
-        if ($editId === 0) $status['saldo_titipan'] = spp_deposit_balance($koneksi,$noInduk);
         $komite = komite_bill($koneksi,$noInduk,$bulan,$tahun);
         $komitePaid = (float)($komite['paid'] ?? 0);
         if ($komite && $editId > 0) {

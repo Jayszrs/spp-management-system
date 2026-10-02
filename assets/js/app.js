@@ -784,7 +784,7 @@ function selectedPaymentMonthLabel() {
 function refreshSppPeriodLabel() {
   const label = document.getElementById('spp-component-label');
   if (!label) return;
-  if (window.sppPublishedBilling) { label.textContent = document.getElementById('spp-action')?.value === 'titipan' ? 'Titipan SPP' : '🎓 Uang SPP'; return; }
+  if (window.sppPublishedBilling) { label.textContent = '🎓 Uang SPP'; return; }
   const monthLabel = selectedPaymentMonthLabel();
   label.textContent = '🎓 Uang SPP' + (monthLabel ? ' (' + monthLabel + ')' : '');
 }
@@ -843,23 +843,11 @@ function daftarUlangRecords(opt) {
 function publishedSppData(opt = selectedStudentOption()) {
   if (!window.sppPublishedBilling || !opt) return null;
   try {
-    const parsed = JSON.parse(opt.dataset.sppBilling || '{"saldo":0,"tagihan":[]}');
-    return { saldo: parseNumber(parsed.saldo || 0), tagihan: Array.isArray(parsed.tagihan) ? parsed.tagihan : [] };
+    const parsed = JSON.parse(opt.dataset.sppBilling || '{"tagihan":[]}');
+    return { tagihan: Array.isArray(parsed.tagihan) ? parsed.tagihan : [] };
   } catch (_) {
-    return { saldo: 0, tagihan: [] };
+    return { tagihan: [] };
   }
-}
-
-function publishedSppPlan(useDeposit = false) {
-  const data = publishedSppData();
-  const newMoney = parseNumber(document.getElementById('spp-input')?.value || 0);
-  if (!data) return { lines: [], depositUsed: 0, depositCreated: 0, balanceAfter: 0, newMoney };
-  const bill = data.tagihan.find(item => item.bulan + '-' + item.tahun === selectedPaymentPeriod());
-  const live=sppStatusState.contextKey === currentSppStatusContext()?.key ? sppStatusState.payload?.selected : null;
-  const need = parseNumber(live?.remaining ?? bill?.remaining ?? 0);
-  const depositUsed = useDeposit ? Math.min(data.saldo, need) : 0;
-  const lines = bill && newMoney + depositUsed + 0.001 >= need && need > 0 ? [{ ...bill, remaining: need, fromDeposit: depositUsed, fromCash: need - depositUsed }] : [];
-  return { lines, depositUsed, depositCreated: 0, balanceAfter: data.saldo - depositUsed, newMoney };
 }
 
 function refreshPublishedKomiteUi(opt = selectedStudentOption()) {
@@ -874,7 +862,7 @@ function refreshPublishedKomiteUi(opt = selectedStudentOption()) {
 
 function refreshPublishedSppUi(opt = selectedStudentOption()) {
   if (!window.sppPublishedBilling) return false;
-  const data = publishedSppData(opt) || { saldo: 0, tagihan: [] };
+  const data = publishedSppData(opt) || { tagihan: [] };
   const bill = data.tagihan.find(item => item.bulan + '-' + item.tahun === selectedPaymentPeriod());
   const contextKey = currentSppStatusContext()?.key || '';
   const live = contextKey && sppStatusState.contextKey === contextKey ? sppStatusState.payload?.selected : null;
@@ -882,17 +870,6 @@ function refreshPublishedSppUi(opt = selectedStudentOption()) {
   refreshPublishedKomiteUi(opt);
   const context = document.getElementById('spp-context-label');
   if (context) context.textContent = bill ? 'SPP ' + paymentPeriodDisplayLabel(selectedPaymentPeriod()) + ' · lunas penuh' : 'Tidak ada tagihan SPP terbuka bulan ini.';
-  const banner = document.getElementById('spp-deposit-banner');
-  const balance = document.getElementById('spp-deposit-balance');
-  const capacity = document.getElementById('spp-deposit-capacity');
-  const button = document.getElementById('spp-use-deposit-button');
-  const hidden = document.getElementById('gunakan-titipan-spp');
-  const nis = opt?.dataset.nis || '';
-  if (hidden && hidden.dataset.nis !== nis) { hidden.value = '0'; hidden.dataset.nis = nis; }
-  if (banner) banner.hidden = !opt;
-  if (balance) balance.textContent = 'Rp ' + formatRupiah(data.saldo);
-  if (capacity) capacity.textContent = data.saldo > 0 ? 'Pilih bulan SPP, lalu konfirmasi penggunaan.' : 'Belum ada saldo titipan SPP.';
-  if (button) { button.disabled = data.saldo <= 0 || !bill; button.textContent = hidden?.value === '1' ? 'Titipan Dipilih' : 'Gunakan Titipan'; }
   return true;
 }
 
@@ -1413,11 +1390,6 @@ function clearPaymentAmountsOnContextChange(studentChanged = false) {
     const input=document.getElementById(id);
     if (input) { input.value='0'; input.setCustomValidity(''); }
   }
-  const deposit=document.getElementById('gunakan-titipan-spp');
-  if (deposit) deposit.value='0';
-  if (studentChanged || window.sppEditPaymentId) {
-    if (document.getElementById('spp-action')?.value === 'titipan') document.getElementById('spp-record-deposit-button')?.click();
-  }
   if (studentChanged) {
     for (const row of document.querySelectorAll('#biaya-lain-list .biaya-lain-row')) {
       const select=row.querySelector('.biaya-lain-select'); if (select) select.value='';
@@ -1480,13 +1452,11 @@ function showSppWarning(status, sourceElement = null, force = false, onPrimary =
   } else if (code === 'spp_required') {
     close.textContent = 'Isi SPP'; secondary.hidden = false;
     sppWarningPrimaryAction = () => {
-      if (document.getElementById('spp-action')?.value === 'titipan') document.getElementById('spp-record-deposit-button')?.click();
       const input = document.getElementById('spp-input');
       const live = sppStatusState.payload;
       if (!input || live?.status !== 'payable' || input.readOnly) return;
       const due = parseNumber(live.selected?.remaining || 0);
-      const deposit = document.getElementById('gunakan-titipan-spp')?.value === '1' ? Math.min(publishedSppData()?.saldo || 0, due) : 0;
-      input.value = formatRupiahString(Math.max(0, due - deposit));
+      input.value = formatRupiahString(due);
       input.dispatchEvent(new Event('input', { bubbles: true })); input.focus();
     };
   } else if (code === 'status_unavailable' || code === 'billing_changed') {
@@ -1495,15 +1465,6 @@ function showSppWarning(status, sourceElement = null, force = false, onPrimary =
     sppWarningPrimaryAction = code === 'billing_changed'
       ? () => { try { sessionStorage.setItem('paymentDraftReload',JSON.stringify(capturePaymentDraftInBrowser())); } catch (_) { /* storage unavailable */ } window.location.reload(); }
       : () => requestSppStatus({ interactive: false, force: true, sourceElement: retryTarget });
-  } else if (code === 'not_published' && window.sppPublishedBilling) {
-    close.textContent = 'Pilih bulan lain';
-    secondary.hidden = false;
-    secondary.textContent = 'Catat Titipan SPP';
-    sppWarningPrimaryAction = () => document.getElementById('bulan-bayar')?.focus();
-    sppWarningSecondaryAction = () => {
-      if (document.getElementById('spp-action')?.value !== 'titipan') document.getElementById('spp-record-deposit-button')?.click();
-      document.getElementById('spp-input')?.focus();
-    };
   } else if (['not_published','already_paid','not_payable'].includes(code)) {
     close.textContent = 'Pilih bulan lain';
     sppWarningPrimaryAction = () => document.getElementById('bulan-bayar')?.focus();
@@ -1512,8 +1473,7 @@ function showSppWarning(status, sourceElement = null, force = false, onPrimary =
     sppWarningPrimaryAction = () => { const trigger=document.getElementById('du-selector-trigger'); trigger?.focus(); trigger?.click(); };
   } else if (['amount_mismatch','komite_amount','over_limit'].includes(code)) {
     close.textContent = 'Perbaiki nominal';
-  } else if (code === 'deposit_confirm') {
-    secondary.hidden = false;
+
   } else if (code === 'future_period') {
     secondary.hidden = false;
     sppWarningSecondaryAction = () => document.getElementById('bulan-bayar')?.focus();
@@ -1540,9 +1500,7 @@ function sppEditDependencyBlocks(dependency, proposedAmount = null) {
 
 function applySppStatusPayload(payload) {
   const opt=selectedStudentOption();
-  if (opt && Number.isFinite(Number(payload?.saldo_titipan))) {
-    try { const data=JSON.parse(opt.dataset.sppBilling || '{}'); data.saldo=Number(payload.saldo_titipan); opt.dataset.sppBilling=JSON.stringify(data); } catch (_) { /* keep current preview */ }
-  }
+
   const selected = payload?.selected;
   if (selected && Number.isFinite(Number(selected.tariff)) && Number.isFinite(Number(selected.paid))) {
     setPaymentComponent('spp', Number(selected.tariff), Number(selected.paid));
@@ -1635,17 +1593,15 @@ function refreshSppInstallmentAvailability() {
   if (!input) return;
   if (window.sppPublishedBilling) {
     const opt = selectedStudentOption();
-    const isDeposit = document.getElementById('spp-action')?.value === 'titipan';
     const context = currentSppStatusContext();
     const live = context && sppStatusState.contextKey === context.key ? sppStatusState.payload : null;
-    const blocked = !opt || (!isDeposit && (sppStatusState.pending || !live || live.lock_spp));
+    const blocked = !opt || (sppStatusState.pending || !live || live.lock_spp);
     setPaymentInputAvailability(input, blocked, live?.message || (opt ? 'Memeriksa tagihan SPP…' : 'Pilih siswa terlebih dahulu'));
-    if (!isDeposit && live && ['not_published', 'not_payable', 'already_paid'].includes(live.status)) input.value = '0';
-    else if (live?.lock_spp && !window.sppEditPaymentId && !isDeposit) input.value = '0';
+    if (live && ['not_published', 'not_payable', 'already_paid'].includes(live.status)) input.value = '0';
+    else if (live?.lock_spp && !window.sppEditPaymentId) input.value = '0';
     const due = parseNumber(live?.selected?.remaining || 0);
-    const deposit = document.getElementById('gunakan-titipan-spp')?.value === '1' ? Math.min(publishedSppData(opt)?.saldo || 0, due) : 0;
     const amount = parseNumber(input.value || 0);
-    const mismatch = !blocked && !isDeposit && amount > .001 && Math.abs(amount + deposit - due) > .001;
+    const mismatch = !blocked && amount > .001 && Math.abs(amount - due) > .001;
     input.setCustomValidity(mismatch ? 'SPP bulan ini harus lunas tepat Rp ' + formatRupiah(due) + '.' : '');
     input.classList.toggle('is-input-overlimit', mismatch);
     if (mismatch) input.setAttribute('aria-invalid', 'true');
@@ -2118,22 +2074,17 @@ document.addEventListener('DOMContentLoaded', function () {
   const sppInput = document.getElementById('spp-input');
   if (sppInput) {
     sppInput.addEventListener('focus', function () {
-      if (!window.sppPublishedBilling || document.getElementById('spp-action')?.value === 'titipan') return;
+      if (!window.sppPublishedBilling) return;
       const status=sppStatusState.payload;
       if (status && status.status !== 'payable') showSppWarning(status,this);
     });
     sppInput.addEventListener('blur', function (event) {
       if (window.sppPublishedBilling) {
         const amount = parseNumber(this.value || 0);
-        if (document.getElementById('spp-action')?.value === 'titipan' || amount <= .001) return;
-        // A partial cash amount is valid when the cashier is about to add Titipan SPP.
-        // The combined amount is checked after the deposit choice and on submit.
-        if (event.relatedTarget?.id === 'spp-use-deposit-button') return;
+        if (amount <= .001) return;
         const status=sppStatusState.payload;
         const due=parseNumber(status?.selected?.remaining || 0);
-        const useDeposit=document.getElementById('gunakan-titipan-spp')?.value === '1';
-        const deposit=useDeposit ? Math.min(publishedSppData()?.saldo || 0,due) : 0;
-        if (status?.status === 'payable' && Math.abs(amount+deposit-due)>.001) showSppWarning({code:'amount_mismatch',title:'Nominal SPP belum sesuai',message:'SPP '+status.selected.label+' harus lunas Rp '+formatRupiah(due)+'.',amount_label:'Sisa Rp '+formatRupiah(due)},this,true);
+        if (status?.status === 'payable' && Math.abs(amount-due)>.001) showSppWarning({code:'amount_mismatch',title:'Nominal SPP belum sesuai',message:'SPP '+status.selected.label+' harus lunas Rp '+formatRupiah(due)+'.',amount_label:'Sisa Rp '+formatRupiah(due)},this,true);
         return;
       }
       if (this.readOnly) return;
@@ -2154,57 +2105,6 @@ document.addEventListener('DOMContentLoaded', function () {
       if (sppEditDependencyBlocks(dependency, amount)) showSppWarning(dependency, this, true);
     });
   }
-
-  const depositModal = document.getElementById('spp-deposit-modal');
-  const closeDepositModal = () => { if (depositModal) depositModal.hidden = true; };
-  document.getElementById('spp-use-deposit-button')?.addEventListener('click', async function () {
-    const hidden = document.getElementById('gunakan-titipan-spp');
-    if (hidden?.value === '1') {
-      hidden.value = '0';
-      refreshPublishedSppUi();
-      return;
-    }
-    if (document.getElementById('spp-action')?.value === 'titipan') return;
-    const status=await requestSppStatus({interactive:false,force:true,sourceElement:this});
-    if (!status || status.status !== 'payable') { showSppWarning(status || unavailableSppStatus(),this,true); return; }
-    const plan = publishedSppPlan(true);
-    const summary = document.getElementById('spp-deposit-modal-summary');
-    const lines = document.getElementById('spp-deposit-modal-lines');
-    const komiteDue = Math.max(0, parseNumber(document.getElementById('komite-total')?.value || 0) - parseNumber(document.getElementById('komite-bayar')?.value || 0));
-    if (summary) summary.textContent = plan.lines.length
-      ? 'SPP bulan ini: uang baru Rp ' + formatRupiah(plan.newMoney) + ', Titipan terpakai Rp ' + formatRupiah(plan.depositUsed) + '. Komite bulan ini Rp ' + formatRupiah(komiteDue) + '. Saldo Titipan akhir Rp ' + formatRupiah(plan.balanceAfter) + '.'
-      : 'Saldo belum cukup untuk melunasi satu tagihan penuh. Tambahkan uang SPP baru agar dapat digabungkan.';
-    if (lines) lines.innerHTML = plan.lines.length ? plan.lines.map(line =>
-      '<article><div><strong>' + escapeHtml(paymentPeriodDisplayLabel(line.bulan + '-' + line.tahun)) + '</strong><small>TA ' + escapeHtml(line.tahun_ajaran || '-') + ' · ' + escapeHtml(line.kelas || '-') + '</small></div><span>Rp ' + formatRupiah(line.remaining) + '</span></article>'
-    ).join('') : '<div class="spp-deposit-empty">Belum ada tagihan yang dapat dilunasi penuh.</div>';
-    const confirm=document.getElementById('spp-deposit-confirm');
-    if (confirm) confirm.disabled=!plan.lines.length;
-    if (depositModal) depositModal.hidden = false;
-  });
-  document.getElementById('spp-deposit-cancel')?.addEventListener('click', closeDepositModal);
-  document.getElementById('spp-deposit-confirm')?.addEventListener('click', function () {
-    const plan = publishedSppPlan(true);
-    if (!plan.lines.length) return;
-    const hidden = document.getElementById('gunakan-titipan-spp');
-    if (hidden) hidden.value = '1';
-    closeDepositModal();
-    refreshPublishedSppUi();
-  });
-  depositModal?.addEventListener('click', event => { if (event.target === depositModal) closeDepositModal(); });
-
-  document.getElementById('spp-record-deposit-button')?.addEventListener('click', function () {
-    const action=document.getElementById('spp-action');
-    if (!action) return;
-    action.value=action.value === 'titipan' ? 'bayar' : 'titipan';
-    const deposit=document.getElementById('gunakan-titipan-spp');if (deposit) deposit.value='0';
-    this.textContent=action.value === 'titipan' ? 'Kembali ke Bayar SPP' : 'Catat Titipan SPP';
-    const context=document.getElementById('spp-action-context');
-    if (context) context.textContent=action.value === 'titipan' ? 'Nominal SPP di bawah akan dicatat sebagai titipan.' : '';
-    const label=document.getElementById('spp-component-label');
-    if (label) label.textContent=action.value === 'titipan' ? 'Titipan SPP' : '🎓 Uang SPP';
-    refreshSppInstallmentAvailability();
-    updateTotal();
-  });
 
   const warningClose = document.getElementById('spp-warning-close');
   const warningSecondary = document.getElementById('spp-warning-secondary');
@@ -2273,13 +2173,11 @@ document.addEventListener('DOMContentLoaded', function () {
         if (!methodInput?.value) { showSppWarning({code:'method_missing',title:'Pilih metode pembayaran',message:'Pilih Tunai, VA, atau QRIS sebelum menyimpan.',target:'sistem-pembayaran'},methodInput,true);return; }
         if (!monthInput?.value || !/^\d{4}$/.test(yearInput?.value || '')) { showSppWarning({code:'period_missing',title:'Periksa bulan tagihan',message:'Pilih bulan dan isi tahun tagihan dengan empat angka sebelum menyimpan.',target:'tahun-bayar'},yearInput,true);return; }
         if (!dateInput?.value) { showSppWarning({code:'date_missing',title:'Tanggal bayar belum ada',message:'Muat ulang halaman agar tanggal pembayaran hari ini terisi.',target:'tgl-bayar'},dateInput,true);return; }
-        const action=document.getElementById('spp-action')?.value || 'bayar';
         const amount=parseNumber(document.getElementById('spp-input')?.value || 0);
         const komiteAmount=parseNumber(document.getElementById('komite-input')?.value || 0);
         const komiteDue=parseNumber(document.getElementById('komite-total')?.value || 0)-parseNumber(document.getElementById('komite-bayar')?.value || 0);
-        const useDeposit=document.getElementById('gunakan-titipan-spp')?.value === '1';
         const total=parseNumber(document.getElementById('hidden-total')?.value || 0);
-        if (total <= .001 && !useDeposit) { showSppWarning({code:'empty_payment',title:'Belum ada pembayaran',message:'Isi setidaknya satu nominal pembayaran sebelum menyimpan.',target:'spp-input'},document.getElementById('spp-input'),true);return; }
+        if (total <= .001) { showSppWarning({code:'empty_payment',title:'Belum ada pembayaran',message:'Isi setidaknya satu nominal pembayaran sebelum menyimpan.',target:'spp-input'},document.getElementById('spp-input'),true);return; }
         const invalidInput = Array.from(form.querySelectorAll('.tbl-pay, .biaya-lain-nominal, .biaya-lain-select')).find(input => input.validationMessage && !input.readOnly && !input.disabled);
         if (invalidInput?.classList.contains('biaya-lain-select')) {
           showSppWarning({code:'other_fee_invalid',title:'Pilih tagihan lain',message:invalidInput.validationMessage},invalidInput,true);return;
@@ -2294,19 +2192,16 @@ document.addEventListener('DOMContentLoaded', function () {
           const message='Sisa '+label+' Rp '+formatRupiah(remaining)+', tetapi yang diisi Rp '+formatRupiah(parseNumber(invalidInput.value || 0))+'. Kurangi nominalnya sebelum menyimpan.';
           showSppWarning({code:'over_limit',title:'Melebihi sisa tagihan',message,target:invalidInput.id},invalidInput,true);return;
         }
-        if (action === 'titipan') {
-          if (amount <= .001) { showSppWarning({code:'deposit_missing',title:'Isi Titipan SPP',message:'Masukkan nominal uang yang akan dititipkan.'},document.getElementById('spp-input'),true);return; }
-        } else if (amount > .001 || useDeposit) {
+        if (amount > .001) {
           const status=await requestSppStatus({interactive:false,force:true,sourceElement:document.getElementById('spp-input')});
           if (!status || status.status !== 'payable') { showSppWarning(status || unavailableSppStatus(),document.getElementById('spp-input'),true);return; }
           if (status.komite && !status.komite.exists) { showSppWarning({code:'billing_changed',title:'Tagihan berubah',message:'Tagihan Komite bulan ini belum tersedia. Perbarui tagihan sebelum menyimpan.',target:'komite-input'},document.getElementById('komite-input'),true);return; }
           const due=parseNumber(status.selected?.remaining || 0);
-          const deposit=useDeposit?Math.min(publishedSppData()?.saldo || 0,due):0;
-          if (Math.abs(amount+deposit-due)>.001) { showSppWarning({code:'amount_mismatch',title:'Nominal belum sesuai',message:'SPP '+status.selected.label+' harus lunas Rp '+formatRupiah(due)+'. Periksa angka yang diisi.',amount_label:'Sisa SPP Rp '+formatRupiah(due),target:'spp-input'},document.getElementById('spp-input'),true);return; }
+          if (Math.abs(amount-due)>.001) { showSppWarning({code:'amount_mismatch',title:'Nominal belum sesuai',message:'SPP '+status.selected.label+' harus lunas Rp '+formatRupiah(due)+'. Periksa angka yang diisi.',amount_label:'Sisa SPP Rp '+formatRupiah(due),target:'spp-input'},document.getElementById('spp-input'),true);return; }
           if (komiteDue > .001 && Math.abs(komiteAmount-komiteDue)>.001) { showSppWarning({code:'komite_required',title:'Komite belum dibayar',message:'SPP '+status.selected.label+' harus dibayar bersama Komite bulan yang sama. Sisa Komite Rp '+formatRupiah(komiteDue)+'.',amount_label:'Sisa Komite Rp '+formatRupiah(komiteDue),target:'komite-input'},document.getElementById('komite-input'),true);return; }
         }
         if (komiteAmount > .001 && Math.abs(komiteAmount-komiteDue)>.001) { showSppWarning({code:'komite_amount',title:'Nominal belum sesuai',message:'Komite '+paymentPeriodDisplayLabel(selectedPaymentPeriod())+' harus lunas Rp '+formatRupiah(komiteDue)+'. Periksa angka yang diisi.',target:'komite-input'},document.getElementById('komite-input'),true);return; }
-        if (komiteAmount > .001 && (action === 'titipan' || (amount <= .001 && !useDeposit))) {
+        if (komiteAmount > .001 && (amount <= .001)) {
           const status=await requestSppStatus({interactive:false,force:true,sourceElement:document.getElementById('spp-input')});
           if (!status || !status.ok) { showSppWarning(status || unavailableSppStatus(),document.getElementById('spp-input'),true);return; }
           const sppDue=parseNumber(status.selected?.remaining || 0);
@@ -2321,12 +2216,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const paidDate=document.getElementById('tgl-bayar')?.value || '';
         const paidYear=parseInt(paidDate.slice(0,4),10);
         const paidMonth=parseInt(paidDate.slice(5,7),10);
-        const depositStatus=action === 'titipan' && amount > .001
-          ? await requestSppStatus({interactive:false,force:true,sourceElement:document.getElementById('spp-input')}) : null;
-        if (depositStatus && ['payable','prior_unpaid'].includes(depositStatus.status) && parseNumber(depositStatus.selected?.remaining || 0) > .001) {
-          showSppWarning({code:'deposit_confirm',severity:'warning',title:'Uang ini menjadi Titipan SPP',message:'Rp '+formatRupiah(amount)+' akan disimpan sebagai titipan. Tagihan '+paymentPeriodDisplayLabel(selectedPaymentPeriod())+' belum lunas.',action_label:'Catat Titipan',target:'spp-input'},document.getElementById('spp-input'),true,submitNow);return;
-        }
-        if (action !== 'titipan' && (amount > .001 || useDeposit || komiteAmount > .001) && periodYear*12+periodMonth > paidYear*12+paidMonth) {
+        if ((amount > .001 || komiteAmount > .001) && periodYear*12+periodMonth > paidYear*12+paidMonth) {
           showSppWarning({code:'future_period',severity:'warning',title:'Periksa bulan tagihan',message:'Tagihan '+paymentPeriodDisplayLabel(selectedPaymentPeriod())+' belum tiba. Pastikan ini memang pembayaran lebih awal.',action_label:'Tetap Simpan',target:'bulan-bayar'},document.getElementById('bulan-bayar'),true,submitNow);return;
         }
         submitNow();
@@ -2338,25 +2228,6 @@ document.addEventListener('DOMContentLoaded', function () {
       }
 
       const amount = parseNumber(document.getElementById('spp-input')?.value || 0);
-      const action = document.getElementById('spp-action')?.value || 'bayar';
-      const useDeposit = document.getElementById('gunakan-titipan-spp')?.value === '1';
-      if (action === 'titipan') {
-        event.preventDefault();
-        if (amount <= 0.001 || useDeposit) {
-          showSppWarning({
-            code: 'deposit_missing_edit',
-            title: 'Periksa mode Titipan SPP',
-            message: amount <= 0.001
-              ? 'Mode Catat Titipan SPP masih aktif, tetapi nominalnya kosong. Isi nominal titipan atau klik Kembali ke Bayar SPP jika hanya ingin mengubah komponen lain.'
-              : 'Titipan baru tidak dapat dicatat sambil menggunakan saldo titipan lama.',
-            target: 'spp-input'
-          }, document.getElementById('spp-input'), true);
-          return;
-        }
-        normalizePaymentInputs();
-        form.submit();
-        return;
-      }
       const editOriginal = window.sppEditOriginal || null;
       const context = currentSppStatusContext();
       const originalChanged = !!editOriginal && !!context && (
@@ -2441,14 +2312,11 @@ async function restorePaymentDraft() {
     setValue('tagihan-daftar-ulang-id', draft.tagihan_daftar_ulang_id);
     if (opt) applyStudentPaymentDetails(opt);
   }
-  if (draft.spp_action && draft.spp_action !== document.getElementById('spp-action')?.value) document.getElementById('spp-record-deposit-button')?.click();
   for (const [key,id] of Object.entries({uang_pangkal:'pangkal-input',uang_psb:'psb-input',uang_komite:'komite-input',uang_du:'du-input'})) {
     if (draft[key] !== undefined && !document.getElementById(id)?.readOnly) setValue(id,formatRupiahString(parseNumber(draft[key])));
   }
   if (opt) await requestSppStatus({interactive:false,force:true});
   if (draft.uang_spp !== undefined && !document.getElementById('spp-input')?.readOnly) setValue('spp-input',formatRupiahString(parseNumber(draft.uang_spp)));
-  // A previous confirmation is not carried into a new request; the cashier must confirm Titipan again.
-  setValue('gunakan-titipan-spp','0');
   window.paymentDraftOtherFees = draft;
   restorePaymentDraftOtherFees();
   updateTotal();
@@ -2458,7 +2326,7 @@ function capturePaymentDraftInBrowser() {
   const value=id => document.getElementById(id)?.value || '';
   const draft={source_path:window.location.pathname,edit_id:Number(window.sppEditPaymentId || 0),
     no_induk:value('disp-nis'),bulan_bayar:value('bulan-bayar'),tahun_bayar:value('tahun-bayar'),
-    sistem_pembayaran:value('sistem-pembayaran'),spp_action:value('spp-action'),
+    sistem_pembayaran:value('sistem-pembayaran'),
     tagihan_daftar_ulang_id:value('tagihan-daftar-ulang-id'),catatan:value('catatan')};
   for (const [key,id] of Object.entries({uang_pangkal:'pangkal-input',uang_psb:'psb-input',uang_spp:'spp-input',uang_komite:'komite-input',uang_du:'du-input'})) draft[key]=value(id);
   const rows=Array.from(document.querySelectorAll('#biaya-lain-list .biaya-lain-row'));

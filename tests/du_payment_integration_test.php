@@ -119,7 +119,7 @@ try {
     $submit = static function (string $nis, int $billId, float $du, float $spp = 0, float $komite=0) use ($baseUrl, &$cookies, $month, $calendarYear): array {
         $form = du_http_request($baseUrl . '/pembayaran/form.php', [], $cookies);
         du_http_assert($form['status'] === 200
-            && preg_match('/name="csrf_token" value="([a-f0-9]{64})"/', spp_test_form_scope($form['body'], 'spp_action'), $csrf) === 1
+            && preg_match('/name="csrf_token" value="([a-f0-9]{64})"/', spp_test_form_scope($form['body'], 'no_induk'), $csrf) === 1
             && preg_match('/name="request_key" value="([a-f0-9]{32})"/', $form['body'], $key) === 1,
             'Token input pembayaran tidak tersedia.');
         return du_http_request($baseUrl . '/pembayaran/proses.php', [
@@ -141,7 +141,7 @@ try {
     du_http_assert($submit($students[1], $studentBills[$previous], 100000)['status'] === 302 && str_contains(du_http_flash($baseUrl, $cookies), 'tidak cocok dengan siswa'), 'ID tagihan milik siswa lain tidak ditolak.');
 
     $edit = du_http_request($baseUrl . '/pembayaran/edit.php?id=' . (int)$payment['id'], [], $cookies);
-    du_http_assert(preg_match('/name="csrf_token" value="([a-f0-9]+)"/', spp_test_form_scope($edit['body'], 'spp_action'), $tokenMatch) === 1, 'Token CSRF edit tidak ditemukan.');
+    du_http_assert(preg_match('/name="csrf_token" value="([a-f0-9]+)"/', spp_test_form_scope($edit['body'], 'no_induk'), $tokenMatch) === 1, 'Token CSRF edit tidak ditemukan.');
     $move = du_http_request($baseUrl . '/pembayaran/proses.php', [
         'aksi'=>'update', 'id'=>(int)$payment['id'], 'csrf_token'=>$tokenMatch[1], 'no_induk'=>$students[0],
         'tanggal_bayar'=>date('Y-m-d H:i:s'), 'bulan_bayar'=>$month, 'tahun_bayar'=>$calendarYear,
@@ -172,4 +172,4 @@ if ($failure) {
     fwrite(STDERR, 'FAILED: ' . $failure->getMessage() . PHP_EOL);
     exit(1);
 }
-echo "OK: pembayaran DU lintas tahun, validasi ID, pemindahan edit, struk, dan batas titipan lulusan tervalidasi.\n";
+echo "OK: pembayaran DU lintas tahun, validasi ID, pemindahan edit, struk, dan batas pembayaran lulusan tervalidasi.\n";

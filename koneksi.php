@@ -7,6 +7,12 @@ define('DB_HOST', getenv('SPP_DB_HOST') ?: 'localhost');
 define('DB_USER', getenv('SPP_DB_USER') ?: 'root');
 define('DB_PASS', getenv('SPP_DB_PASS') !== false ? getenv('SPP_DB_PASS') : '');
 define('DB_NAME', getenv('SPP_DB_NAME') ?: 'db_spp');
+if (PHP_SAPI !== 'cli' && DB_NAME === 'db_spp'
+    && is_file(__DIR__ . '/tmp/financial_migration.lock')) {
+    http_response_code(503);
+    header('Retry-After: 60');
+    exit('SistemSPP sedang dalam pemeliharaan. Silakan coba kembali setelah selesai.');
+}
 $dbPort = filter_var(getenv('SPP_DB_PORT') ?: '3306', FILTER_VALIDATE_INT, [
     'options' => ['min_range' => 1, 'max_range' => 65535]
 ]);

@@ -315,7 +315,7 @@ function primary_lines(array $row, ?array $sppAllocation=null): array {
 function other_lines(array $row, array $details, ?array $sppAllocation=null): array {
     $lines = [];
 
-    if($sppAllocation){foreach($sppAllocation['allocations'] as $allocation)$lines[]=payment_line('SPP '.month_name_id($allocation['bulan']).' '.$allocation['tahun'],(float)$allocation['nominal_dari_bayar']+(float)$allocation['nominal_dari_titipan']);if((float)$sppAllocation['titipan_digunakan']>0)$lines[]=payment_line('Titipan SPP Digunakan',(float)$sppAllocation['titipan_digunakan']);if((float)$sppAllocation['titipan_baru']>0)$lines[]=payment_line('Titipan SPP Baru',(float)$sppAllocation['titipan_baru']);}
+    if($sppAllocation){foreach($sppAllocation['allocations'] as $allocation)$lines[]=payment_line('SPP '.month_name_id($allocation['bulan']).' '.$allocation['tahun'],(float)$allocation['nominal_dari_bayar']);}
 
     foreach ($details as $detail) {
         $label = $detail['nama_biaya_snapshot'];

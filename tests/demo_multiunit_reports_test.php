@@ -27,8 +27,8 @@ foreach ([1, 2, 3] as $unitId) {
     $savings = fixture_count($koneksi, 'tabungan');
     fixture_assert($unitId === 1 ? $students >= 150 : $students === 36, "Jumlah siswa {$label} salah.");
     // An imported disposable snapshot can contain later legitimate payments
-    // in addition to the 17 transactions created by the demo fixture.
-    fixture_assert($unitId === 1 ? $payments >= 1002 : $payments >= 17, "Jumlah pembayaran {$label} salah.");
+    // in addition to the 14 transactions created by the demo fixture.
+    fixture_assert($unitId === 1 ? $payments >= 990 : $payments >= 14, "Jumlah pembayaran {$label} salah.");
     fixture_assert($savings === 6 && fixture_count($koneksi, 'transaksi_m') === 6 && fixture_count($koneksi, 'transaksi_k') === 3,
         "Contoh tabungan {$label} tidak lengkap.");
     $balance = $koneksi->query('SELECT MIN(SALDO) minimum, SUM(SALDO) total FROM tabungan')->fetch_assoc();
@@ -41,7 +41,6 @@ foreach ([1, 2, 3] as $unitId) {
             "Relasi pembayaran SPP/Komite {$label} salah.");
         fixture_assert(fixture_count($koneksi, 'bayar_du') === 3 && fixture_count($koneksi, 'bayar_biaya_lain') === 2,
             "Relasi pembayaran Daftar Ulang/Biaya Lain {$label} salah.");
-        fixture_assert(fixture_count($koneksi, 'titipan_spp_mutasi') >= 3, "Mutasi Titipan SPP {$label} tidak lengkap.");
         fixture_assert((int)$koneksi->query("SELECT COUNT(*) n FROM siswa WHERE KELAS='PSB'")->fetch_assoc()['n'] === 3,
             "Siswa PSB {$label} salah.");
         $year = $koneksi->query("SELECT status FROM tahun_ajaran WHERE label='2026/2027'")->fetch_assoc();
@@ -57,14 +56,8 @@ foreach ([1, 2, 3] as $unitId) {
                 'tanggal_awal'=>$date,'tanggal_akhir'=>$date,
             ]));
             fixture_assert(isset($item['rows']), "Kategori {$categoryLabel} {$label} gagal dimuat.");
-            if ($category === 'titipan_spp') {
-                $ledger = report_build($koneksi, 'titipan-spp', report_filters($koneksi, [
-                    'template'=>'titipan-spp','tanggal_awal'=>$date,'tanggal_akhir'=>$date,
-                ]));
-                fixture_assert(count($ledger['rows']) > 0, "Riwayat Titipan SPP {$label} kosong.");
-            } else {
                 fixture_assert(count($item['rows']) > 0, "Kategori {$categoryLabel} {$label} tidak terisi.");
-            }
+
         }
     }
     $unitCounts[$unitId] = ['siswa'=>$students, 'bayar'=>$payments, 'tabungan'=>$savings];

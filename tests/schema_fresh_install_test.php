@@ -41,7 +41,7 @@ try {
         if ($result instanceof mysqli_result) $result->free();
     } while ($db->more_results() && $db->next_result());
 
-    $required = ['master_spp_tahun', 'master_spp_tarif', 'tagihan_spp', 'spp_alokasi_batch', 'spp_alokasi', 'titipan_spp_mutasi', 'spp_audit_log', 'transaksi_otorisasi', 'keuangan_request'];
+    $required = ['master_spp_tahun', 'master_spp_tarif', 'tagihan_spp', 'spp_alokasi_batch', 'spp_alokasi', 'spp_audit_log', 'transaksi_otorisasi', 'keuangan_request'];
     $quoted = implode(',', array_fill(0, count($required), '?'));
     $stmt = $db->prepare("SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA=? AND TABLE_NAME IN ({$quoted})");
     $params = array_merge([$database], $required);
@@ -52,6 +52,8 @@ try {
     sort($tables); sort($required);
     if ($tables !== $required) throw new RuntimeException('Tabel Master SPP pada instalasi baru tidak lengkap.');
 
+    $retired=(int)$db->query("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND COLUMN_NAME IN ('U_TITIPAN_SPP','gunakan_titipan','titipan_digunakan','titipan_baru','nominal_dari_titipan')")->fetch_row()[0];
+    if($retired || (int)$db->query("SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME LIKE 'titipan_spp_mutasi%'")->fetch_row()[0]) throw new RuntimeException('Fresh install recreated Titipan SPP.');
     $empty = $db->query("SELECT
         (SELECT COUNT(*) FROM `{$database}`.siswa) siswa,
         (SELECT COUNT(*) FROM `{$database}`.bayar) pembayaran,
@@ -105,7 +107,31 @@ try {
         if (!$rejected) throw new RuntimeException("Tarif tingkat {$wrongGrade} diterima di unit {$unitId}.");
     }
 
-    echo "OK: instalasi baru dan migrasi multiunit menerima tarif SPP serta kelas awal SMP/SMA.\n";
+    // The fresh clone has no payments. Remove only test tariffs before the demo profile is installed.
+    $koneksi->query('DELETE FROM master_spp_tarif_data');
+    unit_set_context($koneksi,1);
+    $sdClass=(int)$koneksi->query("SELECT id FROM master_kelas WHERE tingkat=1 AND kode_rombel='A' LIMIT 1")->fetch_row()[0];
+    for($number=1;$number<=6;$number++){
+        $nis='99000000'.str_pad((string)$number,2,'0',STR_PAD_LEFT);
+        $koneksi->query("INSERT INTO siswa(NO_INDUK,NAMA,KELAS,master_kelas_id) VALUES('$nis','Siswa Demo SD install $number','1',$sdClass)");
+    }
+    for($run=0;$run<2;$run++){
+        $process=proc_open([PHP_BINARY,__DIR__.'/../sql/seed_demo_multiunit.php','--apply','--as-of=2026-09-30'],
+            [['pipe','r'],['pipe','w'],['pipe','w']],$pipes,dirname(__DIR__),null,['bypass_shell'=>true]);
+        if(!is_resource($process))throw new RuntimeException('Seeder multiunit tidak dapat dijalankan.');
+        fclose($pipes[0]);$seedOut=stream_get_contents($pipes[1]);fclose($pipes[1]);$seedError=stream_get_contents($pipes[2]);fclose($pipes[2]);
+        if(proc_close($process)!==0)throw new RuntimeException('Seed instalasi baru gagal: '.$seedError.$seedOut);
+    }
+    require_once __DIR__.'/../includes/spp_billing.php';
+    foreach([2,3] as $unitId){
+        unit_set_context($koneksi,$unitId);
+        if((int)$koneksi->query('SELECT COUNT(*) FROM bayar')->fetch_row()[0]!==14)throw new RuntimeException('Seed pembayaran multiunit tidak idempoten.');
+        $wrong=(int)$koneksi->query("SELECT COUNT(*) FROM spp_alokasi a JOIN tagihan_spp ts ON ts.id=a.tagihan_spp_id WHERE ABS(a.nominal_dari_bayar-ts.nominal_tagihan)>.001")->fetch_row()[0];
+        if($wrong)throw new RuntimeException('Seed SPP tidak melunasi tepat satu tagihan.');
+        foreach($koneksi->query('SELECT DISTINCT no_induk FROM spp_alokasi_batch')->fetch_all(MYSQLI_ASSOC) as $seedStudent)
+            spp_assert_paid_order($koneksi,(string)$seedStudent['no_induk']);
+    }
+    echo "OK: instalasi baru/multiunit, tarif SMP/SMA, seed pembayaran langsung, dan rerun tanpa duplikasi.\n";
 } finally {
     if (is_file($credentialsFile)) {
         if (realpath(dirname($credentialsFile)) !== realpath(sys_get_temp_dir())

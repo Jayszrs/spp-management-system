@@ -139,7 +139,7 @@ function komite_validate_spp_pair(mysqli $db, string $noInduk, string $month, st
 
 /** Mendeteksi pembayaran satu sisi agar edit/hapus tidak menciptakan ketimpangan baru. */
 function komite_pair_gap(mysqli $db, string $noInduk, string $month, string $year): string {
-    $stmt=$db->prepare("SELECT ts.nominal_tagihan,ts.status,COALESCE(SUM(CASE WHEN ab.status='active' THEN a.nominal_dari_bayar+a.nominal_dari_titipan ELSE 0 END),0) paid FROM tagihan_spp ts LEFT JOIN spp_alokasi a ON a.tagihan_spp_id=ts.id LEFT JOIN spp_alokasi_batch ab ON ab.id=a.batch_id WHERE ts.no_induk=? AND ts.bulan=? AND ts.tahun=? GROUP BY ts.id LIMIT 1");
+    $stmt=$db->prepare("SELECT ts.nominal_tagihan,ts.status,COALESCE(SUM(CASE WHEN ab.status='active' THEN a.nominal_dari_bayar ELSE 0 END),0) paid FROM tagihan_spp ts LEFT JOIN spp_alokasi a ON a.tagihan_spp_id=ts.id LEFT JOIN spp_alokasi_batch ab ON ab.id=a.batch_id WHERE ts.no_induk=? AND ts.bulan=? AND ts.tahun=? GROUP BY ts.id LIMIT 1");
     $stmt->bind_param('sss',$noInduk,$month,$year);$stmt->execute();$spp=$stmt->get_result()->fetch_assoc();$stmt->close();
     $komite=komite_bill($db,$noInduk,$month,$year);
     if (!$spp || !$komite || $spp['status']!=='open' || (float)$spp['nominal_tagihan']<=.001 || (float)$komite['nominal_tagihan']<=.001) return '';

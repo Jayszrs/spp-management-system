@@ -157,6 +157,15 @@ try {
         $sourceStart = 2030 + ($level - $firstLevel);
         $sourceYear = $sourceStart . '/' . ($sourceStart + 1);
         $targetYear = ($sourceStart + 1) . '/' . ($sourceStart + 2);
+        if($level===$firstLevel){
+            $earlyMaster=lifecycle_request($base.'/master_spp.php?tahun='.rawurlencode($targetYear),null,$cookies,$sourceYear);
+            lifecycle_request($base.'/master_spp.php',[
+                'aksi'=>'terbitkan','csrf_token'=>lifecycle_token($earlyMaster['body'],'spp-publish-form'),
+                'tahun_ajaran'=>$targetYear,'selected_students'=>[$nis],'confirm_previous_debt'=>'1',
+            ],$cookies,$sourceYear);
+            $targetCount=(int)$koneksi->query("SELECT COUNT(*) FROM tagihan_spp ts JOIN tahun_ajaran ta ON ta.id=ts.tahun_ajaran_id WHERE ts.no_induk='$nis' AND ta.label='$targetYear'")->fetch_row()[0];
+            lifecycle_assert($targetCount===0,'Target year published without official placement.');
+        }
         $classPage = lifecycle_request($base . '/master_kelas.php', null, $cookies, $sourceYear);
         lifecycle_assert($classPage['status'] === 200, 'Promotion page failed for class ' . $level . '.');
         $promote = lifecycle_request($base . '/master_kelas.php', [
@@ -184,6 +193,29 @@ try {
             'confirm_previous_debt' => '1',
         ], $cookies, $targetYear);
         lifecycle_assert($publish['status'] === 302, 'SPP publication failed for ' . $targetYear . '.');
+        if($level===$firstLevel){
+            $payMonth=static function(string $month,int $year,float $amount) use ($base,&$cookies,$nis,$sourceYear,$koneksi):void{
+                $form=lifecycle_request($base.'/pembayaran/form.php',null,$cookies,$sourceYear);
+                lifecycle_assert(preg_match('/name="request_key" value="([a-f0-9]{32})"/',$form['body'],$key)===1,'Missing cash request key.');
+                lifecycle_request($base.'/pembayaran/proses.php',[
+                    'aksi'=>'input','no_induk'=>$nis,'payment_plan'=>'monthly',
+                    'csrf_token'=>lifecycle_token($form['body'],'form-bayar'),'request_key'=>$key[1],
+                    'bulan_bayar'=>$month,'tahun_bayar'=>(string)$year,'uang_spp'=>$amount,'uang_komite'=>0,'sistem_pembayaran'=>'Tunai',
+                ],$cookies,$sourceYear);
+            };
+            $before=(int)$koneksi->query("SELECT COUNT(*) FROM bayar WHERE NO_INDUK='$nis'")->fetch_row()[0];
+            $payMonth('07',$sourceStart+1,(float)$rate);
+            lifecycle_assert((int)$koneksi->query("SELECT COUNT(*) FROM bayar WHERE NO_INDUK='$nis'")->fetch_row()[0]===$before,'Future year skipped source arrears.');
+            foreach(spp_academic_periods($sourceYear) as $period){
+                if($period['bulan']==='07')continue;
+                $payMonth($period['bulan'],(int)$period['tahun'],250000.0);
+            }
+            $payMonth('07',$sourceStart+1,(float)$rate);
+            $early=$koneksi->query("SELECT b.*,ta.label FROM bayar b JOIN spp_alokasi_batch ab ON ab.bayar_id=b.id AND ab.status='active' JOIN spp_alokasi a ON a.batch_id=ab.id JOIN tagihan_spp ts ON ts.id=a.tagihan_spp_id JOIN tahun_ajaran ta ON ta.id=ts.tahun_ajaran_id WHERE b.NO_INDUK='$nis' AND b.BULAN='07' AND b.TAHUN='".($sourceStart+1)."'")->fetch_assoc();
+            lifecycle_assert($early && $early['kelas_rombel_snapshot']===($level+1).'A' && (float)$early['U_SPP']===(float)$rate && $early['label']===$targetYear && (int)substr($early['TGL_BYR'],0,4)<$sourceStart+1,'Early future payment has incorrect class, tariff, year, or reception date.');
+            $receipt=lifecycle_request($base.'/laporan/cetak_struk.php?id='.$early['id'],null,$cookies,$sourceYear);
+            lifecycle_assert($receipt['status']===200&&str_contains($receipt['body'],'Juli '.($sourceStart+1))&&!str_contains($receipt['body'],'Titipan SPP'),'Future receipt is incorrect.');
+        }
         $targetRows = lifecycle_report($koneksi, 'spp-tahunan', $nis, $targetYear, 'active');
         lifecycle_assert(count($targetRows) === 1 && $targetRows[0]['kelas'] === ($level + 1) . 'A'
             && (float)$targetRows[0]['total_tagihan'] === (float)(12 * $rate),

@@ -74,7 +74,7 @@ $pages = [
     'master_spp.php' => ['admin', 'kasir'], 'master_daftar_ulang.php' => ['admin', 'kasir'],
     'master_biaya_lain.php' => ['admin', 'kasir'], 'role_management.php' => [],
     'pembayaran/form.php' => ['admin', 'kasir'], 'tabungan/masuk.php' => ['admin', 'kasir'],
-    'tabungan/keluar.php' => ['admin', 'kasir'], 'pembayaran/titipan_spp.php' => ['admin', 'kasir', 'bendahara'],
+    'tabungan/keluar.php' => ['admin', 'kasir'],
     'otorisasi_transaksi.php' => ['admin', 'kasir', 'bendahara'], 'laporan/global.php' => ['admin', 'kasir', 'bendahara'],
 ];
 $mutations = [
@@ -86,7 +86,6 @@ $mutations = [
     'role_management.php' => ['aksi' => 'tambah', 'username' => 'DITOLAK'],
     'pembayaran/proses.php' => ['aksi' => 'input', 'no_induk' => $foreignStudent['NO_INDUK'], 'uang_pangkal' => 123],
     'tabungan/proses.php' => ['aksi' => 'masuk', 'no_induk' => $foreignStudent['NO_INDUK'], 'nominal' => 123],
-    'pembayaran/titipan_spp.php' => ['no_induk' => $foreignStudent['NO_INDUK'], 'nominal' => 123],
     'otorisasi_transaksi.php' => ['action' => 'reject', 'request_id' => 1],
     'unit_switch.php' => ['unit_id' => 2], 'logout.php' => [],
 ];

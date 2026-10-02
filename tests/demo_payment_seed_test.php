@@ -56,24 +56,22 @@ try {
         (SELECT COUNT(*) FROM bayar) pembayaran,
         (SELECT COUNT(*) FROM bayar WHERE KETERANGAN LIKE 'SEED-DEMO-SPP-%') spp,
         (SELECT COUNT(*) FROM bayar WHERE KETERANGAN LIKE 'SEED-DEMO-PSB-%') psb,
-        (SELECT COUNT(*) FROM bayar WHERE KETERANGAN LIKE 'SEED-DEMO-TITIPAN-%') titipan,
         (SELECT COUNT(*) FROM bayar WHERE KETERANGAN LIKE 'SEED-DEMO-LAIN-%') biaya_lain,
         (SELECT COUNT(*) FROM spp_alokasi) alokasi_spp,
         (SELECT COUNT(*) FROM bayar_komite) bayar_komite,
         (SELECT COUNT(*) FROM bayar_du) bayar_du,
         (SELECT COUNT(*) FROM bayar_biaya_lain) bayar_biaya_lain,
-        (SELECT COUNT(*) FROM titipan_spp_mutasi) mutasi_titipan,
         (SELECT COUNT(*) FROM transaksi_m) + (SELECT COUNT(*) FROM transaksi_k) mutasi_tabungan")->fetch_assoc();
 
-    demo_payment_seed_assert((int)$counts['pembayaran'] === 1000, 'Seeder harus membuat tepat 1.000 pembayaran.');
-    demo_payment_seed_assert((int)$counts['spp'] === 970 && (int)$counts['psb'] === 6 && (int)$counts['titipan'] === 12 && (int)$counts['biaya_lain'] === 12, 'Komposisi 1.000 pembayaran demo salah.');
+    demo_payment_seed_assert((int)$counts['pembayaran'] === 988, 'Seeder harus membuat tepat 988 pembayaran.');
+    demo_payment_seed_assert((int)$counts['spp'] === 970 && (int)$counts['psb'] === 6 && (int)$counts['biaya_lain'] === 12, 'Komposisi 988 pembayaran demo salah.');
     demo_payment_seed_assert((int)$counts['alokasi_spp'] === 970 && (int)$counts['bayar_komite'] === 970, 'Relasi SPP dan Komite demo tidak lengkap.');
-    demo_payment_seed_assert((int)$counts['bayar_du'] === 100 && (int)$counts['bayar_biaya_lain'] === 12 && (int)$counts['mutasi_titipan'] === 12, 'Rincian Daftar Ulang, Biaya Lain, atau Titipan salah.');
+    demo_payment_seed_assert((int)$counts['bayar_du'] === 100 && (int)$counts['bayar_biaya_lain'] === 12, 'Rincian Daftar Ulang, Biaya Lain, langsung salah.');
     demo_payment_seed_assert((int)$counts['mutasi_tabungan'] === 0, 'Seeder pembayaran tidak boleh membuat mutasi tabungan.');
 
     // Pemanggilan ulang harus ditolak oleh guard, tanpa menambah transaksi.
     demo_payment_seed_runner($database, 'seed_demo_payments.sql');
-    demo_payment_seed_assert((int)$db->query('SELECT COUNT(*) total FROM bayar')->fetch_assoc()['total'] === 1000, 'Seeder pembayaran tidak boleh menambah transaksi saat dijalankan ulang.');
+    demo_payment_seed_assert((int)$db->query('SELECT COUNT(*) total FROM bayar')->fetch_assoc()['total'] === 988, 'Seeder pembayaran tidak boleh menambah transaksi saat dijalankan ulang.');
 
     $invalid = $db->query("SELECT
         (SELECT COUNT(*) FROM (
@@ -81,7 +79,7 @@ try {
             LEFT JOIN spp_alokasi a ON a.tagihan_spp_id=ts.id
             LEFT JOIN spp_alokasi_batch ab ON ab.id=a.batch_id AND ab.status='active'
             GROUP BY ts.id,ts.nominal_tagihan
-            HAVING COALESCE(SUM(CASE WHEN ab.id IS NOT NULL THEN a.nominal_dari_bayar+a.nominal_dari_titipan ELSE 0 END),0) > ts.nominal_tagihan + .001
+            HAVING COALESCE(SUM(CASE WHEN ab.id IS NOT NULL THEN a.nominal_dari_bayar ELSE 0 END),0) > ts.nominal_tagihan + .001
         ) x) spp_lebih_bayar,
         (SELECT COUNT(*) FROM (
             SELECT tk.id FROM tagihan_komite tk LEFT JOIN bayar_komite bk ON bk.tagihan_komite_id=tk.id
@@ -89,11 +87,11 @@ try {
             HAVING COALESCE(SUM(bk.nominal),0) > tk.nominal_tagihan + .001
         ) x) komite_lebih_bayar,
         (SELECT COUNT(*) FROM bayar b
-            WHERE ABS(b.total_jumlah - (b.U_PANGKAL+b.U_PSB+b.U_SPP+b.U_TITIPAN_SPP+b.U_KOMITE+b.U_LAIN+COALESCE((SELECT SUM(d.jumlah) FROM bayar_du d WHERE d.bayar_id=b.id),0))) > .001
+            WHERE ABS(b.total_jumlah - (b.U_PANGKAL+b.U_PSB+b.U_SPP+b.U_KOMITE+b.U_LAIN+COALESCE((SELECT SUM(d.jumlah) FROM bayar_du d WHERE d.bayar_id=b.id),0))) > .001
         ) total_tidak_sesuai")->fetch_assoc();
     demo_payment_seed_assert((int)$invalid['spp_lebih_bayar'] === 0 && (int)$invalid['komite_lebih_bayar'] === 0 && (int)$invalid['total_tidak_sesuai'] === 0, 'Nominal atau alokasi pembayaran demo tidak konsisten.');
 
-    echo "OK: seeder 1.000 pembayaran demo tervalidasi.\n";
+    echo "OK: seeder 988 pembayaran demo tervalidasi.\n";
 } finally {
     if ($createdDatabase) $db->query("DROP DATABASE `{$database}`");
     $db->close();

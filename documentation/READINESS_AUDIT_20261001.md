@@ -1,3 +1,68 @@
+# Kesiapan SistemSPP setelah penghapusan Titipan SPP - 2 Oktober 2026
+
+## Status terkini
+
+**Siap terbatas dengan syarat untuk Laragon lokal pada cakupan yang diuji.** Titipan SPP sudah dihapus dari kode dan database dummy `db_spp`, sesuai rencana pemilik. Aplikasi lokal kembali terbuka; HTTP `health.php` 200 `ok`, URL Titipan SPP lama 404. Modul Tabungan tetap berfungsi dan datanya utuh. Data sekolah sungguhan, cetak fisik, backup rutin dan deployment server lain tetap memerlukan pemeriksaan lingkungan masing-masing.
+
+Kode dasar `ec3db42`, branch `audit/readiness-20261001`; perubahan ini berada dalam commit yang memuat dokumen ini. `origin/main` `7647608` telah ditinjau, merupakan ancestor, dan tidak memiliki perubahan baru yang perlu digabung saat pemeriksaan. **Belum merge ke main.**
+
+## Aturan aktif
+
+- Satu transaksi SPP melunasi tepat sisa satu tagihan bulanan. Nominal kurang/lebih ditolak; tidak dicatat sebagai saldo.
+- Tunggakan SPP tertua harus dilunasi dahulu. Pasangan SPP-Komite tetap berlaku; konfirmasi periode mendatang tetap muncul.
+- Tahun tujuan baru dapat diterbitkan setelah kenaikan resmi membentuk penempatan tujuan. Kelas tidak diperkirakan dan penempatan rencana tidak dibuat. Pembayaran tagihan tujuan dapat diterima sebelum tahun kalender tagihan tersebut.
+- Daftar Ulang, PSB, Pangkal, Biaya Lain, riwayat kelas/tarif dan filter status tetap mengikuti kontraknya. Tabungan merupakan jurnal tersendiri.
+- Endpoint Titipan SPP dihapus, menu/modal/saldo/laporannya dihapus, field status dan snapshot baru tidak memuat titipan. Kiriman lama untuk mencatat/memakai titipan ditolak tanpa transaksi baru. Histori audit lama dipertahankan sebagai bukti.
+
+## Database utama sebelum dan sesudah
+
+| Data | Sebelum | Sesudah |
+| --- | ---: | ---: |
+| Siswa / penempatan | 222 / 210 | 222 / 210 |
+| Pembayaran | 1.037 | 1.018 |
+| Penerimaan header | Rp579.620.000 | Rp577.145.000 |
+| Header/batch/mutasi khusus titipan | 19 / 19 / 19 | dihapus |
+| SPP / Komite / DU / Biaya Lain terbit | 2.520 / 2.520 / 210 / 16 | tetap |
+| Alokasi SPP / detail Komite / detail DU | 982 / 982 / 107 | tetap |
+| Rekening / saldo Tabungan | 12 / Rp1.050.000 | tetap |
+| Jurnal Tabungan masuk / keluar | 12 / 6 | tetap |
+
+Pembersihan menghapus tepat Rp2.475.000 dummy khusus titipan, tanpa penggunaan atau detail tagihan pada headernya. Tidak ada pengajuan pending. Migrasi membandingkan fingerprint seluruh tabel lain serta pembayaran/alokasi biasa; semuanya sama. Fingerprint rekening `cc5c905b4c708bcd97eb9a9fe3957dbd8a197d80e358d461d74cd58eb8a603e1`, jurnal masuk `e32cfab90145e5153c304f990f10019f4842382fb8f6ef2d0f23ae356c045f9c`, jurnal keluar `98fa3fe71d0158a544329d9ce870626f22128333b8bb313a5741408518053053` sama sebelum/sesudah.
+
+Skema akhir: tabel/view mutasi dan lima kolom titipan tidak ada; enum request hanya pembayaran/tabungan masuk/tabungan keluar. **61 FK, 18 CHECK dan dua trigger tarif** cocok, 14 invariant integritas nol. Schema instalasi, legacy payload, seed dan pengaman skema telah diselaraskan.
+
+## Bukti regresi
+
+Semua penulisan tes menggunakan clone atau database baru dengan nama terjaga dan flag tes. Utama hanya menerima migrasi dummy yang diotorisasi.
+
+| Cakupan | Tes dan hasil |
+| --- | --- |
+| Pembayaran SPP | `spp_billing_integration_test.php`, `payment_process_integration_test.php`: tepat/kurang/lebih, urutan, Komite wajib, input/edit, rollback, larangan hapus periode lama, struk; request pencatatan/penggunaan lama tidak menulis, endpoint 404 dan payload status bersih. |
+| Perjalanan lintas unit | `full_student_lifecycle_http_test.php` dan `psb_to_regular_http_test.php`, masing-masing SD/SMP/SMA: pendaftaran sampai kelulusan, riwayat/tarif/rekap. Reguler juga membuktikan penerbitan tanpa penempatan ditolak, tunggakan lintas tahun memblokir target, setelah pelunasan pembayaran target berhasil dengan penerimaan pada tahun kalender lebih awal; kelas/tarif/struk benar. |
+| Otorisasi/race/replay | `payment_role_access_test.php`, `academic_payment_race_http_test.php`, `financial_mutation_guard_http_test.php`: edit/hapus kasir melalui keputusan admin, dua permintaan pada SPP/Komite/DU yang sama, rollback/replay serta dua penarikan Tabungan tidak melewati saldo. |
+| Akses | `endpoint_access_matrix_http_test.php`: 307 request role/unit/anonymous/CSRF dan ID asing; fingerprint seluruh tabel tetap sama. |
+| Histori/laporan | `historical_reports_after_promotion_test.php`, `report_crossunit_exports_http_test.php`: status, SPP Tahunan, Per Item SPP/Komite lintas tahun, riwayat, tahun kosong, pembatalan dan penerimaan menurut kelas transaksi; layar/Excel/PDF biner cocok pada SD/SMP/SMA dan agregat semua unit. `report_finance_http_regression_test.php`, `report_receipt_discount_http_test.php`: DU lintas tahun, potongan, rincian pembayaran/struk biner cocok. |
+| Surat | `principal_letter_pdf_binary_test.py`: 15 PDF biner cocok dengan sumber, layar, pratinjau dan Excel, termasuk status/rombel/tingkat tiga unit. |
+| Tabungan | `savings_book_test.php`, `savings_note_http_test.php`, race pengaman keuangan dan modular reports lulus; fingerprint migrasi memberi bukti datanya tidak berubah. |
+| Browser | Pembayaran/input/edit/DU/struk, pendaftaran reguler/PSB, kenaikan kelas 6?lulus lalu dua siswa kelas 5 secara terpisah, stale pages, serta approve/reject/cancel otorisasi lulus dan diverifikasi database. Smoke viewport ponsel/filter Per Item juga lulus. |
+| Migrasi/install | `remove_spp_deposit_migration_test.php`: backup restore, titipan terpakai/pending/campuran/relasi asing/fingerprint berubah ditolak, kegagalan setelah transaksi data dipulihkan, apply dan rerun idempoten. `schema_fresh_install_test.php`: schema baru tanpa titipan, multiunit dan seed langsung/rerun (SPP tepat nominal dan mulai bulan tertua). Seeder legacy 988 dan reset baseline 150 siswa lulus. |
+
+Kegagalan alat/fixture dipisahkan: alat `pdftotext` awalnya belum diberi path; laporan sempat berbagi clone dengan penulisan tes lain; seed memerlukan nama database khusus; tahun fixture browser 2098 sudah ada pada backup sehingga diganti tahun kosong 2096; smoke membutuhkan ID edit; seed fresh memerlukan enam siswa SD latihan. Seluruh pemeriksaan tersebut dijalankan ulang dengan prasyaratnya dan lulus. Salah perubahan angka pagination pada penyesuaian tes dikoreksi menjadi 11 halaman untuk 1.001 baris/100 per halaman. Tidak ada kegagalan aplikasi yang dibiarkan terbuka dalam cakupan ini.
+
+Pemeriksaan sintaks: 47 file PHP yang berubah ditambah dua file PHP baru lulus; JavaScript utama lulus `node --check`.
+
+## Backup, lingkungan dan pengiriman
+
+Backup final pra-penerapan: `C:\laragon\backups\spp-management-system\db_spp_before_remove_spp_deposit_final_20261002_182220.sql`, SHA-256 `254E17AD132E380576BF5D30E1F97B6AB07B08D486B1F7F53D58A23447CF95DA`. Backup berhasil dipulihkan dan pembersihan lengkap disimulasikan; langkah pemulihan ada di runbook.
+
+Artefak di luar Git: `remove_deposit_main_apply_20261002.log` (fingerprint seluruh tabel), `remove_deposit_main_fk_20261002.json`, dan `remove_deposit_regression_20261002.log` di folder backup yang sama. Log regresi juga mencatat kegagalan prasyarat awal; hasil ulang di atas menggantikannya. Backup, QA PDF/dependency, log dan layanan lama yang kepemilikannya belum terverifikasi dipertahankan. Penolakan otomatis pada satu perintah gabungan tidak menghapus artefak; perubahan kode dan tes kemudian dilakukan melalui langkah terpisah. Artefak yang penghapusannya ditolak pada audit lama tidak dicoba lewat jalur lain.
+
+Server latihan milik pengujian ini dan clone audit dihentikan/dihapus setelah verifikasi, dengan pemeriksaan identitas; maintenance utama telah dibuka setelah health/integritas/skema lulus. Hash commit/push tercatat pada riwayat Git branch audit.
+
+## Arsip sebelum penghapusan Titipan SPP
+
+> Seluruh bagian di bawah merupakan bukti historis sebelum pembersihan. Baseline, jumlah constraint, fitur titipan dan keputusan saat itu tidak menggantikan status terbaru di atas.
+
 # Status kesiapan operasional SistemSPP - penutupan 2 Oktober 2026
 
 > **Rujukan status terkini untuk Laragon lokal.** Bagian pertama ini menggantikan keputusan checkpoint sebelumnya. Bagian **Arsip checkpoint sebelum penutupan** mempertahankan bukti historis; kalimat di sana tentang migrasi yang belum dijalankan, database hanya dibaca, atau tes yang belum lengkap berlaku pada waktu checkpoint itu.
