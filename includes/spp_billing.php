@@ -3,7 +3,12 @@
 require_once __DIR__ . '/daftar_ulang.php';
 
 class SppBillingOrderException extends RuntimeException {
-    public function __construct(public readonly string $bulan, public readonly string $tahun) {
+    public string $bulan;
+    public string $tahun;
+
+    public function __construct(string $bulan, string $tahun) {
+        $this->bulan = $bulan;
+        $this->tahun = $tahun;
         parent::__construct('Lunasi dahulu SPP '.spp_month_label($bulan).' '.$tahun.'.');
     }
 }
