@@ -59,3 +59,11 @@ Backup berbeda dengan NIS yang sudah ada tidak menimpa. Reimport hash/baris yang
 ## Pemeriksaan akhir
 
 `health.php` harus `ok`; `tests/readiness_integrity_audit.php` read-only dan `sql/audit_foreign_keys.php` bersih. Bandingkan fingerprint rekening/jurnal Tabungan serta seluruh pembayaran/alokasi original. Rujuk [audit backend](LEGACY_IMPORT_BACKEND_20261003.md) untuk angka aktual dan batas pengujian.
+
+### Pemeriksaan database lokal melalui DBeaver
+
+Untuk `db_spp` yang sudah dimigrasi, buka [script pemeriksaan DBeaver](../sql/dbeaver_verify_legacy_db_spp.sql) pada koneksi **MySQL Laragon**, lalu jalankan seluruh script melalui Execute SQL Script. Script menetapkan `USE db_spp`, membaca tabel fisik seluruh unit dalam transaksi read-only, kemudian menutup transaksi. Selesaikan transaksi lain milik Anda sebelum menjalankannya. Jika terhenti karena error, jalankan `ROLLBACK;` pada tab yang sama.
+
+Hasil meliputi identitas server/database, tujuh pemeriksaan kontrak skema Legacy, siswa dan manifest per unit, angka pembayaran/Tabungan, serta 26 pemeriksaan integritas. Semua baris pemeriksaan harus `OK` dan `jumlah_masalah=0`. Angka operasional dibaca aktual; tidak dipaksa sama dengan baseline historis karena aplikasi dapat menerima transaksi berikutnya.
+
+Script diuji pada MySQL lokal dan seluruh 33 pemeriksaan lulus. Ini adalah pemeriksaan database yang sudah terpasang; migrasi DDL tetap menggunakan prosedur CLI/backup/maintenance di atas dan impor `.dat` memakai worker. Hasil baris ditahan/GK berada pada staging privat importer, tidak dibuat menjadi siswa dalam SQL ini. Pengujian tidak mencakup pengoperasian antarmuka DBeaver secara langsung.

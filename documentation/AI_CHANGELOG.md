@@ -13,6 +13,13 @@ File ini mencatat perubahan proyek secara reverse chronological. Baca [PROJECT_C
 - Jangan menghapus atau menulis ulang entri lama. Tambahkan entri koreksi bila diperlukan.
 - Perubahan implementasi dan entri changelog wajib masuk commit yang sama.
 
+## 2026-10-03 - Script pemeriksaan db_spp untuk DBeaver
+
+- Aktor: Codex, permintaan pemilik untuk database lokal `db_spp` yang sudah diperbarui.
+- Perubahan: `sql/dbeaver_verify_legacy_db_spp.sql` membaca skema, siswa/manifest per unit, angka keuangan dan 26 invariant melalui tabel fisik seluruh unit. Transaksi read-only; tidak menerapkan DDL, impor, aktivasi atau perubahan data.
+- Verifikasi: seluruh script dijalankan melalui klien MySQL 8.4; tujuh pemeriksaan skema dan 26 integritas OK. Pemeriksaan query hanya memakai USE/START TRANSACTION/SELECT/COMMIT. Antarmuka DBeaver tidak diuji langsung.
+- Dokumentasi: cara penggunaan dan batas cakupan ditambahkan pada runbook Legacy. Tidak ada perubahan API, skema atau data.
+
 ## 2026-10-03 - Penerapan trial Legacy dan penutupan audit
 
 - Aktor: Codex, atas otorisasi pemilik; kode `62dd273` dipindahkan ke main, migrasi dan tiga sumber diterapkan setelah simulasi/backup/restore lulus.
