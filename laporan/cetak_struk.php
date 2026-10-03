@@ -3,6 +3,10 @@ session_start();
 if (!isset($_SESSION['admin_id'])) { header('Location: ../login.php'); exit; }
 require_once '../koneksi.php';
 require_once '../includes/auth.php';
+require_once '../includes/tagihan_tahunan.php';
+require_once '../includes/tagihan_sekali.php';
+require_once '../includes/spp_billing.php';
+require_once '../includes/komite_billing.php';
 requireRole(['admin', 'bendahara', 'kasir']);
 
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
@@ -66,42 +70,6 @@ function receipt_month_code($value): string {
     return str_pad((string)(int)$value, 2, '0', STR_PAD_LEFT);
 }
 
-function receipt_period_paid(mysqli $db, string $noInduk, string $bulan, string $tahun): array {
-    $monthCode = receipt_month_code($bulan);
-    $monthLabel = receipt_month($monthCode);
-    $legacyMonth = (string)(int)$monthCode;
-    $stmt = $db->prepare("
-        SELECT COALESCE(SUM(U_SPP), 0) AS spp, COALESCE(SUM(U_KOMITE), 0) AS komite
-        FROM bayar
-        WHERE NO_INDUK = ? AND TAHUN = ? AND (BULAN = ? OR BULAN = ? OR BULAN = ?)
-    ");
-    $stmt->bind_param('sssss', $noInduk, $tahun, $monthCode, $monthLabel, $legacyMonth);
-    $stmt->execute();
-    $paid = $stmt->get_result()->fetch_assoc() ?: [];
-    $stmt->close();
-    return ['spp' => (float)($paid['spp'] ?? 0), 'komite' => (float)($paid['komite'] ?? 0)];
-}
-
-function receipt_one_time_paid(mysqli $db, string $noInduk): array {
-    $stmt = $db->prepare("
-        SELECT
-            COALESCE(SUM(U_MAKAN), 0) AS makan,
-            COALESCE(SUM(U_SORGA), 0) AS sorga,
-            COALESCE(SUM(U_INFAQ), 0) AS infaq
-        FROM bayar
-        WHERE NO_INDUK = ?
-    ");
-    $stmt->bind_param('s', $noInduk);
-    $stmt->execute();
-    $paid = $stmt->get_result()->fetch_assoc() ?: [];
-    $stmt->close();
-    return [
-        'makan' => (float)($paid['makan'] ?? 0),
-        'sorga' => (float)($paid['sorga'] ?? 0),
-        'infaq' => (float)($paid['infaq'] ?? 0),
-    ];
-}
-
 function receipt_du_paid(mysqli $db, int $billId): float {
     if ($billId <= 0) return 0.0;
     $stmt = $db->prepare('SELECT COALESCE(SUM(jumlah), 0) AS paid FROM bayar_du WHERE tagihan_daftar_ulang_id = ?');
@@ -134,11 +102,14 @@ function receipt_add_remaining_line(array &$lines, string $label, float $current
 
 function receipt_remaining_lines(mysqli $db, array $payment, array $otherDetails): array {
     $lines = [];
-
-    $psbBill = (float)$payment['tot_pangkal'] > 0
-        ? (float)$payment['tot_pangkal']
-        : max(0, (float)$payment['PANGKAL'] - (float)$payment['potong_pangkal']);
-    receipt_add_remaining_line($lines, 'Sisa PSB', (float)$payment['U_PANGKAL'], $psbBill, (float)$payment['PANGKAL_BAYAR']);
+    $oneTime = one_time_fee_status($db, (string)$payment['NO_INDUK']);
+    foreach (['pangkal' => ['Sisa Pangkal', 'U_PANGKAL'], 'psb' => ['Sisa PSB', 'U_PSB']] as $component => [$label, $field]) {
+        if (abs((float)($payment[$field] ?? 0)) >= 0.005) {
+            $lines[] = [$label, (float)$oneTime[$component]['remaining']];
+        }
+    }
+    $komite=komite_receipt_summary($db,(int)$payment['id']);
+    if ($komite) $lines[]=['Sisa Komite '.$komite['label'],$komite['remaining']];
 
     $duBillId = (int)($payment['tagihan_daftar_ulang_id'] ?? 0);
     $duTotal = (float)($payment['du_nominal_tagihan'] ?? 0);
@@ -148,7 +119,8 @@ function receipt_remaining_lines(mysqli $db, array $payment, array $otherDetails
             : max(0, (float)$payment['DAFTAR_ULANG'] - (float)$payment['potong_du']);
     }
     $duPaid = $duBillId > 0 ? receipt_du_paid($db, $duBillId) : (float)($payment['total_du_bayar'] ?? 0);
-    receipt_add_remaining_line($lines, 'Sisa DU', (float)$payment['uang_du'], $duTotal, $duPaid);
+    $duYear = trim((string)($payment['du_tahun_ajaran'] ?? ''));
+    receipt_add_remaining_line($lines, 'Sisa DU' . ($duYear !== '' ? ' (TA ' . $duYear . ')' : ''), (float)$payment['uang_du'], $duTotal, $duPaid);
 
     return $lines;
 }
@@ -159,17 +131,8 @@ $stmt = $koneksi->prepare("
         s.NAMA,
         s.KELAS AS KELAS_SISWA,
         s.PANGKAL,
+        s.PSB,
         s.NO_induk_diknas,
-        s.PANGKAL_BAYAR,
-        s.BANGUNAN,
-        s.BANGUNAN_BAYAR,
-        s.SERAGAM,
-        s.SERAGAM_BAYAR,
-        s.KEGIATAN,
-        s.KEGIATAN_BAYAR,
-        s.MAKAN,
-        s.SORGA,
-        s.INFAQ,
         s.SPP_PERBULAN,
         s.POMG,
         s.potong_pangkal,
@@ -178,13 +141,13 @@ $stmt = $koneksi->prepare("
         s.potong_du,
         s.tot_du,
         du.tagihan_daftar_ulang_id,
+        du.th_ajaran AS du_tahun_ajaran,
         COALESCE(du.jumlah, 0) AS uang_du,
         COALESCE(tdu.nominal_tagihan, 0) AS du_nominal_tagihan,
         COALESCE(op.nama, NULLIF(b.user_id, '')) AS operator_name,
-        COALESCE((SELECT SUM(bp.U_PANGKAL) FROM bayar bp WHERE bp.NO_INDUK = b.NO_INDUK), 0) AS total_pangkal_bayar,
-        COALESCE((SELECT SUM(bd.jumlah) FROM bayar_du bd WHERE bd.no_induk = b.NO_INDUK), 0) AS total_du_bayar
+        COALESCE((SELECT SUM(bd.jumlah) FROM bayar_du bd WHERE bd.no_induk = b.NO_INDUK AND bd.unit_id=b.unit_id), 0) AS total_du_bayar
     FROM bayar b
-    JOIN siswa s ON s.NO_INDUK = b.NO_INDUK
+    JOIN siswa s ON s.NO_INDUK = b.NO_INDUK AND s.unit_id=b.unit_id
     LEFT JOIN admin op ON op.id = CAST(b.user_id AS UNSIGNED)
     LEFT JOIN bayar_du du ON du.bayar_id = b.id
     LEFT JOIN tagihan_daftar_ulang tdu ON tdu.id = du.tagihan_daftar_ulang_id
@@ -194,7 +157,9 @@ $stmt = $koneksi->prepare("
 $stmt->bind_param('i', $paymentId);
 $stmt->execute();
 $payment = $stmt->get_result()->fetch_assoc();
+if($payment) unit_set_context($koneksi,(int)$payment['unit_id']);
 $stmt->close();
+$sppAllocation = spp_billing_schema_ready($koneksi) ? spp_payment_allocation_summary($koneksi, $paymentId) : null;
 
 if (!$payment) {
     $_SESSION['flash'] = ['type' => 'error', 'msg' => 'Transaksi tidak ditemukan atau siswa sudah tidak tersedia.'];
@@ -216,27 +181,26 @@ $detailResult = $stmt->get_result();
 while ($detail = $detailResult->fetch_assoc()) $otherDetails[] = $detail;
 $stmt->close();
 
+$komiteReceipt=komite_receipt_summary($koneksi,$paymentId);
 $primaryLines = [
-    ['Uang PSB', $payment['U_PANGKAL']],
-    ['Uang Daftar Ulang', $payment['uang_du']],
-    ['Uang SPP', $payment['U_SPP']],
-    ['Komite Sekolah', $payment['U_KOMITE']],
+    ['Uang Pangkal', $payment['U_PANGKAL']],
+    ['Uang PSB', $payment['U_PSB']],
+    ['Uang Daftar Ulang' . (!empty($payment['du_tahun_ajaran']) ? ' (TA ' . $payment['du_tahun_ajaran'] . ')' : ''), $payment['uang_du']],
+    ['Komite Sekolah'.($komiteReceipt?' ('.$komiteReceipt['label'].')':''), $payment['U_KOMITE']],
 ];
-$otherLines = [
-    ['Uang Bangunan', $payment['U_BANGUNAN']],
-    ['Uang Seragam', $payment['U_SERAGAM']],
-    ['Uang Kegiatan', $payment['U_KEGIATAN']],
-    ['Uang Makan', $payment['U_MAKAN']],
-    ['Uang Sorga', $payment['U_SORGA']],
-    ['Uang Infaq', $payment['U_INFAQ']],
-];
+$sppReceiptLines=[];
+if($sppAllocation){
+    $primaryLines[]=['Uang SPP Diterima Sekarang',(float)$sppAllocation['uang_baru']];
+    foreach($sppAllocation['allocations'] as $allocation)$sppReceiptLines[]=['SPP '.receipt_month($allocation['bulan']).' '.$allocation['tahun'],(float)$allocation['nominal_dari_bayar']];
+}else{$primaryLines[]=['Uang SPP',$payment['U_SPP']];}
+$otherLines = [];
 foreach ($otherDetails as $detail) {
     $label = $detail['nama_biaya_snapshot'];
     if (trim((string)$detail['keterangan']) !== '') $label .= ' - ' . $detail['keterangan'];
     $otherLines[] = [$label, $detail['nominal_snapshot']];
 }
 if ((float)$payment['potong_spp'] > 0) $otherLines[] = ['Potongan SPP', -(float)$payment['potong_spp']];
-$otherLines = array_values(array_filter($otherLines, fn($line) => abs((float)$line[1]) >= 0.005));
+$otherLines = array_merge($sppReceiptLines,array_values(array_filter($otherLines, fn($line) => abs((float)$line[1]) >= 0.005)));
 
 $remainingLines = receipt_remaining_lines($koneksi, $payment, $otherDetails);
 $total = (float)$payment['total_jumlah'];
@@ -248,7 +212,7 @@ $signer = $payment['operator_name'] ?: ($_SESSION['admin_nama'] ?? 'Bagian Keuan
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Struk #<?= $paymentId ?> - <?= receipt_e($payment['NAMA']) ?></title>
-  <link rel="icon" type="image/png" href="../assets/img/favicon.png" />
+  <link rel="icon" type="image/png" href="../assets/img/favicon.png?v=2" />
   <style>
     @page { size: A5 landscape; margin: 0; }
     * { box-sizing: border-box; }
@@ -300,7 +264,7 @@ $signer = $payment['operator_name'] ?: ($_SESSION['admin_nama'] ?? 'Bagian Keuan
   </div>
 
   <main class="receipt-sheet">
-    <h1>SEKOLAH DASAR AL-QUR'AN<br>( SDA ) MUTIARA HIKMAH</h1>
+    <h1><?= receipt_e(unit_school_name((int)$payment['unit_id'])) ?></h1>
     <p class="address">Perum Bekasi Griya Asri II, Blok E Jl.H.Nabrih Ds. Sumber Jaya Kp.Buwek Tambun Selatan Telp. 021.88363466</p>
     <div class="rule"></div>
     <div class="document-title">SLIP PEMBAYARAN SEKOLAH</div>
@@ -312,7 +276,7 @@ $signer = $payment['operator_name'] ?: ($_SESSION['admin_nama'] ?? 'Bagian Keuan
         <tr><td class="label">Nama Siswa</td><td class="separator">:</td><td><?= receipt_e($payment['NAMA']) ?></td></tr>
       </table></td>
       <td><table class="mini">
-        <tr><td class="label">Kelas</td><td class="separator">:</td><td><?= receipt_e($payment['KELAS_SISWA']) ?></td></tr>
+        <tr><td class="label">Kelas</td><td class="separator">:</td><td><?= receipt_e($payment['kelas_rombel_snapshot'] ?: ($payment['KELAS'] ?: $payment['KELAS_SISWA'])) ?></td></tr>
         <tr><td class="label">Periode</td><td class="separator">:</td><td><?= receipt_e(receipt_month($payment['BULAN'])) ?> <?= receipt_e($payment['TAHUN']) ?></td></tr>
       </table></td>
     </tr></table>

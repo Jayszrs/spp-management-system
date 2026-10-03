@@ -1,17 +1,29 @@
 // ============================================
 // SistemSPP - app.js
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
 // ============================================
 
 /* ── Theme Init (run ASAP to avoid flash) ─── */
 (function () {
-  const saved = localStorage.getItem('spp_theme') || 'dark';
-  document.documentElement.setAttribute('data-theme', saved);
+  const saved = localStorage.getItem('spp_theme');
+  const theme = (saved === 'dark' || saved === 'light') ? saved : 'light';
+  if (saved !== theme) {
+    localStorage.setItem('spp_theme', theme);
+  }
+  document.documentElement.setAttribute('data-theme', theme);
 })();
 
 /* ── Theme Toggle ────────────────────────── */
 function toggleTheme() {
   const html    = document.documentElement;
-  const current = html.getAttribute('data-theme') || 'dark';
+  const current = html.getAttribute('data-theme') || 'light';
   const next    = current === 'dark' ? 'light' : 'dark';
 
   html.setAttribute('data-theme', next);
@@ -39,8 +51,9 @@ function updateThemeUI(theme) {
 
 // Apply UI labels once DOM is ready
 document.addEventListener('DOMContentLoaded', function () {
-  const saved = localStorage.getItem('spp_theme') || 'dark';
-  updateThemeUI(saved);
+  const saved = localStorage.getItem('spp_theme');
+  const theme = (saved === 'dark' || saved === 'light') ? saved : 'light';
+  updateThemeUI(theme);
 });
 
 document.addEventListener('DOMContentLoaded', function () {
@@ -61,6 +74,47 @@ document.addEventListener('DOMContentLoaded', function () {
       event.preventDefault();
       openEdit();
     });
+  });
+
+  const classHistoryToggles = Array.from(document.querySelectorAll('.student-class-history-toggle[aria-controls]'));
+  const classHistoryMobile = window.matchMedia('(max-width: 900px)');
+  const syncClassHistoryHeight = detail => {
+    if (!detail) return;
+    detail.style.removeProperty('height');
+    if (detail.hidden || !classHistoryMobile.matches) return;
+    const panel = detail.querySelector('.student-class-history-panel');
+    if (panel) detail.style.height = Math.ceil(panel.getBoundingClientRect().height) + 'px';
+  };
+  classHistoryToggles.forEach(button => {
+    const detail = document.getElementById(button.getAttribute('aria-controls'));
+    const panel = detail?.querySelector('.student-class-history-panel');
+    if (panel && 'ResizeObserver' in window) {
+      new ResizeObserver(() => syncClassHistoryHeight(detail)).observe(panel);
+    }
+    button.addEventListener('click', event => {
+      event.stopPropagation();
+      if (!detail) return;
+      const opening = detail.hidden;
+      if (opening) {
+        classHistoryToggles.forEach(otherButton => {
+          if (otherButton === button) return;
+          const otherDetail = document.getElementById(otherButton.getAttribute('aria-controls'));
+          if (otherDetail) {
+            otherDetail.hidden = true;
+            syncClassHistoryHeight(otherDetail);
+          }
+          otherButton.setAttribute('aria-expanded', 'false');
+          otherButton.setAttribute('aria-label', 'Buka Riwayat Kelas ' + (otherButton.dataset.studentName || 'siswa'));
+        });
+      }
+      detail.hidden = !opening;
+      syncClassHistoryHeight(detail);
+      button.setAttribute('aria-expanded', String(opening));
+      button.setAttribute('aria-label', (opening ? 'Tutup' : 'Buka') + ' Riwayat Kelas ' + (button.dataset.studentName || 'siswa'));
+    });
+  });
+  window.addEventListener('resize', () => {
+    classHistoryToggles.forEach(button => syncClassHistoryHeight(document.getElementById(button.getAttribute('aria-controls'))));
   });
 });
 
@@ -125,12 +179,16 @@ function pilihSiswaDatalist(input) {
   const list = document.getElementById('siswa-list');
   if (!list) return;
   const options = list.options;
+  const previousNis = document.getElementById('disp-nis')?.value || '';
   
   if (val === '') {
+    if (window.sppPublishedBilling && previousNis) clearPaymentAmountsOnContextChange(true);
     document.getElementById('disp-nis').value = '';
     document.getElementById('disp-nama').value = '';
     document.getElementById('disp-kelas').value = '';
     clearPaymentDetails();
+    refreshPaymentHistory('');
+    resetSppStatusState();
     return;
   }
   
@@ -141,25 +199,72 @@ function pilihSiswaDatalist(input) {
     const nama = opt.dataset.nama;
     
     // Match if exact match or if user is backspacing but NIS is still at the beginning
-    if (val === opt.value || val === nis || val.startsWith(nis + ' —') || val.startsWith(nis)) {
+    if (val === opt.value || val === nis || val === nama || val.startsWith(nis)) {
+      if (window.sppPublishedBilling && previousNis !== nis) clearPaymentAmountsOnContextChange(true);
       document.getElementById('disp-nis').value = nis || '';
       document.getElementById('disp-nama').value = nama || '';
       document.getElementById('disp-kelas').value = opt.dataset.kelas || '';
       applyDefaultDaftarUlangClass(opt);
       refreshBiayaLainOptions();
+      refreshBiayaLainBillsFromServer(nis || '');
       applyStudentPaymentDetails(opt);
+      refreshPaymentHistory(nis || '');
+      scheduleSppStatusCheck(false);
       found = true;
       break;
     }
   }
   
   if (!found) {
+    if (window.sppPublishedBilling && previousNis) clearPaymentAmountsOnContextChange(true);
     document.getElementById('disp-nis').value = '';
     document.getElementById('disp-nama').value = '';
     document.getElementById('disp-kelas').value = '';
     clearPaymentDetails();
+    refreshPaymentHistory('');
+    resetSppStatusState();
   }
 }
+
+function refreshPaymentHistory(noInduk) {
+  const body = document.getElementById('payment-history-body');
+  const period = document.getElementById('payment-history-period');
+  const url = window.sppPaymentHistoryUrl || '';
+  if (!body || !url) return;
+  if (!noInduk) {
+    body.innerHTML = '<tr><td colspan="6">Belum ada siswa dipilih.</td></tr>';
+    if (period) period.textContent = 'Pilih siswa untuk melihat transaksi.';
+    return;
+  }
+  body.innerHTML = '<tr><td colspan="6">Memuat history transaksi.</td></tr>';
+  fetch(url + '?no_induk=' + encodeURIComponent(noInduk), { headers: { 'Accept': 'application/json' } })
+    .then(response => response.json())
+    .then(payload => {
+      if (!payload.ok) throw new Error(payload.message || 'Gagal memuat history.');
+      if (period) period.textContent = payload.period || '';
+      const rows = Array.isArray(payload.rows) ? payload.rows : [];
+      if (!rows.length) {
+        body.innerHTML = '<tr><td colspan="6">Belum ada transaksi pembayaran untuk siswa ini.</td></tr>';
+        return;
+      }
+      body.innerHTML = rows.map(row => '<tr>' +
+        '<td>' + escapeHtml(row.tanggal || '') + '</td>' +
+        '<td>' + escapeHtml(row.periode || '') + '</td>' +
+        '<td>' + escapeHtml(row.komponen || '') + '</td>' +
+        '<td>' + escapeHtml(row.metode || '') + '</td>' +
+        '<td>' + escapeHtml(row.operator || '') + '</td>' +
+        '<td><strong>' + escapeHtml(row.total || 'Rp 0') + '</strong></td>' +
+      '</tr>').join('');
+    })
+    .catch(error => {
+      body.innerHTML = '<tr><td colspan="6">' + escapeHtml(error.message || 'Gagal memuat history.') + '</td></tr>';
+    });
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+  const noInduk = document.getElementById('disp-nis')?.value || '';
+  if (noInduk) refreshPaymentHistory(noInduk);
+});
 
 function studentSearchText(opt) {
   return [
@@ -174,7 +279,49 @@ function studentSearchText(opt) {
 function studentSearchOptionLabel(opt) {
   const nis = opt.dataset.nis || '';
   const nama = opt.dataset.nama || opt.textContent.trim() || opt.value || '';
-  return nis && nama ? nis + ' - ' + nama : (opt.value || nama);
+  return nama || opt.value || nis;
+}
+
+function studentSearchClassFilter(input) {
+  const selector = input?.dataset.studentClassFilter || '';
+  if (!selector) return { value: '', label: '', type: 'all' };
+  const select = document.querySelector(selector);
+  if (!select) return { value: '', label: '', type: 'all' };
+  const value = String(select.value || '');
+  const selected = select.options?.[select.selectedIndex];
+  let type = 'rombel';
+  let id = value;
+  let level = '';
+  if (!value || value === '0') {
+    type = 'all';
+    id = '';
+  } else if (value.startsWith('tingkat:')) {
+    type = 'tingkat';
+    level = value.slice(8);
+    id = level;
+  } else if (value.startsWith('rombel:')) {
+    id = value.slice(7);
+  }
+  return {
+    value: type === 'all' ? '' : id,
+    type,
+    level,
+    label: selected ? selected.textContent.trim() : ''
+  };
+}
+
+function studentSearchOptionsForClass(input, options) {
+  const filter = studentSearchClassFilter(input);
+  if (!filter.value) return options;
+  if (filter.type === 'tingkat') {
+    return options.filter(opt => {
+      const level = String(opt.dataset.tingkat || '').match(/^(?:1[0-2]|[1-9])$/)?.[0]
+        || String(opt.dataset.kelas || '').match(/(?:1[0-2]|[1-9])/)?.[0]
+        || '';
+      return level === filter.level;
+    });
+  }
+  return options.filter(opt => String(opt.dataset.kelasId || '') === filter.value);
 }
 
 function selectStudentSearchOption(input, opt) {
@@ -182,7 +329,12 @@ function selectStudentSearchOption(input, opt) {
   input.dataset.studentSelected = '1';
   input.dataset.studentSuppressPanel = '1';
   try {
-    window.pilihSiswaDatalist(input);
+    const callbackName = input.dataset.studentSelectCallback || '';
+    if (callbackName && typeof window[callbackName] === 'function') {
+      window[callbackName](input, opt);
+    } else if (typeof window.pilihSiswaDatalist === 'function') {
+      window.pilihSiswaDatalist(input);
+    }
   } finally {
     closeStudentSearchPanel(input);
   }
@@ -207,11 +359,13 @@ function renderStudentSearchPanel(input, forceAll) {
 
   const query = input.value.trim().toLowerCase();
   const allOptions = Array.from(list.options);
+  const classFilter = studentSearchClassFilter(input);
+  const scopedOptions = studentSearchOptionsForClass(input, allOptions);
   const showAll = !!forceAll || !query || input.dataset.studentSelected === '1';
 
   const matches = (!showAll
-    ? allOptions.filter(opt => studentSearchText(opt).includes(query))
-    : allOptions
+    ? scopedOptions.filter(opt => studentSearchText(opt).includes(query))
+    : scopedOptions
   ).slice(0, showAll ? 12 : 8);
 
   input.setAttribute('aria-expanded', 'true');
@@ -229,9 +383,15 @@ function renderStudentSearchPanel(input, forceAll) {
   if (showAll) {
     const hint = document.createElement('div');
     hint.className = 'student-search-hint';
-    hint.textContent = allOptions.length > matches.length
-      ? 'Menampilkan ' + matches.length + ' siswa pertama. Ketik nama atau NIS untuk mencari lebih spesifik.'
-      : 'Pilih siswa dari daftar.';
+    if (classFilter.value) {
+      hint.textContent = scopedOptions.length > matches.length
+        ? 'Menampilkan ' + matches.length + ' siswa pertama dari ' + classFilter.label + '. Ketik nama atau NIS untuk mencari lebih spesifik.'
+        : 'Menampilkan siswa dari ' + classFilter.label + '.';
+    } else {
+      hint.textContent = allOptions.length > matches.length
+        ? 'Menampilkan ' + matches.length + ' siswa pertama. Ketik nama atau NIS untuk mencari lebih spesifik.'
+        : 'Pilih siswa dari daftar.';
+    }
     panel.appendChild(hint);
   }
 
@@ -249,11 +409,13 @@ function renderStudentSearchPanel(input, forceAll) {
       + (opt.dataset.diknas ? ' · NIS Diknas ' + opt.dataset.diknas : '');
     const classBadge = document.createElement('span');
     classBadge.className = 'student-search-class';
-    classBadge.textContent = 'Kelas ' + (opt.dataset.kelas || '-');
+    const classText = opt.dataset.kelas || '-';
+    classBadge.textContent = /^kelas\s/i.test(classText) ? classText : 'Kelas ' + classText;
     main.appendChild(name);
     main.appendChild(nis);
     button.appendChild(main);
     button.appendChild(classBadge);
+    button.addEventListener('click', () => selectStudentSearchOption(input,opt));
     button.addEventListener('mousedown', function (event) {
       event.preventDefault();
       selectStudentSearchOption(input, opt);
@@ -263,8 +425,13 @@ function renderStudentSearchPanel(input, forceAll) {
 }
 
 function initStudentSearchCombobox() {
-  const input = document.getElementById('siswa-search');
-  const list = document.getElementById('siswa-list');
+  const inputs = Array.from(document.querySelectorAll('input[data-student-search], #siswa-search'));
+  inputs.forEach(initStudentSearchInput);
+}
+
+function initStudentSearchInput(input) {
+  const listId = input.dataset.studentList || input.getAttribute('list') || 'siswa-list';
+  const list = document.getElementById(listId);
   if (!input || !list || input.dataset.studentComboboxReady === '1') return;
 
   const box = input.closest('.search-box');
@@ -286,6 +453,7 @@ function initStudentSearchCombobox() {
   input.addEventListener('input', function () {
     delete input.dataset.studentSelected;
     delete input.dataset.studentSuppressPanel;
+    syncStudentSearchQueryTarget(input, input.value);
     renderStudentSearchPanel(input);
   });
   input.addEventListener('focus', function () {
@@ -295,13 +463,35 @@ function initStudentSearchCombobox() {
     delete input.dataset.studentSuppressPanel;
     renderStudentSearchPanel(input, true);
   });
+  const classFilterSelector = input.dataset.studentClassFilter || '';
+  const classFilter = classFilterSelector ? document.querySelector(classFilterSelector) : null;
+  if (classFilter) {
+    classFilter.addEventListener('change', function () {
+      const current = input.value.trim();
+      const options = Array.from(list.options);
+      const selected = options.find(opt => current === opt.value || current === studentSearchOptionLabel(opt));
+      const selectedStillValid = !selected || studentSearchOptionsForClass(input, [selected]).length > 0;
+      if (!selectedStillValid) {
+        input.value = '';
+        delete input.dataset.studentSelected;
+        delete input.dataset.studentSuppressPanel;
+        syncStudentSearchQueryTarget(input, '');
+      }
+      if (document.activeElement === input) {
+        delete input.dataset.studentSuppressPanel;
+        renderStudentSearchPanel(input, true);
+      }
+    });
+  }
   input.addEventListener('keydown', function (event) {
     if (event.key === 'Escape') {
       closeStudentSearchPanel(input);
       return;
     }
     if (event.key !== 'Enter') return;
-    const first = panel.querySelector('.student-search-option');
+    const choices=panel.querySelectorAll('.student-search-option');
+    if(choices.length>1){event.preventDefault();return;}
+    const first = choices[0];
     if (!first || panel.hidden) return;
     event.preventDefault();
     first.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
@@ -311,9 +501,41 @@ function initStudentSearchCombobox() {
   });
 }
 
+function syncStudentSearchQueryTarget(input, value) {
+  const targetId = input.dataset.studentQueryTarget || '';
+  if (!targetId) return;
+  const target = document.getElementById(targetId);
+  if (!target) return;
+  const listId = input.dataset.studentList || input.getAttribute('list') || '';
+  const list = listId ? document.getElementById(listId) : null;
+  const typed = value || '';
+  const exactMatches = list ? Array.from(list.options).filter(opt => typed === opt.value || typed === studentSearchOptionLabel(opt)) : [];
+  const exact=exactMatches.length===1?exactMatches[0]:null;
+  input.closest('form')?.querySelectorAll('[data-student-identity]').forEach(field=>field.value='');
+  target.value = exact
+    ? (exact.dataset.nis || exact.dataset.diknas || typed)
+    : (input.dataset.studentQueryExact === '1' ? '' : typed);
+}
+
+function selectReportStudentSearchOption(input, opt) {
+  input.value = studentSearchOptionLabel(opt);
+  syncStudentSearchQueryTarget(input, opt.dataset.nis || opt.dataset.diknas || input.value);
+  const form=input.closest('form');if(!form)return;
+  for(const [name,value] of [['student_id',opt.dataset.studentId||''],['student_unit',opt.dataset.unitId||'']]){
+    let field=form.querySelector('[name="'+name+'"]');if(!field){field=document.createElement('input');field.type='hidden';field.name=name;field.dataset.studentIdentity='1';form.append(field);}field.value=value;
+  }
+}
+
 function applyDefaultDaftarUlangClass(opt) {
-  const studentClass = String(opt.dataset.kelas || '').match(/[1-6]/)?.[0] || '';
-  setDaftarUlangContext(studentClass, academicYearFromPaymentPeriod());
+  const hidden = document.getElementById('tagihan-daftar-ulang-id');
+  const editingLinkedId = parseInt(window.sppEditingDuBillId || 0, 10) || 0;
+  if (hidden && editingLinkedId && daftarUlangRecords(opt).some(bill => parseInt(bill.id, 10) === editingLinkedId)) {
+    hidden.value = String(editingLinkedId);
+    window.sppEditingDuBillId = 0;
+  } else if (hidden) {
+    hidden.value = '';
+  }
+  ensureDefaultDaftarUlangSelection(opt);
 }
 
 function selectedPaymentPeriod() {
@@ -379,6 +601,45 @@ function followingSppPeriodsInAcademicYear() {
   return periods;
 }
 
+function activeSppPlacementPeriods(opt) {
+  if (!opt) return [];
+  let placements = [];
+  try {
+    placements = JSON.parse(opt.dataset.sppPlacements || '[]');
+  } catch (_) {
+    placements = [];
+  }
+
+  const periods = [];
+  placements.forEach(placement => {
+    const match = String(placement?.tahun_ajaran || '').match(/^(\d{4})\/(\d{4})$/);
+    if (!match || Number(match[2]) !== Number(match[1]) + 1) return;
+    const startYear = Number(match[1]);
+    const tariff = parseNumber(placement?.tarif || 0);
+    [[startYear, 7, 12], [startYear + 1, 1, 6]].forEach(([year, firstMonth, lastMonth]) => {
+      for (let month = firstMonth; month <= lastMonth; month++) {
+        const code = String(month).padStart(2, '0');
+        periods.push({
+          period: code + '-' + year,
+          year,
+          month,
+          tariff,
+          order: (year * 12) + month,
+          label: paymentMonthLabelByCode(code) + ' ' + year
+        });
+      }
+    });
+  });
+
+  return periods.sort((left, right) => left.order - right.order);
+}
+
+function selectedSppTariff(opt) {
+  const selected = selectedPaymentPeriod();
+  const record = activeSppPlacementPeriods(opt).find(period => period.period === selected);
+  return record ? record.tariff : datasetNumber(opt, 'total', 'spp');
+}
+
 function firstUnpaidPriorSppPeriod(opt, monthlyBill) {
   if (!opt || monthlyBill <= 0) return null;
   let periods = {};
@@ -388,14 +649,19 @@ function firstUnpaidPriorSppPeriod(opt, monthlyBill) {
     periods = {};
   }
 
-  for (const period of priorSppPeriodsInAcademicYear()) {
-    const paid = parseNumber(periods[period] || 0);
-    if (paid + 0.001 < monthlyBill) {
+  const selectedOrder = (() => {
+    const [month, year] = selectedPaymentPeriod().split('-').map(Number);
+    return month && year ? (year * 12) + month : 0;
+  })();
+  for (const period of activeSppPlacementPeriods(opt)) {
+    if (period.order >= selectedOrder || period.tariff <= 0.001) continue;
+    const paid = parseNumber(periods[period.period] || 0);
+    if (paid + 0.001 < period.tariff) {
       return {
-        period,
+        period: period.period,
         paid,
-        remaining: Math.max(0, monthlyBill - paid),
-        label: paymentPeriodDisplayLabel(period)
+        remaining: Math.max(0, period.tariff - paid),
+        label: period.label
       };
     }
   }
@@ -411,10 +677,13 @@ function firstPaidFollowingSppPeriod(opt) {
     periods = {};
   }
 
-  for (const period of followingSppPeriodsInAcademicYear()) {
-    const paid = parseNumber(periods[period] || 0);
+  const [month, year] = selectedPaymentPeriod().split('-').map(Number);
+  const selectedOrder = month && year ? (year * 12) + month : 0;
+  for (const period of activeSppPlacementPeriods(opt)) {
+    if (period.order <= selectedOrder) continue;
+    const paid = parseNumber(periods[period.period] || 0);
     if (paid > 0.001) {
-      return { period, paid, label: paymentPeriodDisplayLabel(period) };
+      return { period: period.period, paid, label: period.label };
     }
   }
   return null;
@@ -477,12 +746,38 @@ function academicYearPeriodKeys() {
 function paidForAcademicYear(opt, key) {
   if (!opt) return 0;
   try {
-    const datasetKey = key === 'komite' ? 'paidKomitePeriods' : 'paidSppPeriods';
-    const periods = JSON.parse(opt.dataset[datasetKey] || '{}');
+    const periods = JSON.parse(opt.dataset.paidSppPeriods || '{}');
     return academicYearPeriodKeys().reduce((sum, period) => sum + parseNumber(periods[period] || 0), 0);
   } catch (_) {
     return 0;
   }
+}
+
+function selectedAnnualFeeRecord(opt, key) {
+  if (!opt) return null;
+  const year = academicYearFromPaymentPeriod();
+  if (!year) return null;
+  try {
+    const fees = JSON.parse(opt.dataset.annualFees || '{}');
+    return fees?.[key]?.[year] || null;
+  } catch (_) {
+    return null;
+  }
+}
+
+function hasAnnualFeeDataset(opt) {
+  return !!opt?.dataset?.annualFees && opt.dataset.annualFees !== '{}';
+}
+
+function totalAnnualFeeForContext(opt, key) {
+  const record = selectedAnnualFeeRecord(opt, key);
+  return record ? parseNumber(record.total || 0) : datasetNumber(opt, 'total', key);
+}
+
+function paidAnnualFeeForContext(opt, key) {
+  const record = selectedAnnualFeeRecord(opt, key);
+  if (!record && hasAnnualFeeDataset(opt)) return 0;
+  return record ? parseNumber(record.paid || 0) : datasetNumber(opt, 'paid', key);
 }
 
 function selectedPaymentMonthLabel() {
@@ -496,6 +791,7 @@ function selectedPaymentMonthLabel() {
 function refreshSppPeriodLabel() {
   const label = document.getElementById('spp-component-label');
   if (!label) return;
+  if (window.sppPublishedBilling) { label.textContent = '🎓 Uang SPP'; return; }
   const monthLabel = selectedPaymentMonthLabel();
   label.textContent = '🎓 Uang SPP' + (monthLabel ? ' (' + monthLabel + ')' : '');
 }
@@ -509,8 +805,9 @@ function setDaftarUlangContext(kelas, tahunAjaran) {
 
 function syncDaftarUlangContextFromCurrentState() {
   const opt = selectedStudentOption();
+  ensureDefaultDaftarUlangSelection(opt);
   const bill = selectedDaftarUlangBill(opt);
-  setDaftarUlangContext(bill?.kelas || '', academicYearFromPaymentPeriod());
+  setDaftarUlangContext(bill?.kelas || '', bill?.tahun_ajaran || '');
   return opt;
 }
 
@@ -532,28 +829,80 @@ function paidForPeriod(opt, key) {
   if (!opt) return 0;
   if (key === 'spp' && isAnnualPaymentPlan()) return annualPaidForYear(opt, key);
   try {
-    const datasetKey = key === 'komite' ? 'paidKomitePeriods' : 'paidSppPeriods';
-    const periods = JSON.parse(opt.dataset[datasetKey] || '{}');
+    const periods = JSON.parse(opt.dataset.paidSppPeriods || '{}');
     return parseNumber(periods[selectedPaymentPeriod()] || 0);
   } catch (_) {
     return 0;
   }
 }
 
+function daftarUlangRecords(opt) {
+  if (!opt) return [];
+  try {
+    const raw = JSON.parse(opt.dataset.duBills || '[]');
+    if (Array.isArray(raw)) return raw;
+    return Object.entries(raw).map(([year, record]) => ({ tahun_ajaran: year, ...record }));
+  } catch (_) {
+    return [];
+  }
+}
+
+function publishedSppData(opt = selectedStudentOption()) {
+  if (!window.sppPublishedBilling || !opt) return null;
+  try {
+    const parsed = JSON.parse(opt.dataset.sppBilling || '{"tagihan":[]}');
+    return { tagihan: Array.isArray(parsed.tagihan) ? parsed.tagihan : [] };
+  } catch (_) {
+    return { tagihan: [] };
+  }
+}
+
+function refreshPublishedKomiteUi(opt = selectedStudentOption()) {
+  let record = null;
+  try { record = JSON.parse(opt?.dataset.komiteBilling || '{}')[selectedPaymentPeriod()] || null; } catch (_) { /* empty */ }
+  const live=sppStatusState.contextKey === currentSppStatusContext()?.key ? sppStatusState.payload?.komite : null;
+  if (live) record=live.exists ? live : null;
+  setPaymentComponent('komite', parseNumber(record?.total || 0), parseNumber(record?.paid || 0));
+  const context = document.getElementById('komite-context-label');
+  if (context) context.textContent = record ? 'Komite ' + paymentPeriodDisplayLabel(selectedPaymentPeriod()) + ' · lunas penuh' : 'Belum ada tagihan bulan ini.';
+}
+
+function refreshPublishedSppUi(opt = selectedStudentOption()) {
+  if (!window.sppPublishedBilling) return false;
+  const data = publishedSppData(opt) || { tagihan: [] };
+  const bill = data.tagihan.find(item => item.bulan + '-' + item.tahun === selectedPaymentPeriod());
+  const contextKey = currentSppStatusContext()?.key || '';
+  const live = contextKey && sppStatusState.contextKey === contextKey ? sppStatusState.payload?.selected : null;
+  setPaymentComponent('spp', parseNumber(live?.tariff ?? bill?.total ?? 0), parseNumber(live?.paid ?? bill?.paid ?? 0));
+  refreshPublishedKomiteUi(opt);
+  const context = document.getElementById('spp-context-label');
+  if (context) context.textContent = bill ? 'SPP ' + paymentPeriodDisplayLabel(selectedPaymentPeriod()) + ' · lunas penuh' : 'Tidak ada tagihan SPP terbuka bulan ini.';
+  return true;
+}
+
 function selectedDaftarUlangKey() {
-  return academicYearFromPaymentPeriod();
+  return document.getElementById('tagihan-daftar-ulang-id')?.value || '';
 }
 
 function selectedDaftarUlangRecord(opt) {
-  if (!opt) return null;
-  const year = selectedDaftarUlangKey();
-  if (!year) return null;
-  try {
-    const bills = JSON.parse(opt.dataset.duBills || '{}');
-    return bills[year] || null;
-  } catch (_) {
-    return null;
+  const selectedId = parseInt(selectedDaftarUlangKey(), 10) || 0;
+  return daftarUlangRecords(opt).find(record => parseInt(record.id, 10) === selectedId) || null;
+}
+
+function ensureDefaultDaftarUlangSelection(opt) {
+  const hidden = document.getElementById('tagihan-daftar-ulang-id');
+  if (!hidden || !opt) return null;
+  const records = daftarUlangRecords(opt);
+  let selected = records.find(record => String(record.id) === hidden.value);
+  if (!selected) {
+    selected = records.find(record => record.is_current && record.status === 'open' && parseNumber(record.sisa) > .001)
+      || records.filter(record => record.is_arrear && record.status === 'open' && parseNumber(record.sisa) > .001)
+        .sort((a, b) => String(a.tahun_ajaran).localeCompare(String(b.tahun_ajaran)))[0]
+      || records.find(record => record.is_current)
+      || null;
+    hidden.value = selected ? String(selected.id) : '';
   }
+  return selected;
 }
 
 function selectedDaftarUlangBill(opt) {
@@ -565,68 +914,247 @@ function totalDaftarUlangForContext(opt) {
   return parseNumber(selectedDaftarUlangBill(opt)?.total || 0);
 }
 
+function refreshDaftarUlangSelector(opt) {
+  const trigger = document.getElementById('du-selector-trigger');
+  const menu = document.getElementById('du-selector-menu');
+  const warningIcon = document.getElementById('du-arrear-warning');
+  if (!trigger || !menu) return;
+
+  const records = daftarUlangRecords(opt);
+  const arrears = records.filter(record => record.is_arrear && parseNumber(record.sisa) > .001);
+  menu.hidden = true;
+  trigger.setAttribute('aria-expanded', 'false');
+  if (warningIcon) {
+    const message = arrears.length + ' tahun ajaran masih memiliki tunggakan Daftar Ulang';
+    warningIcon.hidden = arrears.length === 0;
+    warningIcon.textContent = arrears.length ? '!' : '';
+    warningIcon.setAttribute('aria-label', arrears.length ? message : '');
+    warningIcon.title = arrears.length ? message : '';
+  }
+
+  menu.replaceChildren();
+  const menuHeader = document.createElement('div');
+  menuHeader.className = 'du-selector-menu-header';
+  const menuHeading = document.createElement('strong');
+  menuHeading.textContent = 'Pilih tagihan Daftar Ulang';
+  const menuHint = document.createElement('span');
+  menuHint.textContent = arrears.length ? arrears.length + ' tunggakan perlu diselesaikan' : 'Tidak ada tunggakan';
+  menuHeader.append(menuHeading, menuHint);
+  menu.appendChild(menuHeader);
+
+  if (records.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'du-selector-empty';
+    empty.textContent = opt ? 'Belum ada tagihan Daftar Ulang yang dapat dipilih.' : 'Pilih siswa untuk melihat tagihan.';
+    menu.appendChild(empty);
+  }
+
+  records.forEach(record => {
+    const option = document.createElement('button');
+    option.type = 'button';
+    option.className = 'du-selector-option';
+    option.setAttribute('role', 'option');
+    option.setAttribute('aria-selected', String(String(record.id) === selectedDaftarUlangKey()));
+    option.dataset.billId = String(record.id);
+
+    const heading = document.createElement('span');
+    heading.className = 'du-option-heading';
+    const titleWrap = document.createElement('span');
+    titleWrap.className = 'du-option-title';
+    const title = document.createElement('strong');
+    title.textContent = 'TA ' + record.tahun_ajaran;
+    const className = document.createElement('span');
+    className.textContent = 'Kelas ' + record.kelas;
+    titleWrap.append(title, className);
+    const badge = document.createElement('span');
+    badge.className = 'du-option-badge ' + (record.is_current ? 'is-current' : 'is-arrear');
+    badge.textContent = record.is_current ? 'Tahun Berjalan' : 'Tunggakan';
+    heading.append(titleWrap, badge);
+
+    const values = document.createElement('span');
+    values.className = 'du-option-values';
+    [
+      ['Tagihan', record.total],
+      ['Terbayar', record.terbayar ?? record.paid ?? 0],
+      ['Sisa', record.sisa ?? 0]
+    ].forEach(([label, value]) => {
+      const stat = document.createElement('span');
+      const statLabel = document.createElement('small');
+      const statValue = document.createElement('strong');
+      statLabel.textContent = label;
+      statValue.textContent = 'Rp ' + formatRupiah(value);
+      stat.append(statLabel, statValue);
+      values.appendChild(stat);
+    });
+    const selectedMark = document.createElement('span');
+    selectedMark.className = 'du-option-selected-mark';
+    selectedMark.setAttribute('aria-hidden', 'true');
+    selectedMark.textContent = '✓';
+    option.append(heading, values, selectedMark);
+    option.addEventListener('click', () => {
+      const hidden = document.getElementById('tagihan-daftar-ulang-id');
+      if (hidden) hidden.value = String(record.id);
+      const input = document.getElementById('du-input');
+      if (input) input.value = '0';
+      menu.hidden = true;
+      trigger.setAttribute('aria-expanded', 'false');
+      setDaftarUlangContext(record.kelas, record.tahun_ajaran);
+      applyStudentPaymentDetails(opt);
+      trigger.focus();
+    });
+    menu.appendChild(option);
+  });
+
+  if (trigger.dataset.bound !== '1') {
+    trigger.dataset.bound = '1';
+    trigger.addEventListener('click', () => {
+      const opening = menu.hidden;
+      menu.hidden = !opening;
+      trigger.setAttribute('aria-expanded', String(opening));
+      if (opening) menu.querySelector('[aria-selected="true"]')?.focus();
+    });
+    trigger.addEventListener('keydown', event => {
+      if (event.key === 'ArrowDown' || event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        menu.hidden = false;
+        trigger.setAttribute('aria-expanded', 'true');
+        menu.querySelector('[aria-selected="true"], .du-selector-option')?.focus();
+      }
+    });
+    document.addEventListener('click', event => {
+      if (!event.target.closest('.du-bill-selector')) {
+        menu.hidden = true;
+        trigger.setAttribute('aria-expanded', 'false');
+      }
+    });
+    menu.addEventListener('keydown', event => {
+      const options = Array.from(menu.querySelectorAll('.du-selector-option'));
+      const index = options.indexOf(document.activeElement);
+      if (event.key === 'Escape') {
+        menu.hidden = true;
+        trigger.setAttribute('aria-expanded', 'false');
+        trigger.focus();
+      } else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+        event.preventDefault();
+        const step = event.key === 'ArrowDown' ? 1 : -1;
+        options[(index + step + options.length) % options.length]?.focus();
+      }
+    });
+  }
+}
+
 function refreshDaftarUlangMasterWarning(opt) {
   const warning = document.getElementById('du-master-warning');
   const input = document.getElementById('du-input');
   if (!warning && !input) return;
 
-  const periodKey = selectedDaftarUlangKey();
-  const record = selectedDaftarUlangRecord(opt);
+  ensureDefaultDaftarUlangSelection(opt);
   const bill = selectedDaftarUlangBill(opt);
-  const hasContext = !!opt && !!periodKey;
+  const periodKey = bill?.tahun_ajaran || '';
   const total = parseNumber(bill?.total || 0);
-  const paid = parseNumber(bill?.paid || 0);
-  const remaining = Math.max(0, total - paid);
-  const isSettled = !!bill && total > 0 && remaining <= 0.001;
-  const isUnavailable = hasContext && !bill;
+  const paid = parseNumber(bill?.terbayar ?? bill?.paid ?? 0);
+  const remaining = parseNumber(bill?.sisa ?? Math.max(0, total - paid));
+  const isSettled = !!bill && remaining <= 0.001;
+  const isUnavailable = !!opt && !bill;
+  const expectedTotal = document.getElementById('du-expected-total');
+  const expectedPaid = document.getElementById('du-expected-paid');
+  if (expectedTotal) expectedTotal.value = bill ? String(total) : '';
+  if (expectedPaid) expectedPaid.value = bill ? String(paid) : '';
   const contextLabel = document.getElementById('du-context-label');
   if (contextLabel) {
     let status = 'Belum Bayar';
-    if (isSettled) status = 'Lunas';
+    if (isSettled) status = total <= .001 ? 'Tidak perlu dibayar' : 'Lunas';
     else if (paid > 0) status = 'Cicilan';
     if (!opt || !periodKey) {
-      contextLabel.textContent = 'Pilih siswa, bulan, dan tahun pembayaran.';
+      contextLabel.textContent = opt ? 'Belum ada tagihan Daftar Ulang yang dapat dipilih.' : 'Pilih siswa untuk melihat tagihan.';
     } else if (bill) {
-      contextLabel.textContent = 'TA ' + periodKey + ' · Kelas ' + bill.kelas + ' · ' + status;
-    } else if (record?.status === 'cancelled') {
-      contextLabel.textContent = 'TA ' + periodKey + ' · Tagihan dibatalkan';
-    } else {
-      contextLabel.textContent = 'TA ' + periodKey + ' · Tagihan belum tersedia';
+      contextLabel.textContent = 'TA ' + periodKey + ' · Kelas ' + bill.kelas + ' · ' + status
+        + (remaining > .001 ? ' · Sisa Rp ' + formatRupiah(remaining) : '');
     }
   }
 
   if (input) {
-    const locked = !bill || isSettled;
+    const locked = !bill || total <= 0 || isSettled;
     const lockedMessage = isSettled
       ? 'Tagihan Daftar Ulang sudah lunas.'
-      : 'Tagihan Daftar Ulang siswa untuk tahun ajaran ini belum diterbitkan.';
-    input.readOnly = locked;
-    input.classList.toggle('tbl-readonly', locked);
-    if (locked) {
-      input.value = '0';
-      input.title = lockedMessage;
-      input.setCustomValidity('');
-    } else {
-      input.setCustomValidity('');
-      input.removeAttribute('title');
-    }
+      : 'Tidak ada tagihan Daftar Ulang yang dapat dibayar.';
+    setPaymentInputAvailability(input, locked, lockedMessage, true);
   }
 
   if (!warning) return;
   if (!isUnavailable) {
     warning.hidden = true;
     warning.textContent = '';
-    return;
+  } else {
+    warning.hidden = false;
+    warning.textContent = 'Tagihan Daftar Ulang belum diterbitkan atau tidak memiliki sisa.';
   }
-
-  warning.hidden = false;
-  warning.textContent = record?.status === 'cancelled'
-    ? 'Tagihan siswa ini telah dibatalkan dan tidak dapat dibayar.'
-    : 'Tagihan belum diterbitkan. Buka Master Daftar Ulang lalu gunakan Simpan & Terbitkan Tagihan.';
+  refreshDaftarUlangSelector(opt);
 }
 
 function paidDaftarUlangForContext(opt) {
-  return parseNumber(selectedDaftarUlangBill(opt)?.paid || 0);
+  const bill = selectedDaftarUlangBill(opt);
+  return parseNumber(bill?.terbayar ?? bill?.paid ?? 0);
+}
+
+function applyGraduatePaymentLock(opt) {
+  const graduateOnly = opt?.dataset.isGraduate === '1';
+  ['pangkal', 'psb', 'spp', 'komite'].forEach(key => {
+    const input = document.getElementById(key + '-input');
+    if (!input) return;
+    if (graduateOnly && !(window.sppPublishedBilling && (key === 'spp' || key === 'komite'))) {
+      input.value = '0';
+      input.readOnly = true;
+      input.classList.add('tbl-readonly');
+      input.dataset.graduateLocked = '1';
+      input.title = 'Lulusan hanya dapat melunasi tunggakan SPP, Komite, dan Daftar Ulang.';
+    } else if (input.dataset.graduateLocked === '1') {
+      input.readOnly = false;
+      input.classList.remove('tbl-readonly');
+      delete input.dataset.graduateLocked;
+      input.removeAttribute('title');
+    }
+  });
+  const discount = document.getElementById('potongan-spp');
+  if (discount) {
+    if (graduateOnly) {
+      discount.value = '0';
+      discount.readOnly = true;
+      discount.dataset.graduateLocked = '1';
+    } else if (discount.dataset.graduateLocked === '1') {
+      discount.readOnly = false;
+      delete discount.dataset.graduateLocked;
+    }
+  }
+  document.querySelectorAll('.biaya-lain-select').forEach(select => {
+    if (graduateOnly) {
+      select.value = '';
+      select.disabled = true;
+      select.dataset.graduateLocked = '1';
+    } else if (select.dataset.graduateLocked === '1') {
+      select.disabled = false;
+      delete select.dataset.graduateLocked;
+    }
+  });
+  document.querySelectorAll('.biaya-lain-nominal, .biaya-lain-keterangan').forEach(input => {
+    if (graduateOnly) input.value = input.classList.contains('biaya-lain-nominal') ? '0' : '';
+    if (graduateOnly) {
+      input.readOnly = true;
+      input.dataset.graduateLocked = '1';
+    } else if (input.dataset.graduateLocked === '1') {
+      input.readOnly = false;
+      delete input.dataset.graduateLocked;
+    }
+  });
+  document.querySelectorAll('.btn-remove-biaya-lain').forEach(button => {
+    if (graduateOnly) { button.disabled = true; button.dataset.graduateLocked = '1'; }
+    else if (button.dataset.graduateLocked === '1') { button.disabled = false; delete button.dataset.graduateLocked; }
+  });
+  const addButton = document.getElementById('btn-add-biaya-lain');
+  if (addButton) {
+    if (graduateOnly) { addButton.disabled = true; addButton.dataset.graduateLocked = '1'; }
+    else if (addButton.dataset.graduateLocked === '1') { delete addButton.dataset.graduateLocked; }
+  }
 }
 
 function selectedBiayaLainSummary() {
@@ -661,14 +1189,25 @@ function refreshAcademicYearSummary() {
     return;
   }
 
-  const oneTimeKeys = ['pangkal','bangunan','seragam','kegiatan','makan','sorga','infaq'];
-  let total = oneTimeKeys.reduce((sum, key) => sum + datasetNumber(opt, 'total', key), 0);
-  let paid = oneTimeKeys.reduce((sum, key) => sum + datasetNumber(opt, 'paid', key), 0);
+  const annualKeys = window.sppPublishedBilling ? [] : ['komite'];
+  let total = annualKeys.reduce((sum, key) => sum + totalAnnualFeeForContext(opt, key), 0);
+  let paid = annualKeys.reduce((sum, key) => sum + paidAnnualFeeForContext(opt, key), 0);
+  if (window.sppPublishedBilling) {
+    try {
+      Object.values(JSON.parse(opt.dataset.komiteBilling || '{}')).forEach(bill => { total += parseNumber(bill.total); paid += parseNumber(bill.paid); });
+    } catch (_) { /* no bills */ }
+  }
+  ['pangkal', 'psb'].forEach(key => {
+    total += datasetNumber(opt, 'total', key);
+    paid += datasetNumber(opt, 'paid', key);
+  });
 
-  total += datasetNumber(opt, 'total', 'spp') * 12;
-  total += datasetNumber(opt, 'total', 'komite') * 12;
-  paid += paidForAcademicYear(opt, 'spp');
-  paid += paidForAcademicYear(opt, 'komite');
+  if (window.sppPublishedBilling) {
+    const sppData=publishedSppData(opt);total+=(sppData?.tagihan||[]).reduce((sum,bill)=>sum+parseNumber(bill.total||0),0);paid+=(sppData?.tagihan||[]).reduce((sum,bill)=>sum+parseNumber(bill.paid||0),0);
+  } else {
+    total += datasetNumber(opt, 'total', 'spp') * 12;
+    paid += paidForAcademicYear(opt, 'spp');
+  }
 
   const daftarUlang = selectedDaftarUlangBill(opt);
   total += parseNumber(daftarUlang?.total || 0);
@@ -693,15 +1232,22 @@ function setPaymentComponent(key, total, paid) {
 
 function applyStudentPaymentDetails(opt) {
   if (!opt) return;
-  ['pangkal','bangunan','seragam','kegiatan','spp','komite','makan','sorga','infaq','du'].forEach(key => {
+  ensureDefaultDaftarUlangSelection(opt);
+  ['pangkal','psb','spp','komite','du'].forEach(key => {
+    if (window.sppPublishedBilling && (key === 'spp' || key === 'komite')) return;
     const total = key === 'du'
       ? totalDaftarUlangForContext(opt)
-      : datasetNumber(opt, 'total', key) * (key === 'spp' && isAnnualPaymentPlan() ? 12 : 1);
+      : (key === 'spp'
+          ? selectedSppTariff(opt) * (isAnnualPaymentPlan() ? 12 : 1)
+          : (key === 'komite' ? totalAnnualFeeForContext(opt, key) : datasetNumber(opt, 'total', key)));
     const paid = key === 'du'
       ? paidDaftarUlangForContext(opt)
-      : (['spp', 'komite'].includes(key) ? paidForPeriod(opt, key) : datasetNumber(opt, 'paid', key));
+      : (key === 'spp'
+          ? paidForPeriod(opt, key)
+          : (key === 'komite' ? paidAnnualFeeForContext(opt, key) : datasetNumber(opt, 'paid', key)));
     setPaymentComponent(key, total, paid);
   });
+  refreshPublishedSppUi(opt);
   refreshAnnualPaymentState(opt);
   refreshDaftarUlangMasterWarning(opt);
   refreshBiayaLainOptions();
@@ -710,13 +1256,17 @@ function applyStudentPaymentDetails(opt) {
 }
 
 function clearPaymentDetails() {
-  ['pangkal','bangunan','seragam','kegiatan','spp','komite','makan','sorga','infaq','du'].forEach(key => {
+  const duBillId = document.getElementById('tagihan-daftar-ulang-id');
+  if (duBillId) duBillId.value = '';
+  ['pangkal','psb','spp','komite','du'].forEach(key => {
     ['total','bayar','sisa'].forEach(part => {
       const el = document.getElementById(key + '-' + part);
       if (el) el.value = '0';
     });
   });
   refreshDaftarUlangMasterWarning(null);
+  refreshPublishedSppUi(null);
+  applyGraduatePaymentLock(null);
   refreshAnnualPaymentState(null);
   refreshBiayaLainOptions();
   document.querySelectorAll('.biaya-lain-row').forEach(row => refreshBiayaLainRow(row, true));
@@ -725,51 +1275,348 @@ function clearPaymentDetails() {
 
 const paymentComponentLabels = {
   pangkal: 'Uang Pangkal',
-  bangunan: 'Uang Bangunan',
-  seragam: 'Uang Seragam',
-  kegiatan: 'Uang Kegiatan',
+  psb: 'Uang PSB',
   spp: 'Uang SPP',
   komite: 'Uang Komite',
-  makan: 'Uang Makan',
-  sorga: 'Uang Sorga',
-  infaq: 'Uang Infaq',
   du: 'Uang Daftar Ulang'
 };
 
+function setPaymentInputAvailability(input, locked, message = '', clearWhenLocked = false) {
+  if (!input) return;
+  input.readOnly = locked;
+  input.setAttribute('aria-readonly', locked ? 'true' : 'false');
+  input.classList.toggle('tbl-readonly', locked);
+  if (locked) {
+    if (clearWhenLocked) input.value = '0';
+    input.title = message;
+    input.setCustomValidity('');
+  } else {
+    input.removeAttribute('title');
+    input.setCustomValidity('');
+  }
+}
+
 function refreshOptionalOneTimeFeeAvailability() {
   const hasStudent = !!document.getElementById('disp-nis')?.value;
-  ['makan', 'sorga', 'infaq'].forEach(key => {
+  ['pangkal', 'psb', 'komite'].forEach(key => {
     const total = parseNumber(document.getElementById(key + '-total')?.value || 0);
     const paid = parseNumber(document.getElementById(key + '-bayar')?.value || 0);
     const inputEl = document.getElementById(key + '-input');
     const contextEl = document.getElementById(key + '-context-label');
     if (!inputEl) return;
 
+    const labels = {
+      pangkal: 'Uang Pangkal',
+      psb: 'Uang PSB',
+      komite: 'Uang Komite'
+    };
     let message = '';
     if (!hasStudent) message = 'Pilih siswa terlebih dahulu';
-    else if (total <= 0) message = 'Tarif belum diatur di Data Siswa';
-    else if (paid + 0.001 >= total) message = 'Lunas';
+    else if (total <= 0) message = key === 'komite'
+      ? 'Belum ada tagihan Komite pada periode ini'
+      : labels[key] + ' belum diatur di Data Siswa';
+    else if (paid + 0.001 >= total) message = labels[key] + ' sudah lunas';
 
     const locked = message !== '';
-    inputEl.readOnly = locked;
-    inputEl.classList.toggle('tbl-readonly', locked);
-    if (locked) {
-      inputEl.value = '0';
-      inputEl.title = message;
-      inputEl.setCustomValidity('');
-    } else {
-      inputEl.removeAttribute('title');
-    }
+    setPaymentInputAvailability(inputEl, locked, message, true);
     if (contextEl) {
-      contextEl.textContent = locked ? message : 'Tagihan satu kali · dapat dicicil';
+      contextEl.textContent = locked ? message : (key === 'komite' ? 'Komite bulan ini wajib lunas penuh.' : 'Tagihan satu kali, dapat dicicil');
     }
     hitungSisa(key);
   });
 }
 
+let sppStatusUiReady = false;
+let sppStatusTimer = null;
+let sppStatusRequestId = 0;
+let sppStatusAbortController = null;
+let sppWarningRestoreFocus = null;
+let sppWarningPrimaryAction = null;
+let sppWarningSecondaryAction = null;
+const sppStatusState = {
+  contextKey: '',
+  pending: false,
+  payload: null,
+  lastShownKey: ''
+};
+
+function currentSppStatusContext() {
+  const noInduk = document.getElementById('disp-nis')?.value.trim() || '';
+  const bulan = document.getElementById('bulan-bayar')?.value || '';
+  const tahun = document.getElementById('tahun-bayar')?.value.trim() || '';
+  if (!noInduk || !/^\d{2}$/.test(bulan) || !/^\d{4}$/.test(tahun)) return null;
+  const editId = parseInt(window.sppEditPaymentId || 0, 10) || 0;
+  return {
+    noInduk,
+    bulan,
+    tahun,
+    editId,
+    key: [noInduk, bulan, tahun, editId].join('|')
+  };
+}
+
+function resetSppStatusState() {
+  if (sppStatusTimer) window.clearTimeout(sppStatusTimer);
+  sppStatusTimer = null;
+  if (sppStatusAbortController) sppStatusAbortController.abort();
+  sppStatusAbortController = null;
+  sppStatusRequestId += 1;
+  sppStatusState.contextKey = '';
+  sppStatusState.pending = false;
+  sppStatusState.payload = null;
+  sppStatusState.lastShownKey = '';
+}
+
+function unavailableSppStatus() {
+  return {
+    ok: false,
+    status: 'status_unavailable',
+    code: 'status_unavailable',
+    lock_spp: true,
+    title: 'Status belum tersedia',
+    message: 'Status SPP belum dapat diperiksa. Coba lagi.',
+    amount_label: ''
+  };
+}
+
+function closeSppWarning() {
+  const overlay = document.getElementById('spp-warning-overlay');
+  if (!overlay) return;
+  overlay.classList.remove('show');
+  overlay.setAttribute('aria-hidden', 'true');
+  document.body.classList.remove('spp-warning-open');
+  const focusTarget = sppWarningRestoreFocus;
+  sppWarningRestoreFocus = null;
+  sppWarningPrimaryAction = null;
+  sppWarningSecondaryAction = null;
+  if (focusTarget && typeof focusTarget.focus === 'function') focusTarget.focus();
+}
+
+function clearPaymentAmountsOnContextChange(studentChanged = false) {
+  for (const id of ['spp-input','komite-input',...(studentChanged ? ['pangkal-input','psb-input','du-input'] : [])]) {
+    const input=document.getElementById(id);
+    if (input) { input.value='0'; input.setCustomValidity(''); }
+  }
+  if (studentChanged) {
+    for (const row of document.querySelectorAll('#biaya-lain-list .biaya-lain-row')) {
+      const select=row.querySelector('.biaya-lain-select'); if (select) select.value='';
+      const amount=row.querySelector('.biaya-lain-nominal'); if (amount) amount.value='0';
+      const note=row.querySelector('.biaya-lain-keterangan'); if (note) note.value='';
+    }
+  }
+  updateTotal();
+}
+
+function showSppWarning(status, sourceElement = null, force = false, onPrimary = null) {
+  const overlay = document.getElementById('spp-warning-overlay');
+  const title = document.getElementById('spp-warning-title');
+  const message = document.getElementById('spp-warning-message');
+  const amount = document.getElementById('spp-warning-amount');
+  const secondary = document.getElementById('spp-warning-secondary');
+  const close = document.getElementById('spp-warning-close');
+  if (!overlay || !title || !message || !amount || !secondary || !close || !status) return;
+
+  const context = currentSppStatusContext();
+  const warningKey = (context?.key || 'flash') + '|' + (status.code || 'blocked');
+  if (!force && sppStatusState.lastShownKey === warningKey) return;
+  sppStatusState.lastShownKey = warningKey;
+  sppWarningRestoreFocus = status.target === 'biaya-lain-list'
+    ? document.querySelector('.biaya-lain-row.row-overpaid .biaya-lain-nominal, .biaya-lain-nominal')
+    : document.getElementById(status.target || '') || sourceElement || document.activeElement;
+
+  title.textContent = status.title || 'SPP belum bisa dibayar';
+  message.textContent = status.message || 'Pembayaran SPP belum dapat diproses.';
+  amount.textContent = status.amount_label || '';
+  amount.hidden = !status.amount_label;
+  const code = status.code || 'blocked';
+  const severity = status.severity || (['not_published','already_paid','not_payable'].includes(code) ? 'info' : 'error');
+  overlay.dataset.severity = severity;
+  overlay.setAttribute('role', severity === 'error' ? 'alertdialog' : 'dialog');
+  secondary.hidden = true;
+  secondary.textContent = 'Kembali';
+  close.textContent = status.action_label || 'Mengerti';
+  sppWarningPrimaryAction = onPrimary;
+  sppWarningSecondaryAction = null;
+  if (code === 'prior_unpaid' && status.blocking_period) {
+    close.textContent = 'Pilih ' + status.blocking_period.label;
+    secondary.hidden = false;
+    sppWarningPrimaryAction = () => {
+      const month = document.getElementById('bulan-bayar');
+      const year = document.getElementById('tahun-bayar');
+      if (month && year) {
+        month.value = status.blocking_period.bulan;
+        year.value = status.blocking_period.tahun;
+        month.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+    };
+  } else if (code === 'komite_required') {
+    close.textContent = 'Isi Komite'; secondary.hidden = false;
+    sppWarningPrimaryAction = () => {
+      const input = document.getElementById('komite-input');
+      const due = Math.max(0, parseNumber(document.getElementById('komite-total')?.value || 0) - parseNumber(document.getElementById('komite-bayar')?.value || 0));
+      if (input && !input.readOnly && due > .001) { input.value = formatRupiahString(due); input.dispatchEvent(new Event('input', { bubbles: true })); input.focus(); }
+    };
+  } else if (code === 'spp_required') {
+    close.textContent = 'Isi SPP'; secondary.hidden = false;
+    sppWarningPrimaryAction = () => {
+      const input = document.getElementById('spp-input');
+      const live = sppStatusState.payload;
+      if (!input || live?.status !== 'payable' || input.readOnly) return;
+      const due = parseNumber(live.selected?.remaining || 0);
+      input.value = formatRupiahString(due);
+      input.dispatchEvent(new Event('input', { bubbles: true })); input.focus();
+    };
+  } else if (code === 'status_unavailable' || code === 'billing_changed') {
+    close.textContent = code === 'status_unavailable' ? 'Coba Lagi' : 'Perbarui tagihan';
+    const retryTarget = sppWarningRestoreFocus;
+    sppWarningPrimaryAction = code === 'billing_changed'
+      ? () => { try { sessionStorage.setItem('paymentDraftReload',JSON.stringify(capturePaymentDraftInBrowser())); } catch (_) { /* storage unavailable */ } window.location.reload(); }
+      : () => requestSppStatus({ interactive: false, force: true, sourceElement: retryTarget });
+  } else if (['not_published','already_paid','not_payable'].includes(code)) {
+    close.textContent = 'Pilih bulan lain';
+    sppWarningPrimaryAction = () => document.getElementById('bulan-bayar')?.focus();
+  } else if (code === 'du_reselect') {
+    close.textContent = 'Pilih tagihan';
+    sppWarningPrimaryAction = () => { const trigger=document.getElementById('du-selector-trigger'); trigger?.focus(); trigger?.click(); };
+  } else if (['amount_mismatch','komite_amount','over_limit'].includes(code)) {
+    close.textContent = 'Perbaiki nominal';
+
+  } else if (code === 'future_period') {
+    secondary.hidden = false;
+    sppWarningSecondaryAction = () => document.getElementById('bulan-bayar')?.focus();
+  }
+  overlay.dataset.statusCode = status.code || 'blocked';
+  overlay.classList.add('show');
+  overlay.setAttribute('aria-hidden', 'false');
+  document.body.classList.add('spp-warning-open');
+  window.setTimeout(() => close.focus(), 0);
+}
+
+function sppEditDependencyBlocks(dependency, proposedAmount = null) {
+  if (!dependency?.original) return false;
+  const context = currentSppStatusContext();
+  if (!context) return false;
+  const original = dependency.original;
+  const contextMoved = context.noInduk !== String(original.no_induk || '')
+    || context.bulan !== String(original.bulan || '')
+    || context.tahun !== String(original.tahun || '');
+  if (contextMoved) return true;
+  if (proposedAmount === null) return false;
+  return proposedAmount + 0.001 < parseNumber(original.tariff || 0);
+}
+
+function applySppStatusPayload(payload) {
+  const opt=selectedStudentOption();
+
+  const selected = payload?.selected;
+  if (selected && Number.isFinite(Number(selected.tariff)) && Number.isFinite(Number(selected.paid))) {
+    setPaymentComponent('spp', Number(selected.tariff), Number(selected.paid));
+  }
+  updateTotal();
+}
+
+async function requestSppStatus(options = {}) {
+  const context = currentSppStatusContext();
+  const interactive = options.interactive === true;
+  const force = options.force === true;
+  const sourceElement = options.sourceElement || document.activeElement;
+  const urlValue = window.sppPaymentStatusUrl || '';
+  if (!context || !urlValue) {
+    resetSppStatusState();
+    refreshSppInstallmentAvailability();
+    return null;
+  }
+
+  if (!force && sppStatusState.contextKey === context.key && sppStatusState.payload && !sppStatusState.pending) {
+    const cached = sppStatusState.payload;
+    if (interactive && sppEditDependencyBlocks(cached.edit_dependency)) {
+      showSppWarning(cached.edit_dependency, sourceElement);
+    } else if (interactive && ['prior_unpaid','arrears'].includes(cached.status)) {
+      showSppWarning(cached, sourceElement);
+    }
+    return cached;
+  }
+
+  if (sppStatusAbortController) sppStatusAbortController.abort();
+  sppStatusAbortController = new AbortController();
+  const requestId = ++sppStatusRequestId;
+  if (sppStatusState.contextKey !== context.key) sppStatusState.lastShownKey = '';
+  sppStatusState.contextKey = context.key;
+  sppStatusState.pending = true;
+  sppStatusState.payload = null;
+  refreshSppInstallmentAvailability();
+
+  try {
+    const url = new URL(urlValue, window.location.href);
+    url.searchParams.set('no_induk', context.noInduk);
+    url.searchParams.set('bulan', context.bulan);
+    url.searchParams.set('tahun', context.tahun);
+    if (context.editId > 0) url.searchParams.set('edit_id', String(context.editId));
+    const response = await fetch(url.toString(), {
+      headers: { 'Accept': 'application/json' },
+      cache: 'no-store',
+      signal: sppStatusAbortController.signal
+    });
+    const payload = await response.json().catch(() => null);
+    if (requestId !== sppStatusRequestId) return null;
+    if (!response.ok || !payload?.ok) throw new Error(payload?.message || 'Status SPP belum dapat diperiksa.');
+
+    sppStatusState.pending = false;
+    sppStatusState.payload = payload;
+    applySppStatusPayload(payload);
+    if (interactive && sppEditDependencyBlocks(payload.edit_dependency)) {
+      showSppWarning(payload.edit_dependency, sourceElement, force);
+    } else if (interactive && ['prior_unpaid','arrears'].includes(payload.status)) {
+      showSppWarning(payload, sourceElement, force);
+    }
+    return payload;
+  } catch (error) {
+    if (error?.name === 'AbortError' || requestId !== sppStatusRequestId) return null;
+    const payload = unavailableSppStatus();
+    sppStatusState.pending = false;
+    sppStatusState.payload = payload;
+    refreshSppInstallmentAvailability();
+    if (interactive) showSppWarning(payload, sourceElement, force);
+    return payload;
+  }
+}
+
+function scheduleSppStatusCheck(interactive = true, sourceElement = null) {
+  if (sppStatusTimer) window.clearTimeout(sppStatusTimer);
+  const context = currentSppStatusContext();
+  if (!context) {
+    resetSppStatusState();
+    refreshSppInstallmentAvailability();
+    return;
+  }
+  sppStatusTimer = window.setTimeout(() => {
+    sppStatusTimer = null;
+    requestSppStatus({ interactive, sourceElement });
+  }, 220);
+}
+
 function refreshSppInstallmentAvailability() {
   const input = document.getElementById('spp-input');
   if (!input) return;
+  if (window.sppPublishedBilling) {
+    const opt = selectedStudentOption();
+    const context = currentSppStatusContext();
+    const live = context && sppStatusState.contextKey === context.key ? sppStatusState.payload : null;
+    const blocked = !opt || (sppStatusState.pending || !live || live.lock_spp);
+    setPaymentInputAvailability(input, blocked, live?.message || (opt ? 'Memeriksa tagihan SPP…' : 'Pilih siswa terlebih dahulu'));
+    if (live && ['not_published', 'not_payable', 'already_paid'].includes(live.status)) input.value = '0';
+    else if (live?.lock_spp && !window.sppEditPaymentId) input.value = '0';
+    const due = parseNumber(live?.selected?.remaining || 0);
+    const amount = parseNumber(input.value || 0);
+    const mismatch = !blocked && amount > .001 && Math.abs(amount - due) > .001;
+    input.setCustomValidity(mismatch ? 'SPP bulan ini harus lunas tepat Rp ' + formatRupiah(due) + '.' : '');
+    input.classList.toggle('is-input-overlimit', mismatch);
+    if (mismatch) input.setAttribute('aria-invalid', 'true');
+    else input.removeAttribute('aria-invalid');
+    input.closest('tr')?.classList.toggle('row-input-overlimit', mismatch);
+    refreshPublishedSppUi(opt);
+    return;
+  }
   const opt = selectedStudentOption();
   const total = parseNumber(document.getElementById('spp-total')?.value || 0);
   const paid = parseNumber(document.getElementById('spp-bayar')?.value || 0);
@@ -778,32 +1625,47 @@ function refreshSppInstallmentAvailability() {
   const monthLabel = selectedPaymentMonthLabel();
   const year = document.getElementById('tahun-bayar')?.value || '';
 
+  const contextKey = currentSppStatusContext()?.key || '';
+  const hasLiveContext = contextKey && sppStatusState.contextKey === contextKey;
+  const liveStatus = hasLiveContext ? sppStatusState.payload : null;
   let lockedMessage = '';
-  if (!opt) lockedMessage = 'Pilih siswa terlebih dahulu';
-  else if (total <= 0) lockedMessage = 'Tarif SPP belum diatur';
-  else if (remaining <= 0.001) lockedMessage = 'Lunas untuk ' + monthLabel + ' ' + year;
-  else {
+  let locked = false;
+
+  if (hasLiveContext && sppStatusState.pending) {
+    locked = true;
+    lockedMessage = 'Memeriksa status SPP…';
+  } else if (liveStatus) {
+    locked = liveStatus.lock_spp === true;
+    lockedMessage = locked ? (liveStatus.message || 'Pembayaran SPP belum dapat diproses.') : '';
+    if (lockedMessage && liveStatus.amount_label) lockedMessage += ' ' + liveStatus.amount_label + '.';
+  } else if (!opt) {
+    locked = true;
+    lockedMessage = 'Pilih siswa terlebih dahulu';
+  } else if (!contextKey) {
+    locked = true;
+    lockedMessage = 'Lengkapi bulan dan tahun pembayaran';
+  } else if (total <= 0) {
+    locked = true;
+    lockedMessage = 'Tarif SPP belum diatur';
+  } else if (remaining <= 0.001) {
+    locked = true;
+    lockedMessage = 'Lunas untuk ' + monthLabel + ' ' + year;
+  } else {
     const unpaidPrior = firstUnpaidPriorSppPeriod(opt, total);
     if (unpaidPrior) {
+      locked = true;
       lockedMessage = 'SPP ' + monthLabel + ' ' + year + ' belum bisa dibayar karena ' + unpaidPrior.label + ' belum lunas';
       if (unpaidPrior.remaining > 0) lockedMessage += ' (sisa Rp ' + formatRupiah(unpaidPrior.remaining) + ')';
     }
   }
 
-  const paidFollowing = firstPaidFollowingSppPeriod(opt);
-  const mustSettleCurrent = !lockedMessage && !!paidFollowing && remaining > 0.001;
   const inputValue = parseNumber(input.value || 0);
-  const locked = lockedMessage !== '';
-  input.readOnly = locked;
-  input.classList.toggle('tbl-readonly', locked);
+  setPaymentInputAvailability(input, locked, lockedMessage);
   if (locked) {
-    input.value = '0';
-    input.title = lockedMessage;
-    input.setCustomValidity('');
+    if (liveStatus?.lock_spp && !window.sppEditPaymentId) input.value = '0';
   } else {
-    input.removeAttribute('title');
-    if (mustSettleCurrent && inputValue > 0.001 && inputValue + 0.001 < remaining) {
-      input.setCustomValidity('SPP ' + monthLabel + ' ' + year + ' harus dilunasi karena ' + paidFollowing.label + ' sudah memiliki pembayaran.');
+    if (inputValue > 0.001 && Math.abs(inputValue - total) > 0.001) {
+      input.setCustomValidity('SPP ' + monthLabel + ' ' + year + ' wajib dibayar penuh sebesar Rp ' + formatRupiah(total) + '.');
     } else {
       input.setCustomValidity('');
     }
@@ -811,11 +1673,7 @@ function refreshSppInstallmentAvailability() {
 
   if (context) {
     if (lockedMessage) context.textContent = lockedMessage;
-    else if (paid > 0) context.textContent = 'Cicilan ' + monthLabel + ' ' + year + ' · sisa Rp ' + formatRupiah(remaining);
-    else context.textContent = 'Tagihan bulanan · dapat dicicil';
-  }
-  if (context && !lockedMessage && mustSettleCurrent) {
-    context.textContent = 'Harus dilunasi sebelum ' + paidFollowing.label + ' tetap valid · sisa Rp ' + formatRupiah(remaining);
+    else context.textContent = 'SPP ' + monthLabel + ' ' + year + ' wajib dibayar penuh Rp ' + formatRupiah(total);
   }
   hitungSisa('spp');
 }
@@ -864,6 +1722,7 @@ function refreshPaymentInputOverlimitWarnings() {
   const warnings = [];
 
   Object.keys(paymentComponentLabels).forEach(key => {
+    if (window.sppPublishedBilling && key === 'spp') return;
     const totalEl = document.getElementById(key + '-total');
     const paidEl = document.getElementById(key + '-bayar');
     const inputEl = document.getElementById(key + '-input');
@@ -874,6 +1733,7 @@ function refreshPaymentInputOverlimitWarnings() {
       row?.classList.remove('row-input-overlimit');
       inputEl.classList.remove('is-input-overlimit');
       inputEl.setCustomValidity('');
+      inputEl.removeAttribute('aria-invalid');
       return;
     }
 
@@ -882,17 +1742,22 @@ function refreshPaymentInputOverlimitWarnings() {
     const input = parseNumber(inputEl.value || 0);
     const remainingBeforeInput = Math.max(0, total - paid);
     const isTooMuch = input > remainingBeforeInput + 0.001;
+    const isInvalidFullSpp = key === 'spp' && input > 0.001 && Math.abs(input - total) > 0.001;
 
-    row?.classList.toggle('row-input-overlimit', isTooMuch);
-    inputEl.classList.toggle('is-input-overlimit', isTooMuch);
+    row?.classList.toggle('row-input-overlimit', isTooMuch || isInvalidFullSpp);
+    inputEl.classList.toggle('is-input-overlimit', isTooMuch || isInvalidFullSpp);
 
-    if (isTooMuch) {
-      const message = paymentComponentLabels[key] + ' melebihi sisa tagihan. Sisa Rp ' + formatRupiah(remainingBeforeInput) + ', input Rp ' + formatRupiah(input) + '.';
+    if (isTooMuch || isInvalidFullSpp) {
+      const message = isInvalidFullSpp
+        ? 'Uang SPP wajib dibayar penuh sebesar Rp ' + formatRupiah(total) + '.'
+        : paymentComponentLabels[key] + ' melebihi sisa tagihan. Sisa Rp ' + formatRupiah(remainingBeforeInput) + ', input Rp ' + formatRupiah(input) + '.';
       inputEl.setCustomValidity(message);
-      inputEl.title = message;
+      inputEl.setAttribute('aria-invalid', 'true');
+      inputEl.removeAttribute('title');
       warnings.push(message);
     } else {
       inputEl.setCustomValidity('');
+      inputEl.removeAttribute('aria-invalid');
       if (!inputEl.readOnly) inputEl.removeAttribute('title');
     }
   });
@@ -941,20 +1806,6 @@ function refreshSelectedStudentPaymentDetails() {
     refreshSppPeriodLabel();
     refreshAcademicYearSummary();
   }
-}
-
-function showMonthLabels(select) {
-  if (!select) return;
-  Array.from(select.options).forEach(opt => {
-    if (opt.value && opt.dataset.label) opt.textContent = opt.dataset.label;
-  });
-}
-
-function showSelectedMonthCode(select) {
-  if (!select) return;
-  showMonthLabels(select);
-  const opt = select.options[select.selectedIndex];
-  if (opt && opt.value) opt.textContent = opt.value;
 }
 
 // Helper to parse formatted rupiah string back to raw number
@@ -1007,15 +1858,126 @@ function bindNumericInput(input) {
   });
 }
 
+function initPromotionBatchSelector() {
+  const form = document.getElementById('promotion-batch-form');
+  if (!form || form.dataset.promotionReady === '1') return;
+
+  const search = document.getElementById('promotion-batch-search');
+  const sourceFilter = document.getElementById('promotion-source-filter');
+  const rows = Array.from(form.querySelectorAll('[data-promotion-student]'));
+  const emptyState = document.getElementById('promotion-empty-filter');
+  const visibleCount = document.getElementById('promotion-visible-count');
+  const selectedCount = document.getElementById('promotion-selected-count');
+  const submitSummary = document.getElementById('promotion-submit-summary');
+  const submitButton = document.getElementById('promotion-submit-button');
+  const selectVisible = document.getElementById('promotion-select-visible');
+  const selectAll = document.getElementById('promotion-select-all');
+  const clearSelection = document.getElementById('promotion-clear-selection');
+  const actionLabel = form.dataset.promotionAction || 'Proses';
+  form.dataset.promotionReady = '1';
+
+  const normalize = value => (value || '').toLocaleLowerCase('id-ID').trim();
+  const checkboxFor = row => row.querySelector('input[type="checkbox"][name="selected_students[]"]');
+  const selectedRows = () => rows.filter(row => checkboxFor(row)?.checked);
+
+  const updateSelection = () => {
+    const selected = selectedRows();
+    rows.forEach(row => {
+      const isSelected = !!checkboxFor(row)?.checked;
+      const target = row.querySelector('select[name^="target_master_kelas_id"]');
+      row.classList.toggle('is-selected', isSelected);
+      if (target) target.disabled = !isSelected;
+    });
+    if (selectedCount) selectedCount.textContent = selected.length + ' siswa dipilih';
+    if (submitSummary) {
+      submitSummary.textContent = selected.length > 0
+        ? selected.length + ' siswa siap diproses'
+        : 'Belum ada siswa dipilih';
+    }
+    if (submitButton) {
+      submitButton.disabled = selected.length === 0;
+      submitButton.textContent = actionLabel + ' ' + selected.length + ' Siswa';
+    }
+  };
+
+  const filterRows = () => {
+    const query = normalize(search?.value);
+    const source = sourceFilter?.value || '';
+    let shown = 0;
+    rows.forEach(row => {
+      const matchesSearch = !query || normalize(row.dataset.search).includes(query);
+      const matchesSource = !source || row.dataset.sourceRombel === source;
+      const visible = matchesSearch && matchesSource;
+      row.hidden = !visible;
+      if (visible) shown++;
+    });
+    if (visibleCount) visibleCount.textContent = shown + ' siswa ditampilkan';
+    if (emptyState) emptyState.hidden = shown !== 0;
+  };
+
+  search?.addEventListener('input', filterRows);
+  sourceFilter?.addEventListener('change', filterRows);
+  rows.forEach(row => checkboxFor(row)?.addEventListener('change', updateSelection));
+  selectVisible?.addEventListener('click', function () {
+    rows.filter(row => !row.hidden).forEach(row => {
+      const checkbox = checkboxFor(row);
+      if (checkbox) checkbox.checked = true;
+    });
+    updateSelection();
+  });
+  selectAll?.addEventListener('click', function () {
+    rows.forEach(row => {
+      const checkbox = checkboxFor(row);
+      if (checkbox) checkbox.checked = true;
+    });
+    updateSelection();
+  });
+  clearSelection?.addEventListener('click', function () {
+    rows.forEach(row => {
+      const checkbox = checkboxFor(row);
+      if (checkbox) checkbox.checked = false;
+    });
+    updateSelection();
+  });
+
+  form.addEventListener('submit', function (event) {
+    const selected = selectedRows();
+    if (selected.length === 0) {
+      event.preventDefault();
+      return;
+    }
+    const missingTargets = selected.filter(row => {
+      const target = row.querySelector('select[name^="target_master_kelas_id"]');
+      return target && !target.value;
+    }).length;
+    let message = actionLabel + ' ' + selected.length + ' siswa untuk tahun ajaran yang dituju?';
+    if (missingTargets > 0) {
+      message += '\n\n' + missingTargets + ' siswa belum memiliki rombel tujuan dan akan dilewati.';
+    }
+    if (!window.confirm(message)) {
+      event.preventDefault();
+      return;
+    }
+    if (submitButton) submitButton.disabled = true;
+  });
+
+  filterRows();
+  updateSelection();
+}
+
 // Auto-fill on page load (edit page) & bind number formatting
 document.addEventListener('DOMContentLoaded', function () {
   initStudentSearchCombobox();
+  initPromotionBatchSelector();
 
   const sel = document.getElementById('siswa-select');
   if (sel && sel.value) pilihSiswa(sel);
   const siswaSearch = document.getElementById('siswa-search');
   if (siswaSearch && siswaSearch.value.trim() !== '') {
     pilihSiswaDatalist(siswaSearch);
+  }
+  if (document.getElementById('du-selector-trigger') && !document.getElementById('disp-nis')?.value) {
+    refreshDaftarUlangSelector(null);
   }
 
   // Set today's date if empty
@@ -1025,9 +1987,14 @@ document.addEventListener('DOMContentLoaded', function () {
   }
 
   document.querySelectorAll('#bulan-bayar, #tahun-bayar').forEach(el => {
-    el.addEventListener('change', refreshSelectedStudentPaymentDetails);
+    const handlePeriodChange = () => {
+      if (window.sppPublishedBilling) clearPaymentAmountsOnContextChange(false);
+      refreshSelectedStudentPaymentDetails();
+      scheduleSppStatusCheck(sppStatusUiReady, el);
+    };
+    el.addEventListener('change', handlePeriodChange);
     if (el.id === 'tahun-bayar') {
-      el.addEventListener('input', refreshSelectedStudentPaymentDetails);
+      el.addEventListener('input', handlePeriodChange);
     }
   });
 
@@ -1088,7 +2055,7 @@ document.addEventListener('DOMContentLoaded', function () {
     paymentDate.addEventListener('change', function () {
       const selectedYear = this.value.slice(0, 4);
       const yearInput = document.getElementById('tahun-bayar');
-      if (yearInput && selectedYear) {
+      if (!window.sppPublishedBilling && yearInput && selectedYear) {
         if ('options' in yearInput) {
           if (Array.from(yearInput.options).some(option => option.value === selectedYear || option.textContent.trim() === selectedYear)) {
             yearInput.value = selectedYear;
@@ -1098,19 +2065,9 @@ document.addEventListener('DOMContentLoaded', function () {
         }
       }
       refreshSelectedStudentPaymentDetails();
+      scheduleSppStatusCheck(sppStatusUiReady, this);
     });
   }
-
-  document.querySelectorAll('.month-code-select').forEach(select => {
-    showSelectedMonthCode(select);
-    select.addEventListener('pointerdown', () => showMonthLabels(select));
-    select.addEventListener('focus', () => showMonthLabels(select));
-    select.addEventListener('keydown', () => showMonthLabels(select));
-    select.addEventListener('change', () => {
-      window.setTimeout(() => showSelectedMonthCode(select), 0);
-    });
-    select.addEventListener('blur', () => showSelectedMonthCode(select));
-  });
 
   // Format all numeric fields dynamically
   const numericInputs = document.querySelectorAll(
@@ -1121,13 +2078,207 @@ document.addEventListener('DOMContentLoaded', function () {
     bindNumericInput(input);
   });
 
+  const sppInput = document.getElementById('spp-input');
+  if (sppInput) {
+    sppInput.addEventListener('focus', function () {
+      if (!window.sppPublishedBilling) return;
+      const status=sppStatusState.payload;
+      if (status && status.status !== 'payable') showSppWarning(status,this);
+    });
+    sppInput.addEventListener('blur', function (event) {
+      if (window.sppPublishedBilling) {
+        const amount = parseNumber(this.value || 0);
+        if (amount <= .001) return;
+        const status=sppStatusState.payload;
+        const due=parseNumber(status?.selected?.remaining || 0);
+        if (status?.status === 'payable' && Math.abs(amount-due)>.001) showSppWarning({code:'amount_mismatch',title:'Nominal SPP belum sesuai',message:'SPP '+status.selected.label+' harus lunas Rp '+formatRupiah(due)+'.',amount_label:'Sisa Rp '+formatRupiah(due)},this,true);
+        return;
+      }
+      if (this.readOnly) return;
+      const amount = parseNumber(this.value || 0);
+      if (amount <= 0.001) return;
+      const tariff = parseNumber(document.getElementById('spp-total')?.value || 0);
+      if (tariff > 0.001 && Math.abs(amount - tariff) > 0.001) {
+        const context = currentSppStatusContext();
+        showSppWarning({
+          code: 'amount_mismatch',
+          title: 'Nominal SPP belum sesuai',
+          message: 'SPP ' + (context ? paymentPeriodDisplayLabel(context.bulan + '-' + context.tahun) : '') + ' harus dibayar penuh Rp ' + formatRupiah(tariff) + '.',
+          amount_label: 'Tagihan Rp ' + formatRupiah(tariff)
+        }, this, true);
+        return;
+      }
+      const dependency = sppStatusState.payload?.edit_dependency;
+      if (sppEditDependencyBlocks(dependency, amount)) showSppWarning(dependency, this, true);
+    });
+  }
+
+  const warningClose = document.getElementById('spp-warning-close');
+  const warningSecondary = document.getElementById('spp-warning-secondary');
+  warningClose?.addEventListener('click', function () {
+    const action = sppWarningPrimaryAction;
+    closeSppWarning();
+    if (action) action();
+  });
+  warningSecondary?.addEventListener('click', function () {
+    const action = sppWarningSecondaryAction;
+    closeSppWarning();
+    if (action) action();
+  });
+  document.addEventListener('keydown', function (event) {
+    const overlay = document.getElementById('spp-warning-overlay');
+    if (!overlay?.classList.contains('show')) return;
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      closeSppWarning();
+      return;
+    }
+    if (event.key === 'Tab') {
+      const actions = Array.from(overlay.querySelectorAll('button:not([hidden]):not([disabled])'));
+      if (!actions.length) return;
+      const first = actions[0];
+      const last = actions[actions.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    }
+  });
+
   // Clean all formatted numeric inputs right before form submission so the backend gets raw numbers
   const form = document.getElementById('form-bayar');
   if (form) {
-    form.addEventListener('submit', function () {
+    // Validasi native berjalan sebelum event submit dan menutup kesempatan modal tampil.
+    // Hanya form input dengan handler ini yang memakai modal; edit tetap memakai validasi semula.
+    if (window.sppPublishedBilling && !window.sppEditPaymentId) form.noValidate = true;
+    const normalizePaymentInputs = () => {
       document.querySelectorAll('.tbl-input, #potongan-spp, #kewajiban-spp, .biaya-lain-nominal').forEach(input => {
         input.value = input.value.replace(/\./g, '');
       });
+    };
+    form.addEventListener('submit', async function (event) {
+      if (window.sppPublishedBilling && !window.sppEditPaymentId) {
+        event.preventDefault();
+        if (form.dataset.sppSubmitting === '1') return;
+        const submitNow = () => {
+          if (form.dataset.sppSubmitting === '1') return;
+          form.dataset.sppSubmitting = '1';
+          const button = document.getElementById('btn-input');
+          if (button) button.disabled = true;
+          normalizePaymentInputs();
+          form.submit();
+        };
+        const studentInput = document.getElementById('disp-nis');
+        const methodInput = document.getElementById('sistem-pembayaran');
+        const monthInput = document.getElementById('bulan-bayar');
+        const yearInput = document.getElementById('tahun-bayar');
+        const dateInput = document.getElementById('tgl-bayar');
+        if (!studentInput?.value) { showSppWarning({code:'student_missing',title:'Pilih siswa',message:'Pilih siswa dari hasil pencarian sebelum menyimpan.',target:'siswa-search'},studentInput,true);return; }
+        if (!methodInput?.value) { showSppWarning({code:'method_missing',title:'Pilih metode pembayaran',message:'Pilih Tunai, VA, atau QRIS sebelum menyimpan.',target:'sistem-pembayaran'},methodInput,true);return; }
+        if (!monthInput?.value || !/^\d{4}$/.test(yearInput?.value || '')) { showSppWarning({code:'period_missing',title:'Periksa bulan tagihan',message:'Pilih bulan dan isi tahun tagihan dengan empat angka sebelum menyimpan.',target:'tahun-bayar'},yearInput,true);return; }
+        if (!dateInput?.value) { showSppWarning({code:'date_missing',title:'Tanggal bayar belum ada',message:'Muat ulang halaman agar tanggal pembayaran hari ini terisi.',target:'tgl-bayar'},dateInput,true);return; }
+        const amount=parseNumber(document.getElementById('spp-input')?.value || 0);
+        const komiteAmount=parseNumber(document.getElementById('komite-input')?.value || 0);
+        const komiteDue=parseNumber(document.getElementById('komite-total')?.value || 0)-parseNumber(document.getElementById('komite-bayar')?.value || 0);
+        const total=parseNumber(document.getElementById('hidden-total')?.value || 0);
+        if (total <= .001) { showSppWarning({code:'empty_payment',title:'Belum ada pembayaran',message:'Isi setidaknya satu nominal pembayaran sebelum menyimpan.',target:'spp-input'},document.getElementById('spp-input'),true);return; }
+        const invalidInput = Array.from(form.querySelectorAll('.tbl-pay, .biaya-lain-nominal, .biaya-lain-select')).find(input => input.validationMessage && !input.readOnly && !input.disabled);
+        if (invalidInput?.classList.contains('biaya-lain-select')) {
+          showSppWarning({code:'other_fee_invalid',title:'Pilih tagihan lain',message:invalidInput.validationMessage},invalidInput,true);return;
+        }
+        if (invalidInput && invalidInput.id !== 'spp-input' && invalidInput.id !== 'komite-input') {
+          const key=invalidInput.id?.replace('-input','') || '';
+          const row=invalidInput.closest('.biaya-lain-row');
+          const totalDue=row ? parseNumber(row.querySelector('.biaya-lain-total')?.value || 0) : parseNumber(document.getElementById(key+'-total')?.value || 0);
+          const paid=row ? parseNumber(row.querySelector('.biaya-lain-paid')?.value || 0) : parseNumber(document.getElementById(key+'-bayar')?.value || 0);
+          const remaining=Math.max(0,totalDue-paid);
+          const label=row ? (row.querySelector('.biaya-lain-select')?.selectedOptions?.[0]?.textContent?.trim() || 'Biaya Lain') : (paymentComponentLabels[key] || 'tagihan');
+          const message='Sisa '+label+' Rp '+formatRupiah(remaining)+', tetapi yang diisi Rp '+formatRupiah(parseNumber(invalidInput.value || 0))+'. Kurangi nominalnya sebelum menyimpan.';
+          showSppWarning({code:'over_limit',title:'Melebihi sisa tagihan',message,target:invalidInput.id},invalidInput,true);return;
+        }
+        if (amount > .001) {
+          const status=await requestSppStatus({interactive:false,force:true,sourceElement:document.getElementById('spp-input')});
+          if (!status || status.status !== 'payable') { showSppWarning(status || unavailableSppStatus(),document.getElementById('spp-input'),true);return; }
+          if (status.komite && !status.komite.exists) { showSppWarning({code:'billing_changed',title:'Tagihan berubah',message:'Tagihan Komite bulan ini belum tersedia. Perbarui tagihan sebelum menyimpan.',target:'komite-input'},document.getElementById('komite-input'),true);return; }
+          const due=parseNumber(status.selected?.remaining || 0);
+          if (Math.abs(amount-due)>.001) { showSppWarning({code:'amount_mismatch',title:'Nominal belum sesuai',message:'SPP '+status.selected.label+' harus lunas Rp '+formatRupiah(due)+'. Periksa angka yang diisi.',amount_label:'Sisa SPP Rp '+formatRupiah(due),target:'spp-input'},document.getElementById('spp-input'),true);return; }
+          if (komiteDue > .001 && Math.abs(komiteAmount-komiteDue)>.001) { showSppWarning({code:'komite_required',title:'Komite belum dibayar',message:'SPP '+status.selected.label+' harus dibayar bersama Komite bulan yang sama. Sisa Komite Rp '+formatRupiah(komiteDue)+'.',amount_label:'Sisa Komite Rp '+formatRupiah(komiteDue),target:'komite-input'},document.getElementById('komite-input'),true);return; }
+        }
+        if (komiteAmount > .001 && Math.abs(komiteAmount-komiteDue)>.001) { showSppWarning({code:'komite_amount',title:'Nominal belum sesuai',message:'Komite '+paymentPeriodDisplayLabel(selectedPaymentPeriod())+' harus lunas Rp '+formatRupiah(komiteDue)+'. Periksa angka yang diisi.',target:'komite-input'},document.getElementById('komite-input'),true);return; }
+        if (komiteAmount > .001 && (amount <= .001)) {
+          const status=await requestSppStatus({interactive:false,force:true,sourceElement:document.getElementById('spp-input')});
+          if (!status || !status.ok) { showSppWarning(status || unavailableSppStatus(),document.getElementById('spp-input'),true);return; }
+          const sppDue=parseNumber(status.selected?.remaining || 0);
+          if (status.status === 'prior_unpaid') { showSppWarning(status,document.getElementById('spp-input'),true);return; }
+          if (status.status === 'payable' && sppDue > .001) {
+            showSppWarning({code:'spp_required',title:'SPP belum dibayar',message:'Komite '+paymentPeriodDisplayLabel(selectedPaymentPeriod())+' harus dibayar bersama SPP bulan yang sama. Sisa SPP Rp '+formatRupiah(sppDue)+'.',amount_label:'Sisa SPP Rp '+formatRupiah(sppDue),target:'spp-input'},document.getElementById('spp-input'),true);return;
+          }
+          if (!['already_paid','not_published','not_payable'].includes(status.status)) { showSppWarning(status,document.getElementById('spp-input'),true);return; }
+        }
+        const periodYear=parseInt(document.getElementById('tahun-bayar')?.value || 0,10);
+        const periodMonth=parseInt(document.getElementById('bulan-bayar')?.value || 0,10);
+        const paidDate=document.getElementById('tgl-bayar')?.value || '';
+        const paidYear=parseInt(paidDate.slice(0,4),10);
+        const paidMonth=parseInt(paidDate.slice(5,7),10);
+        if ((amount > .001 || komiteAmount > .001) && periodYear*12+periodMonth > paidYear*12+paidMonth) {
+          showSppWarning({code:'future_period',severity:'warning',title:'Periksa bulan tagihan',message:'Tagihan '+paymentPeriodDisplayLabel(selectedPaymentPeriod())+' belum tiba. Pastikan ini memang pembayaran lebih awal.',action_label:'Tetap Simpan',target:'bulan-bayar'},document.getElementById('bulan-bayar'),true,submitNow);return;
+        }
+        submitNow();
+        return;
+      }
+      if (form.dataset.sppSubmitting === '1') {
+        normalizePaymentInputs();
+        return;
+      }
+
+      const amount = parseNumber(document.getElementById('spp-input')?.value || 0);
+      const editOriginal = window.sppEditOriginal || null;
+      const context = currentSppStatusContext();
+      const originalChanged = !!editOriginal && !!context && (
+        context.noInduk !== String(editOriginal.no_induk || '')
+        || context.bulan !== String(editOriginal.bulan || '')
+        || context.tahun !== String(editOriginal.tahun || '')
+        || Math.abs(amount - parseNumber(editOriginal.amount || 0)) > 0.001
+      );
+      const needsFinalSppCheck = amount > 0.001 || originalChanged;
+      if (!needsFinalSppCheck) {
+        normalizePaymentInputs();
+        return;
+      }
+
+      event.preventDefault();
+      const status = await requestSppStatus({ interactive: false, force: true, sourceElement: document.getElementById('spp-input') });
+      if (!status || status.code === 'status_unavailable') {
+        showSppWarning(status || unavailableSppStatus(), document.getElementById('spp-input'), true);
+        return;
+      }
+      if (amount > 0.001 && status.status !== 'payable') {
+        showSppWarning(status, document.getElementById('spp-input'), true);
+        return;
+      }
+
+      const tariff = parseNumber(status.selected?.tariff || document.getElementById('spp-total')?.value || 0);
+      if (amount > 0.001 && Math.abs(amount - tariff) > 0.001) {
+        showSppWarning({
+          code: 'amount_mismatch',
+          title: 'Nominal SPP belum sesuai',
+          message: 'SPP ' + (status.selected?.label || '') + ' harus dibayar penuh Rp ' + formatRupiah(tariff) + '.',
+          amount_label: 'Tagihan Rp ' + formatRupiah(tariff)
+        }, document.getElementById('spp-input'), true);
+        return;
+      }
+
+      if (sppEditDependencyBlocks(status.edit_dependency, amount)) {
+        showSppWarning(status.edit_dependency, document.getElementById('spp-input'), true);
+        return;
+      }
+
+      form.dataset.sppSubmitting = '1';
+      normalizePaymentInputs();
+      form.submit();
     });
     form.addEventListener('reset', function () {
       window.setTimeout(resetForm, 0);
@@ -1136,7 +2287,86 @@ document.addEventListener('DOMContentLoaded', function () {
 
   updateTotal();
   autoHideFlash();
+  sppStatusUiReady = true;
+  Promise.resolve(restorePaymentDraft()).catch(() => { /* pesan dari server tetap ditampilkan */ }).then(() => {
+    if (window.sppFlashWarning) showSppWarning(window.sppFlashWarning, document.getElementById('spp-input'), true);
+  });
 });
+
+async function restorePaymentDraft() {
+  let draft=window.paymentDraft;
+  try {
+    const reloaded=sessionStorage.getItem('paymentDraftReload');
+    if (reloaded) {
+      sessionStorage.removeItem('paymentDraftReload');
+      const saved=JSON.parse(reloaded);
+      if (saved?.source_path === window.location.pathname
+        && Number(saved?.edit_id) === Number(window.sppEditPaymentId || 0)) draft=saved;
+    }
+  } catch (_) { /* storage unavailable */ }
+  if (!draft || !document.getElementById('form-bayar')) return;
+  const setValue = (id, value) => { const input=document.getElementById(id); if (input && value !== undefined) input.value=String(value); };
+  setValue('bulan-bayar', draft.bulan_bayar);
+  setValue('tahun-bayar', draft.tahun_bayar);
+  setValue('sistem-pembayaran', draft.sistem_pembayaran);
+  setValue('catatan', draft.catatan);
+  const opt=Array.from(document.getElementById('siswa-list')?.options || []).find(option => option.dataset.nis === draft.no_induk);
+  if (opt) {
+    setValue('siswa-search', opt.value);
+    pilihSiswaDatalist(document.getElementById('siswa-search'));
+  }
+  if (draft.tagihan_daftar_ulang_id) {
+    setValue('tagihan-daftar-ulang-id', draft.tagihan_daftar_ulang_id);
+    if (opt) applyStudentPaymentDetails(opt);
+  }
+  for (const [key,id] of Object.entries({uang_pangkal:'pangkal-input',uang_psb:'psb-input',uang_komite:'komite-input',uang_du:'du-input'})) {
+    if (draft[key] !== undefined && !document.getElementById(id)?.readOnly) setValue(id,formatRupiahString(parseNumber(draft[key])));
+  }
+  if (opt) await requestSppStatus({interactive:false,force:true});
+  if (draft.uang_spp !== undefined && !document.getElementById('spp-input')?.readOnly) setValue('spp-input',formatRupiahString(parseNumber(draft.uang_spp)));
+  window.paymentDraftOtherFees = draft;
+  restorePaymentDraftOtherFees();
+  updateTotal();
+}
+
+function capturePaymentDraftInBrowser() {
+  const value=id => document.getElementById(id)?.value || '';
+  const draft={source_path:window.location.pathname,edit_id:Number(window.sppEditPaymentId || 0),
+    no_induk:value('disp-nis'),bulan_bayar:value('bulan-bayar'),tahun_bayar:value('tahun-bayar'),
+    sistem_pembayaran:value('sistem-pembayaran'),
+    tagihan_daftar_ulang_id:value('tagihan-daftar-ulang-id'),catatan:value('catatan')};
+  for (const [key,id] of Object.entries({uang_pangkal:'pangkal-input',uang_psb:'psb-input',uang_spp:'spp-input',uang_komite:'komite-input',uang_du:'du-input'})) draft[key]=value(id);
+  const rows=Array.from(document.querySelectorAll('#biaya-lain-list .biaya-lain-row'));
+  draft.biaya_lain_tagihan_id=rows.map(row => row.querySelector('.biaya-lain-select')?.value || '');
+  draft.biaya_lain_nominal=rows.map(row => row.querySelector('.biaya-lain-nominal')?.value || '0');
+  draft.biaya_lain_keterangan=rows.map(row => row.querySelector('.biaya-lain-keterangan')?.value || '');
+  return draft;
+}
+
+function restorePaymentDraftOtherFees() {
+  const draft=window.paymentDraftOtherFees;
+  if (!draft || !Array.isArray(draft.biaya_lain_tagihan_id)) return;
+  const ids=draft.biaya_lain_tagihan_id;
+  const list=document.getElementById('biaya-lain-list');
+  if (!list) return;
+  while (list.querySelectorAll('.biaya-lain-row').length < Math.min(ids.length,12)) addBiayaLainRow();
+  const rows=Array.from(list.querySelectorAll('.biaya-lain-row'));
+  let allAvailable=true;
+  ids.forEach((id,index) => {
+    const row=rows[index], select=row?.querySelector('.biaya-lain-select');
+    if (!select) return;
+    if (id && !Array.from(select.options).some(option => option.value === String(id))) { allAvailable=false; return; }
+    select.value=String(id || '');
+    refreshBiayaLainRow(row,true);
+    const amount=row.querySelector('.biaya-lain-nominal');
+    if (amount) amount.value=formatRupiahString(parseNumber(draft.biaya_lain_nominal?.[index] || 0));
+    const note=row.querySelector('.biaya-lain-keterangan');
+    if (note) note.value=String(draft.biaya_lain_keterangan?.[index] || '');
+    refreshBiayaLainRow(row,true);
+  });
+  updateTotal();
+  if (allAvailable) window.paymentDraftOtherFees=null;
+}
 
 function renumberBiayaLainRows() {
   document.querySelectorAll('#biaya-lain-list .biaya-lain-row').forEach((row, index) => {
@@ -1184,7 +2414,9 @@ function refreshBiayaLainOptions() {
     select.innerHTML = '';
     const placeholder = document.createElement('option');
     placeholder.value = '';
-    placeholder.textContent = legacyPlaceholder?.textContent || '-- Pilih Tagihan --';
+    placeholder.textContent = legacyPlaceholder?.textContent || (selectedStudentOption()
+      ? (bills.length ? 'Pilih tagihan' : 'Belum ada tagihan. Publish dari Master Biaya Lain')
+      : 'Pilih siswa dulu');
     if (legacyPlaceholder) {
       placeholder.dataset.legacy = '1';
       placeholder.dataset.nominal = legacyPlaceholder.dataset.nominal || '0';
@@ -1203,6 +2435,37 @@ function refreshBiayaLainOptions() {
     if (current && Array.from(select.options).some(option => option.value === current)) select.value = current;
   });
   refreshBiayaLainAvailability();
+}
+
+let biayaLainBillsRequestId = 0;
+function refreshBiayaLainBillsFromServer(noInduk) {
+  const url = window.sppOtherFeeBillsUrl || '';
+  if (!url || !noInduk) return;
+  const requestId = ++biayaLainBillsRequestId;
+  fetch(url + '?no_induk=' + encodeURIComponent(noInduk), {
+    headers: { 'Accept': 'application/json' },
+    cache: 'no-store'
+  })
+    .then(response => response.json())
+    .then(payload => {
+      if (requestId !== biayaLainBillsRequestId) return;
+      if (!payload.ok) throw new Error(payload.message || 'Gagal memuat tagihan biaya lain.');
+      const opt = selectedStudentOption();
+      if (!opt || String(opt.dataset.nis || '') !== String(noInduk)) return;
+      opt.dataset.biayaLainBills = JSON.stringify(Array.isArray(payload.rows) ? payload.rows : []);
+      refreshBiayaLainOptions();
+      document.querySelectorAll('.biaya-lain-row').forEach(row => refreshBiayaLainRow(row, true));
+      applyGraduatePaymentLock(opt);
+      restorePaymentDraftOtherFees();
+    })
+    .catch(error => {
+      if (requestId !== biayaLainBillsRequestId) return;
+      const alertEl = document.getElementById('biaya-lain-overpaid-alert');
+      if (alertEl) {
+        alertEl.hidden = false;
+        alertEl.textContent = error.message || 'Gagal memuat tagihan biaya lain terbaru.';
+      }
+    });
 }
 
 function refreshAnnualPaymentState(opt) {
@@ -1258,13 +2521,13 @@ function refreshBiayaLainAvailability() {
 
     Array.from(select.options).forEach(option => {
       if (!option.value) return;
-      const baseLabel = option.dataset.baseLabel || option.textContent.replace(/\s+—\s+(Lunas|Sudah dipilih)$/u, '');
+      const baseLabel = option.dataset.baseLabel || option.textContent.replace(/\s+\((Lunas|Sudah dipilih)\)$/u, '');
       option.dataset.baseLabel = baseLabel;
       const fullyPaid = paidBiayaLainForSelectedStudent(option.value) >= parseNumber(option.dataset.nominal || 0) - 0.001;
       const usedByOtherRow = rows.some(otherRow => otherRow !== row
         && otherRow.querySelector('.biaya-lain-select')?.value === option.value);
       option.disabled = option.value !== selectedId && (fullyPaid || usedByOtherRow);
-      option.textContent = baseLabel + (fullyPaid ? ' — Lunas' : (usedByOtherRow ? ' — Sudah dipilih' : ''));
+      option.textContent = baseLabel + (fullyPaid ? ' (Lunas)' : (usedByOtherRow ? ' (Sudah dipilih)' : ''));
     });
 
     const selectedOption = select.options[select.selectedIndex];
@@ -1279,8 +2542,9 @@ function refreshBiayaLainAvailability() {
       message = (selectedOption?.dataset.baseLabel || 'Biaya ini') + ' hanya boleh dipilih satu kali dalam satu transaksi.';
     }
     select.setCustomValidity(message);
-    if (message) select.title = message;
-    else select.removeAttribute('title');
+    if (message) select.setAttribute('aria-invalid', 'true');
+    else select.removeAttribute('aria-invalid');
+    select.removeAttribute('title');
     row.classList.toggle('row-unavailable', !!message);
   });
 
@@ -1318,6 +2582,7 @@ function refreshBiayaLainRow(row, preserveInput) {
     if (sisaEl) sisaEl.value = legacy ? formatRupiahString(Math.max(0, masterTotal - currentInput)) : '0';
     if (!preserveInput) nominal.value = '0';
     nominal.setCustomValidity('');
+    nominal.removeAttribute('aria-invalid');
     nominal.removeAttribute('title');
     row?.classList.remove('row-overpaid');
     return;
@@ -1337,9 +2602,11 @@ function refreshBiayaLainRow(row, preserveInput) {
   if (isTooMuch) {
     const message = 'Input bayar biaya lain melebihi sisa. Sisa hanya Rp ' + formatRupiah(remainingBeforeInput) + '.';
     nominal.setCustomValidity(message);
-    nominal.title = message;
+    nominal.setAttribute('aria-invalid', 'true');
+    nominal.removeAttribute('title');
   } else {
     nominal.setCustomValidity('');
+    nominal.removeAttribute('aria-invalid');
     nominal.removeAttribute('title');
   }
 }
@@ -1479,6 +2746,8 @@ function closeReportDateRangePicker(picker) {
   const button = picker?.querySelector('.report-date-range-button');
   if (!popover || !button) return;
   popover.hidden = true;
+  picker.classList.remove('is-open');
+  picker.closest('.report-filter-card')?.classList.remove('is-date-picker-open');
   button.setAttribute('aria-expanded', 'false');
 }
 
@@ -1523,6 +2792,8 @@ function initReportDateRangePickers() {
       const willOpen = popover.hidden;
       document.querySelectorAll('[data-range-picker]').forEach(closeReportDateRangePicker);
       popover.hidden = !willOpen;
+      picker.classList.toggle('is-open', willOpen);
+      picker.closest('.report-filter-card')?.classList.toggle('is-date-picker-open', willOpen);
       button.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
       if (willOpen) {
         syncInputsFromHidden();
@@ -1547,245 +2818,155 @@ function initReportDateRangePickers() {
   });
 }
 
+function closeReportMonthRangePicker(picker) {
+  const popover = picker?.querySelector('.report-month-range-popover');
+  const button = picker?.querySelector('.report-month-range-button');
+  if (!popover || !button) return;
+  popover.hidden = true;
+  picker.classList.remove('is-open');
+  button.setAttribute('aria-expanded', 'false');
+}
+
+function closeReportYearRangePicker(picker) {
+  const popover = picker?.querySelector('.report-year-range-popover');
+  const button = picker?.querySelector('.report-year-range-button');
+  if (!popover || !button) return;
+  popover.hidden = true;
+  picker.classList.remove('is-open');
+  button.setAttribute('aria-expanded', 'false');
+}
+
+function closeAllReportRangePickers() {
+  document.querySelectorAll('[data-range-picker]').forEach(closeReportDateRangePicker);
+  document.querySelectorAll('[data-month-range-picker]').forEach(closeReportMonthRangePicker);
+  document.querySelectorAll('[data-year-range-picker]').forEach(closeReportYearRangePicker);
+}
+
+function initReportMonthRangePickers() {
+  document.querySelectorAll('[data-month-range-picker]').forEach(picker => {
+    if (picker.dataset.monthRangePickerReady === '1') return;
+    picker.dataset.monthRangePickerReady = '1';
+    const button = picker.querySelector('.report-month-range-button');
+    const valueLabel = picker.querySelector('.report-month-range-value');
+    const popover = picker.querySelector('.report-month-range-popover');
+    const hiddenStart = picker.querySelector('input[type="hidden"][name="bulan_awal"]');
+    const hiddenEnd = picker.querySelector('input[type="hidden"][name="bulan_akhir"]');
+    const startInput = picker.querySelector('[data-month-range-start]');
+    const endInput = picker.querySelector('[data-month-range-end]');
+    const applyButton = picker.querySelector('[data-month-range-apply]');
+    if (!button || !valueLabel || !popover || !hiddenStart || !hiddenEnd || !startInput || !endInput) return;
+
+    const syncLabel = () => {
+      const start = paymentMonthLabelByCode(parseNumber(hiddenStart.value));
+      const end = paymentMonthLabelByCode(parseNumber(hiddenEnd.value));
+      valueLabel.textContent = hiddenStart.value && hiddenEnd.value ? start + ' - ' + end : (picker.dataset.emptyLabel || 'Pilih bulan tagihan');
+    };
+    const syncInputs = () => {
+      startInput.value = hiddenStart.value;
+      endInput.value = hiddenEnd.value;
+    };
+    const applyRange = () => {
+      hiddenStart.value = startInput.value;
+      hiddenEnd.value = endInput.value;
+      syncInputs();
+      syncLabel();
+      closeReportMonthRangePicker(picker);
+    };
+
+    syncInputs();
+    syncLabel();
+    button.addEventListener('click', () => {
+      const willOpen = popover.hidden;
+      closeAllReportRangePickers();
+      popover.hidden = !willOpen;
+      picker.classList.toggle('is-open', willOpen);
+      button.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+      if (willOpen) setTimeout(() => startInput.focus(), 0);
+    });
+    [startInput, endInput].forEach(input => input.addEventListener('keydown', event => {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        applyRange();
+      }
+    }));
+    applyButton?.addEventListener('click', applyRange);
+  });
+}
+
+function initReportYearRangePickers() {
+  document.querySelectorAll('[data-year-range-picker]').forEach(picker => {
+    if (picker.dataset.yearRangePickerReady === '1') return;
+    picker.dataset.yearRangePickerReady = '1';
+    const button = picker.querySelector('.report-year-range-button');
+    const valueLabel = picker.querySelector('.report-year-range-value');
+    const popover = picker.querySelector('.report-year-range-popover');
+    const hiddenStart = picker.querySelector('input[type="hidden"][name="tahun_awal"]');
+    const hiddenEnd = picker.querySelector('input[type="hidden"][name="tahun_akhir"]');
+    const startInput = picker.querySelector('[data-year-range-start]');
+    const endInput = picker.querySelector('[data-year-range-end]');
+    const applyButton = picker.querySelector('[data-year-range-apply]');
+    if (!button || !valueLabel || !popover || !hiddenStart || !hiddenEnd || !startInput || !endInput) return;
+
+    const syncLabel = () => {
+      valueLabel.textContent = hiddenStart.value && hiddenEnd.value
+        ? hiddenStart.value + ' - ' + hiddenEnd.value
+        : (picker.dataset.emptyLabel || 'Pilih tahun tagihan');
+    };
+    const syncInputs = () => {
+      startInput.value = hiddenStart.value;
+      endInput.value = hiddenEnd.value;
+    };
+    const applyRange = () => {
+      const start = parseNumber(startInput.value);
+      const end = parseNumber(endInput.value);
+      if (!start || !end) return;
+      hiddenStart.value = String(Math.min(start, end));
+      hiddenEnd.value = String(Math.max(start, end));
+      syncInputs();
+      syncLabel();
+      closeReportYearRangePicker(picker);
+    };
+
+    syncInputs();
+    syncLabel();
+    button.addEventListener('click', () => {
+      const willOpen = popover.hidden;
+      closeAllReportRangePickers();
+      popover.hidden = !willOpen;
+      picker.classList.toggle('is-open', willOpen);
+      button.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+      if (willOpen) setTimeout(() => startInput.focus(), 0);
+    });
+    [startInput, endInput].forEach(input => input.addEventListener('keydown', event => {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        applyRange();
+      }
+    }));
+    applyButton?.addEventListener('click', applyRange);
+  });
+}
+
 document.addEventListener('DOMContentLoaded', function () {
   initReportDateRangePickers();
+  initReportMonthRangePickers();
+  initReportYearRangePickers();
   document.addEventListener('mousedown', function (event) {
     document.querySelectorAll('[data-range-picker]').forEach(picker => {
       if (!picker.contains(event.target)) closeReportDateRangePicker(picker);
+    });
+    document.querySelectorAll('[data-month-range-picker]').forEach(picker => {
+      if (!picker.contains(event.target)) closeReportMonthRangePicker(picker);
+    });
+    document.querySelectorAll('[data-year-range-picker]').forEach(picker => {
+      if (!picker.contains(event.target)) closeReportYearRangePicker(picker);
     });
   });
   document.addEventListener('keydown', function (event) {
     if (event.key !== 'Escape') return;
     document.querySelectorAll('[data-range-picker]').forEach(closeReportDateRangePicker);
-  });
-});
-
-function normalizeClassComboboxText(value) {
-  return String(value || '').toLowerCase().replace(/\s+/g, ' ').trim();
-}
-
-function compactClassComboboxText(value) {
-  return normalizeClassComboboxText(value).replace(/^kelas\s+/, '').replace(/\s+/g, '');
-}
-
-function classComboboxAliases(option) {
-  const text = option.textContent.trim();
-  const normalized = normalizeClassComboboxText(text);
-  const compact = compactClassComboboxText(text);
-  return Array.from(new Set([
-    normalized,
-    compact,
-    normalized.replace(/^kelas\s+/, ''),
-    compact.replace(/^kelas/, ''),
-  ].filter(Boolean)));
-}
-
-function isClassComboboxClearOption(option) {
-  if (!option) return false;
-  const value = String(option.value || '');
-  const label = normalizeClassComboboxText(option.textContent);
-  return value === '' || (value === '0' && label.includes('semua'));
-}
-
-function setClassComboboxValue(select, option, dispatch = true) {
-  if (!select || !option) return;
-  select.value = option.value;
-  if (dispatch) select.dispatchEvent(new Event('change', { bubbles: true }));
-}
-
-function clearClassComboboxValue(select, dispatch = true) {
-  if (!select) return;
-  const clearOption = Array.from(select.options).find(isClassComboboxClearOption);
-  if (clearOption) {
-    setClassComboboxValue(select, clearOption, dispatch);
-  } else {
-    select.value = '';
-    if (dispatch) select.dispatchEvent(new Event('change', { bubbles: true }));
-  }
-}
-
-function closeClassCombobox(box) {
-  const panel = box?.querySelector('.class-combobox-panel');
-  const input = box?.querySelector('.class-combobox-input');
-  if (!panel || !input) return;
-  box.classList.remove('is-open');
-  panel.hidden = true;
-  input.setAttribute('aria-expanded', 'false');
-}
-
-function syncClassComboboxInput(select, input) {
-  const selected = select.options[select.selectedIndex];
-  input.value = selected && !isClassComboboxClearOption(selected) ? selected.textContent.trim() : '';
-  input.setCustomValidity('');
-}
-
-function findExactClassComboboxOption(select, query) {
-  const normalizedQuery = normalizeClassComboboxText(query);
-  const compactQuery = compactClassComboboxText(query);
-  if (!normalizedQuery) return null;
-  return Array.from(select.options).find(option => {
-    if (isClassComboboxClearOption(option)) return false;
-    return classComboboxAliases(option).includes(normalizedQuery)
-      || classComboboxAliases(option).includes(compactQuery);
-  }) || null;
-}
-
-function renderClassComboboxOptions(box, query) {
-  const select = box.querySelector('select[data-class-combobox]');
-  const input = box.querySelector('.class-combobox-input');
-  const panel = box.querySelector('.class-combobox-panel');
-  if (!select || !input || !panel) return;
-  const normalizedQuery = normalizeClassComboboxText(query);
-  const compactQuery = compactClassComboboxText(query);
-  const options = Array.from(select.options);
-  const matches = options.filter(option => {
-    if (isClassComboboxClearOption(option)) return !normalizedQuery;
-    const aliases = classComboboxAliases(option);
-    return !normalizedQuery || aliases.some(alias => alias.includes(normalizedQuery) || alias.includes(compactQuery));
-  }).slice(0, 30);
-  panel.innerHTML = '';
-  if (matches.length === 0) {
-    const empty = document.createElement('div');
-    empty.className = 'class-combobox-empty';
-    empty.textContent = 'Rombel tidak ditemukan';
-    panel.appendChild(empty);
-  } else {
-    matches.forEach(option => {
-      const button = document.createElement('button');
-      button.type = 'button';
-      button.className = 'class-combobox-option';
-      button.textContent = option.textContent.trim();
-      button.setAttribute('role', 'option');
-      button.setAttribute('aria-selected', select.value === option.value ? 'true' : 'false');
-      button.classList.toggle('is-active', select.value === option.value);
-      button.addEventListener('mousedown', function (event) {
-        event.preventDefault();
-        setClassComboboxValue(select, option, false);
-        syncClassComboboxInput(select, input);
-        select.dispatchEvent(new Event('change', { bubbles: true }));
-        closeClassCombobox(box);
-      });
-      panel.appendChild(button);
-    });
-  }
-  box.classList.add('is-open');
-  panel.hidden = false;
-  input.setAttribute('aria-expanded', 'true');
-  const active = panel.querySelector('.class-combobox-option.is-active');
-  if (active) requestAnimationFrame(() => active.scrollIntoView({ block: 'nearest' }));
-}
-
-function initClassComboboxes() {
-  document.querySelectorAll('select[data-class-combobox]').forEach(select => {
-    if (select.dataset.classComboboxReady === '1') return;
-    select.dataset.classComboboxReady = '1';
-    const originalParent = select.parentNode;
-    if (!originalParent) return;
-    const box = document.createElement('div');
-    box.className = 'class-combobox';
-    const control = document.createElement('div');
-    control.className = 'class-combobox-control';
-    const input = document.createElement('input');
-    input.type = 'text';
-    input.className = 'field-input class-combobox-input';
-    input.placeholder = select.dataset.placeholder || 'Ketik kelas/rombel...';
-    input.autocomplete = 'off';
-    input.spellcheck = false;
-    input.setAttribute('aria-expanded', 'false');
-    input.setAttribute('aria-haspopup', 'listbox');
-    input.setAttribute('role', 'combobox');
-    if (select.required) input.required = true;
-    const toggle = document.createElement('button');
-    toggle.type = 'button';
-    toggle.className = 'class-combobox-toggle';
-    toggle.setAttribute('aria-label', 'Tampilkan pilihan kelas');
-    toggle.innerHTML = '&#9662;';
-    const panel = document.createElement('div');
-    panel.className = 'class-combobox-panel';
-    panel.setAttribute('role', 'listbox');
-    panel.hidden = true;
-    originalParent.insertBefore(box, select);
-    box.appendChild(select);
-    control.appendChild(input);
-    control.appendChild(toggle);
-    box.appendChild(control);
-    box.appendChild(panel);
-    select.classList.add('class-combobox-native');
-    syncClassComboboxInput(select, input);
-
-    input.addEventListener('focus', () => renderClassComboboxOptions(box, input.value));
-    input.addEventListener('click', () => renderClassComboboxOptions(box, input.value));
-    input.addEventListener('input', function () {
-      const exact = findExactClassComboboxOption(select, input.value);
-      if (exact) {
-        setClassComboboxValue(select, exact, false);
-        select.dispatchEvent(new Event('change', { bubbles: true }));
-        input.setCustomValidity('');
-      } else if (normalizeClassComboboxText(input.value) === '') {
-        clearClassComboboxValue(select, true);
-        input.setCustomValidity('');
-      } else {
-        select.value = '';
-        if (select.required) input.setCustomValidity('Pilih kelas/rombel dari daftar.');
-      }
-      renderClassComboboxOptions(box, input.value);
-    });
-    input.addEventListener('keydown', function (event) {
-      if (event.key === 'Escape') {
-        closeClassCombobox(box);
-        return;
-      }
-      if (event.key !== 'Enter') return;
-      const first = panel.querySelector('.class-combobox-option');
-      if (!first || panel.hidden) return;
-      event.preventDefault();
-      first.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
-    });
-    input.addEventListener('blur', function () {
-      window.setTimeout(function () {
-        const exact = findExactClassComboboxOption(select, input.value);
-        if (exact) {
-          setClassComboboxValue(select, exact);
-          syncClassComboboxInput(select, input);
-        } else if (normalizeClassComboboxText(input.value) === '') {
-          clearClassComboboxValue(select);
-          input.setCustomValidity('');
-        } else if (select.required) {
-          input.setCustomValidity('Pilih kelas/rombel dari daftar.');
-        }
-      }, 120);
-    });
-    toggle.addEventListener('click', function () {
-      if (panel.hidden) {
-        input.focus();
-        renderClassComboboxOptions(box, input.value);
-      } else {
-        closeClassCombobox(box);
-      }
-    });
-    select.addEventListener('change', () => syncClassComboboxInput(select, input));
-    select.form?.addEventListener('submit', function (event) {
-      const exact = findExactClassComboboxOption(select, input.value);
-      if (exact) {
-        setClassComboboxValue(select, exact);
-        syncClassComboboxInput(select, input);
-      } else if (normalizeClassComboboxText(input.value) === '') {
-        clearClassComboboxValue(select);
-      }
-      if (!select.required || select.value !== '') return;
-      input.setCustomValidity('Pilih kelas/rombel dari daftar.');
-      input.reportValidity();
-      event.preventDefault();
-    });
-  });
-}
-
-document.addEventListener('DOMContentLoaded', function () {
-  initClassComboboxes();
-  document.addEventListener('mousedown', function (event) {
-    document.querySelectorAll('.class-combobox').forEach(box => {
-      if (!box.contains(event.target)) closeClassCombobox(box);
-    });
+    document.querySelectorAll('[data-month-range-picker]').forEach(closeReportMonthRangePicker);
+    document.querySelectorAll('[data-year-range-picker]').forEach(closeReportYearRangePicker);
   });
 });
 
@@ -1806,7 +2987,8 @@ function updateTotal() {
   refreshBiayaLainAvailability();
   document.querySelectorAll('.biaya-lain-row').forEach(row => refreshBiayaLainRow(row, true));
   refreshBiayaLainWarnings();
-  const ids = ['pangkal-input','bangunan-input','seragam-input','kegiatan-input','spp-input','komite-input','makan-input','sorga-input','infaq-input','du-input'];
+  applyGraduatePaymentLock(selectedStudentOption());
+  const ids = ['pangkal-input','psb-input','spp-input','komite-input','du-input'];
   let total = 0;
   ids.forEach(id => {
     const el = document.getElementById(id);
@@ -1844,13 +3026,15 @@ function formatRupiah(num) {
 
 /* ── Reset Form ──────────────────────────── */
 function resetForm() {
+  closeSppWarning();
+  resetSppStatusState();
   clearOverpaidUiState();
   const totalEl = document.getElementById('totalJumlah');
   if (totalEl) totalEl.textContent = 'Rp 0';
   const hiddenEl = document.getElementById('hidden-total');
   if (hiddenEl) hiddenEl.value = 0;
 
-  ['pangkal','bangunan','seragam','kegiatan','spp','komite','makan','sorga','infaq','du'].forEach(k => {
+  ['pangkal','psb','spp','komite','du'].forEach(k => {
     ['total','bayar','sisa','input'].forEach(s => {
       const el = document.getElementById(k + '-' + s);
       if (el) el.value = '0';
@@ -1870,6 +3054,7 @@ function resetForm() {
   }
   clearOverpaidUiState();
   refreshAnnualPaymentState(null);
+  refreshPaymentHistory('');
   updateTotal();
 }
 

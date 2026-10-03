@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="id" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PAYMENT_MODAL_PENDING</title>
+  <script>localStorage.setItem('spp_theme', 'light'); window.sppPublishedBilling = true; window.sppEditPaymentId = 0;</script>
+  <link rel="stylesheet" href="../assets/css/style.css">
+</head>
+<body>
+  <form id="form-bayar" action="javascript:void(0)">
+    <input id="disp-nis" value="20270001" readonly required>
+    <select id="sistem-pembayaran" required><option value="Tunai" selected>Tunai</option></select>
+    <select id="bulan-bayar" required><option value="07" selected>Juli</option></select>
+    <input id="tahun-bayar" value="2026" pattern="\d{4}" required>
+    <input id="tgl-bayar" value="2026-09-28" readonly required>
+    <input id="hidden-total" value="0">
+    <table><tbody><tr>
+      <td>Uang Pangkal</td>
+      <td><input id="pangkal-total" value="500000"></td>
+      <td><input id="pangkal-bayar" value="0"></td>
+      <td><input id="pangkal-sisa" value="0"></td>
+      <td><input id="pangkal-input" class="tbl-input tbl-pay" value="600000"></td>
+    </tr></tbody></table>
+    <button id="btn-input" type="submit">Simpan</button>
+  </form>
+  <div class="spp-warning-overlay" id="spp-warning-overlay" role="alertdialog" aria-modal="true"
+       aria-labelledby="spp-warning-title" aria-describedby="spp-warning-message" aria-hidden="true">
+    <div class="spp-warning-dialog" role="document">
+      <div class="spp-warning-head"><h3 class="spp-warning-title" id="spp-warning-title">Pembayaran perlu diperiksa</h3></div>
+      <div class="spp-warning-content">
+        <p class="spp-warning-message" id="spp-warning-message"></p>
+        <div class="spp-warning-amount" id="spp-warning-amount" hidden></div>
+        <div class="spp-warning-actions">
+          <button type="button" class="btn btn-ghost" id="spp-warning-secondary" hidden>Kembali</button>
+          <button type="button" class="btn btn-primary" id="spp-warning-close">Mengerti</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script src="../assets/js/app.js"></script>
+  <script>
+    window.addEventListener('load', async () => {
+      try {
+        const form = document.getElementById('form-bayar');
+        const overlay = document.getElementById('spp-warning-overlay');
+        const input = document.getElementById('pangkal-input');
+        const title = document.getElementById('spp-warning-title');
+        const message = document.getElementById('spp-warning-message');
+        const button = document.getElementById('btn-input');
+        const close = document.getElementById('spp-warning-close');
+        const pause = () => new Promise(resolve => window.setTimeout(resolve, 80));
+        updateTotal();
+        button.click();
+        await pause();
+        if (!form.noValidate || !overlay.classList.contains('show') || input.getAttribute('aria-invalid') !== 'true'
+          || title.textContent !== 'Melebihi sisa tagihan' || !message.textContent.includes('Kurangi nominalnya')) {
+          throw new Error('nominal');
+        }
+        close.click();
+        document.getElementById('sistem-pembayaran').value = '';
+        button.click();
+        await pause();
+        if (title.textContent !== 'Pilih metode pembayaran') throw new Error('metode');
+        close.click();
+        document.getElementById('sistem-pembayaran').value = 'Tunai';
+        document.getElementById('tahun-bayar').value = '20';
+        button.click();
+        await pause();
+        if (title.textContent !== 'Periksa bulan tagihan') throw new Error('periode');
+        document.title = 'PAYMENT_MODAL_OK';
+      } catch (error) {
+        document.title = 'PAYMENT_MODAL_FAILED_' + error.message;
+      }
+    });
+  </script>
+</body>
+</html>

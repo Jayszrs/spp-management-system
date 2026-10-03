@@ -31,7 +31,7 @@ function du_history_page_url(array $query, int $page): string {
 }
 
 $search = trim((string)($_GET['q'] ?? ''));
-$filterClass = (int)($_GET['kelas'] ?? 0);
+$filterClass = trim((string)($_GET['kelas'] ?? ''));
 $filterYear = trim((string)($_GET['tahun_ajaran'] ?? ''));
 $filterStatus = trim((string)($_GET['status'] ?? ''));
 $allowedPageSizes = [10, 25, 50, 100];
@@ -39,9 +39,14 @@ $requestedPage = (int)($_GET['page'] ?? 1);
 $requestedPageSize = (int)($_GET['per_page'] ?? 10);
 $perPage = in_array($requestedPageSize, $allowedPageSizes, true) ? $requestedPageSize : 10;
 $page = max(1, $requestedPage);
-$classOptions = class_all($koneksi, true, true);
+$allowedClasses = ['1', '2', '3', '4', '5', '6'];
+$classRows = class_all($koneksi, true);
+$validClassFilters = [''];
+foreach ($allowedClasses as $class) $validClassFilters[] = 'tingkat:' . $class;
+foreach ($classRows as $classRow) $validClassFilters[] = 'rombel:' . (int)$classRow['id'];
 $allowedStatuses = ['', 'lunas', 'cicilan'];
-if ($filterClass > 0 && !array_filter($classOptions, static fn($row) => (int)$row['id'] === $filterClass)) $filterClass = 0;
+if (in_array($filterClass, $allowedClasses, true)) $filterClass = 'tingkat:' . $filterClass;
+if (!in_array($filterClass, $validClassFilters, true)) $filterClass = '';
 if (!in_array($filterStatus, $allowedStatuses, true)) $filterStatus = '';
 if ($filterYear !== '' && !preg_match('/^\d{4}\/\d{4}$/', $filterYear)) $filterYear = '';
 
@@ -49,7 +54,20 @@ $academicYears = [];
 $yearResult = $koneksi->query("SELECT label FROM tahun_ajaran WHERE status IN ('published','closed') ORDER BY label DESC");
 while ($year = $yearResult->fetch_row()) $academicYears[] = $year[0];
 
-$where = ["tdu.status = 'open'"];
+$studentOptions = $koneksi->query("
+    SELECT DISTINCT s.id AS student_id,s.NO_INDUK, s.unit_id, s.NO_induk_diknas, s.NAMA, s.KELAS,
+           s.master_kelas_id, mk.tingkat AS master_tingkat, mk.kode_rombel, mk.is_placeholder
+    FROM tagihan_daftar_ulang tdu
+    JOIN siswa s ON s.NO_INDUK = tdu.no_induk AND s.unit_id=tdu.unit_id
+    LEFT JOIN master_kelas mk ON mk.id = s.master_kelas_id
+    WHERE tdu.status = 'open'
+    ORDER BY s.NAMA
+")->fetch_all(MYSQLI_ASSOC);
+$studentSearchDisplay = $search;
+$displayMatches=array_values(array_filter($studentOptions,static fn($o)=>(int)($_GET['student_id']??0)>0 ? (int)$o['student_id']===(int)$_GET['student_id'] : ($search!==''&&($search===$o['NO_INDUK']||$search===(string)($o['NO_induk_diknas']??'')))));
+if(count($displayMatches)===1)$studentSearchDisplay=$displayMatches[0]['NAMA'];
+
+$where = ["tdu.status = 'open'", "1=1".unit_student_selection_where()];
 $params = [];
 $types = '';
 if ($search !== '') {
@@ -57,9 +75,12 @@ if ($search !== '') {
     $where[] = '(tdu.no_induk LIKE ? OR s.NAMA LIKE ? OR s.NO_induk_diknas LIKE ?)';
     $params[] = $like; $params[] = $like; $params[] = $like; $types .= 'sss';
 }
-if ($filterClass > 0) {
-    $where[] = 'sta.master_kelas_id = ?';
-    $params[] = $filterClass; $types .= 'i';
+if (str_starts_with($filterClass, 'tingkat:')) {
+    $where[] = 'COALESCE(mk.tingkat, s.KELAS, tdu.kelas_snapshot) = ?';
+    $params[] = substr($filterClass, 8); $types .= 's';
+} elseif (str_starts_with($filterClass, 'rombel:')) {
+    $where[] = 's.master_kelas_id = ?';
+    $params[] = (int)substr($filterClass, 7); $types .= 'i';
 }
 if ($filterYear !== '') {
     $where[] = 'ta.label = ?';
@@ -67,12 +88,8 @@ if ($filterYear !== '') {
 }
 
 $aggregateSql = "
-    SELECT tdu.id AS tagihan_id, tdu.no_induk, tdu.kelas_snapshot AS kelas,
+    SELECT tdu.unit_id,tdu.id AS tagihan_id, tdu.no_induk, tdu.kelas_snapshot AS kelas,
            ta.label AS th_ajaran, s.NAMA AS nama, s.NO_induk_diknas, s.KELAS AS kelas_siswa,
-           COALESCE(sta.kelas_rombel_snapshot,
-             CASE WHEN mk.is_placeholder = 1 THEN CONCAT('Kelas ', tdu.kelas_snapshot, ' (Belum Ditentukan)')
-                  ELSE CONCAT(mk.tingkat, UPPER(mk.kode_rombel)) END
-           ) AS kelas_label,
            tdu.nominal_tagihan AS master_total,
            COALESCE(SUM(bd.jumlah), 0) AS paid,
            GREATEST(0, tdu.nominal_tagihan - COALESCE(SUM(bd.jumlah), 0)) AS remaining,
@@ -80,13 +97,12 @@ $aggregateSql = "
                 THEN 'lunas' ELSE 'cicilan' END AS payment_status
     FROM tagihan_daftar_ulang tdu
     JOIN tahun_ajaran ta ON ta.id = tdu.tahun_ajaran_id
-    JOIN siswa_tahun_ajaran sta ON sta.id = tdu.penempatan_id
-    JOIN siswa s ON s.NO_INDUK = tdu.no_induk
-    LEFT JOIN master_kelas mk ON mk.id = sta.master_kelas_id
+    JOIN siswa s ON s.NO_INDUK = tdu.no_induk AND s.unit_id=tdu.unit_id
+    LEFT JOIN master_kelas mk ON mk.id = s.master_kelas_id
     LEFT JOIN bayar_du bd ON bd.tagihan_daftar_ulang_id = tdu.id
     WHERE " . implode(' AND ', $where) . "
-    GROUP BY tdu.id, tdu.no_induk, tdu.kelas_snapshot, ta.label, s.NAMA, s.NO_induk_diknas,
-             s.KELAS, sta.kelas_rombel_snapshot, mk.is_placeholder, mk.tingkat, mk.kode_rombel, tdu.nominal_tagihan
+    GROUP BY tdu.unit_id,tdu.id, tdu.no_induk, tdu.kelas_snapshot, ta.label, s.NAMA, s.NO_induk_diknas,
+             s.KELAS, tdu.nominal_tagihan
 ";
 $havingSql = '';
 if ($filterStatus === 'lunas') $havingSql = ' HAVING remaining <= 0.001';
@@ -112,7 +128,7 @@ $page = min($page, $totalPages);
 $offset = ($page - 1) * $perPage;
 
 $pageSql = $aggregateSql . $havingSql . "
-    ORDER BY ta.label DESC, sta.kelas_rombel_snapshot, s.NAMA, tdu.id
+    ORDER BY ta.label DESC, CAST(tdu.kelas_snapshot AS UNSIGNED), s.NAMA, tdu.id
     LIMIT ? OFFSET ?";
 $pageParams = $params;
 $pageParams[] = $perPage;
@@ -130,7 +146,7 @@ foreach ($pageRows as $row) {
     $group = [
         'tagihan_id' => (int)$row['tagihan_id'],
         'no_induk' => $row['no_induk'], 'no_induk_diknas' => $row['NO_induk_diknas'], 'nama' => $row['nama'],
-        'kelas' => $row['kelas'], 'kelas_label' => $row['kelas_label'], 'kelas_siswa' => $row['kelas_siswa'],
+        'kelas' => $row['kelas'], 'kelas_siswa' => $row['kelas_siswa'],
         'th_ajaran' => $row['th_ajaran'], 'total' => (float)$row['master_total'],
         'paid' => (float)$row['paid'], 'remaining' => (float)$row['remaining'],
         'status' => $row['payment_status'], 'transactions' => [],
@@ -173,7 +189,7 @@ $pageWindowStart = max(1, $page - 2);
 $pageWindowEnd = min($totalPages, $pageWindowStart + 4);
 $pageWindowStart = max(1, $pageWindowEnd - 4);
 $paginationQuery = array_filter([
-    'q'=>$search, 'kelas'=>$filterClass > 0 ? (string)$filterClass : '', 'tahun_ajaran'=>$filterYear,
+    'q'=>$search, 'kelas'=>$filterClass, 'tahun_ajaran'=>$filterYear,
     'status'=>$filterStatus, 'per_page'=>$perPage,
 ], static fn($value) => $value !== '');
 
@@ -181,17 +197,17 @@ $flash = $_SESSION['flash'] ?? null;
 unset($_SESSION['flash']);
 ?>
 <!DOCTYPE html>
-<html lang="id">
+<html lang="id" data-palette="<?= unit_palette_for_view(isset($reportUnitId) ? (int)$reportUnitId : null) ?>">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Riwayat Daftar Ulang | SistemSPP</title>
-  <link rel="icon" type="image/png" href="../assets/img/favicon.png" />
+  <link rel="icon" type="image/png" href="../assets/img/favicon.png?v=2" />
   <meta name="description" content="Rekap pembayaran dan cicilan daftar ulang siswa." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="../assets/css/style.css?v=7.4" />
-  <script>(function(){var t=localStorage.getItem('spp_theme')||'dark';document.documentElement.setAttribute('data-theme',t);})();</script>
+  <link rel="stylesheet" href="../assets/css/style.css?v=unitpalette4&amp;mtime=<?= filemtime(__DIR__ . '/../assets/css/style.css') ?>" />
+  <script>(function(){var t=localStorage.getItem('spp_theme')||'light';document.documentElement.setAttribute('data-theme',t);})();</script>
 </head>
 <body>
   <div class="bg-orbs"><div class="orb orb-1"></div><div class="orb orb-2"></div><div class="orb orb-3"></div></div>
@@ -206,20 +222,48 @@ unset($_SESSION['flash']);
 
       <?php if ($flash): ?><div class="alert alert-<?= du_e($flash['type'] ?? 'error') ?>" id="flash-msg"><?= du_e($flash['msg'] ?? '') ?></div><?php endif; ?>
 
-      <div class="main-card du-history-card">
-        <div class="card-title-row">
-          <div class="card-title"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M4 4.5A2.5 2.5 0 0 1 6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5z"/><path d="M9 7h6M9 11h6"/></svg>Rekap Daftar Ulang Siswa</div>
-          <a href="form.php" class="btn btn-primary">+ Input Pembayaran</a>
-        </div>
+      <section class="main-card class-recap-card recap-report-shell history-recap-shell du-history-card">
+        <div class="recap-report-header">
+          <div class="recap-report-copy">
+            <span class="recap-class-overline">Daftar Ulang</span>
+            <h1>Riwayat Daftar Ulang</h1>
+            <p><?= number_format($summary['students']) ?> siswa/periode cocok dengan filter saat ini.</p>
+          </div>
 
-        <form method="GET" class="filter-bar du-history-filter">
-          <div class="search-box"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input type="text" name="q" value="<?= du_e($search) ?>" placeholder="Cari nama / NIS / NIS Diknas..." /></div>
-          <select class="field-input field-select filter-sel" name="kelas" data-class-combobox data-placeholder="Semua rombel atau ketik kelas..."><option value="">Semua Rombel</option><?php foreach ($classOptions as $class): ?><option value="<?= (int)$class['id'] ?>" <?= $filterClass === (int)$class['id'] ? 'selected' : '' ?>><?= du_e(class_label($class)) ?></option><?php endforeach; ?></select>
+        <form method="GET" class="recap-header-controls history-recap-filter filter-bar du-history-filter"><input type="hidden" name="student_id" data-student-identity="1" value="<?= max(0,(int)($_GET['student_id']??0)) ?>">
+          <span class="recap-filter-label">Filter Riwayat</span>
+          <div class="field-row full-span">
+            <label class="field-label" for="du-history-student">Cari Siswa (Nama / NIS / NIS Diknas)</label>
+            <div class="search-box">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              <input type="text" id="du-history-student" data-student-search data-student-list="du-history-student-list" data-student-select-callback="selectReportStudentSearchOption" data-student-query-target="du-history-student-query" value="<?= du_e($studentSearchDisplay) ?>" placeholder="Ketik nama, NIS, atau NIS Diknas..." autocomplete="off" />
+              <input type="hidden" id="du-history-student-query" name="q" value="<?= du_e($search) ?>" />
+            </div>
+            <datalist id="du-history-student-list">
+              <?php foreach ($studentOptions as $studentOption): ?>
+              <?php $studentClassLabel = class_label(['tingkat' => $studentOption['master_tingkat'] ?: $studentOption['KELAS'], 'kode_rombel' => $studentOption['kode_rombel'] ?? 'BELUM', 'is_placeholder' => $studentOption['is_placeholder'] ?? 1]); ?>
+              <option value="<?= du_e($studentOption['NAMA']) ?>"
+                data-student-id="<?= (int)($studentOption['student_id']??0) ?>" data-unit-id="<?= (int)($studentOption['unit_id']??0) ?>" data-nis="<?= du_e($studentOption['NO_INDUK']) ?>"
+                data-diknas="<?= du_e((string)($studentOption['NO_induk_diknas'] ?? '')) ?>"
+                data-nama="<?= du_e($studentOption['NAMA']) ?>"
+                data-kelas="<?= du_e($studentClassLabel) ?>">
+                <?= du_e($studentOption['NAMA']) ?> (<?= du_e($studentClassLabel) ?>)
+              </option>
+              <?php endforeach; ?>
+            </datalist>
+          </div>
+          <select class="field-input field-select filter-sel" name="kelas"><option value="">Semua Kelas</option><?php foreach ($allowedClasses as $class): ?><option value="tingkat:<?= $class ?>" <?= $filterClass === 'tingkat:'.$class ? 'selected' : '' ?>>Semua Kelas <?= $class ?></option><?php endforeach; ?><?php foreach ($classRows as $classRow): ?><option value="rombel:<?= (int)$classRow['id'] ?>" <?= $filterClass === 'rombel:'.((int)$classRow['id']) ? 'selected' : '' ?>><?= du_e($classRow['label']) ?></option><?php endforeach; ?></select>
           <select class="field-input field-select filter-sel" name="tahun_ajaran"><option value="">Semua Tahun Ajaran</option><?php foreach ($academicYears as $year): ?><option value="<?= du_e($year) ?>" <?= $filterYear === $year ? 'selected' : '' ?>><?= du_e($year) ?></option><?php endforeach; ?></select>
           <select class="field-input field-select filter-sel" name="status"><option value="">Semua Status</option><option value="cicilan" <?= $filterStatus === 'cicilan' ? 'selected' : '' ?>>Belum Lunas</option><option value="lunas" <?= $filterStatus === 'lunas' ? 'selected' : '' ?>>Lunas</option></select>
           <select class="field-input field-select filter-sel du-page-size" name="per_page" aria-label="Jumlah data per halaman"><?php foreach ($allowedPageSizes as $pageSize): ?><option value="<?= $pageSize ?>" <?= $perPage === $pageSize ? 'selected' : '' ?>><?= $pageSize ?> / halaman</option><?php endforeach; ?></select>
-          <button class="btn btn-primary" type="submit">Tampilkan</button><a class="btn btn-ghost" href="riwayat_daftar_ulang.php">Reset</a>
+          <div class="history-recap-actions"><button class="btn btn-primary" type="submit">Tampilkan Rekap</button><a class="btn btn-ghost" href="riwayat_daftar_ulang.php">Reset</a><a href="form.php" class="btn btn-primary">Input Pembayaran</a></div>
         </form>
+        </div>
+
+        <div class="recap-period-strip history-recap-strip">
+          <div><strong>Rekap Tagihan Daftar Ulang</strong><span>Menampilkan <?= number_format($firstShown) ?>–<?= number_format($lastShown) ?> dari <?= number_format($summary['students']) ?> siswa/periode.</span></div>
+          <span><?= number_format($summary['students']) ?> data</span>
+        </div>
 
         <div class="history-summary-grid du-history-summary">
           <div><span>Siswa / Periode</span><strong><?= number_format($summary['students']) ?></strong></div>
@@ -236,8 +280,8 @@ unset($_SESSION['flash']);
             <?php else: foreach ($visibleGroups as $index => $group): ?>
               <tr>
                 <td data-label="No"><?= $offset + $index + 1 ?></td>
-                <td data-label="Siswa"><strong><?= du_e($group['nama']) ?></strong><small class="du-history-nis">NIS <?= du_e($group['no_induk']) ?><?= !empty($group['no_induk_diknas']) ? ' · Diknas ' . du_e($group['no_induk_diknas']) : '' ?></small></td>
-                <td data-label="Kelas / Tahun"><strong><?= du_e($group['kelas_label'] ?: ('Kelas '.$group['kelas'])) ?></strong><small class="du-history-nis"><?= du_e($group['th_ajaran']) ?></small></td>
+                <td data-label="Siswa"><strong><?= unit_record_badge($group) ?><?= du_e($group['nama']) ?></strong><br><span class="badge-nis"><?= du_e($group['no_induk']) ?></span><?php if (!empty($group['no_induk_diknas'])): ?><small class="report-secondary-id">Diknas <?= du_e($group['no_induk_diknas']) ?></small><?php endif; ?></td>
+                <td data-label="Kelas / Tahun"><div class="du-class-year-cell"><span class="kelas-badge">Kelas <?= du_e($group['kelas']) ?></span><small class="du-history-nis"><?= du_e($group['th_ajaran']) ?></small></div></td>
                 <td data-label="Tagihan" class="nominal"><?= du_money($group['total']) ?></td>
                 <td data-label="Terbayar" class="nominal"><?= du_money($group['paid']) ?></td>
                 <td data-label="Sisa" class="nominal"><?= du_money($group['remaining']) ?></td>
@@ -252,7 +296,7 @@ unset($_SESSION['flash']);
                     <?php foreach ($group['transactions'] as $transaction): ?>
                       <div class="du-payment-entry">
                         <div><strong><?= du_money($transaction['jumlah']) ?></strong><span><?= du_e($transaction['full_date']['date']) ?> · <?= du_e($transaction['full_date']['time']) ?></span></div>
-                        <div class="du-payment-actions"><a class="btn-tbl btn-tbl-print" href="../laporan/cetak_struk.php?id=<?= (int)$transaction['bayar_id'] ?>" target="_blank" rel="noopener">Cetak</a><?php if ((int)$transaction['payment_link_version'] === 1): ?><a class="btn-tbl btn-tbl-edit" href="edit.php?id=<?= (int)$transaction['bayar_id'] ?>">Edit</a><?php endif; ?></div>
+                        <div class="du-payment-actions"><a class="btn-tbl btn-tbl-print" href="../laporan/cetak_struk.php?id=<?= (int)$transaction['bayar_id'] ?>" target="_blank" rel="noopener">Cetak</a><?php if (hasRole(['admin','kasir']) && (int)$transaction['payment_link_version'] === 1): ?><a class="btn-tbl btn-tbl-edit" href="edit.php?id=<?= (int)$transaction['bayar_id'] ?>">Edit</a><?php endif; ?></div>
                       </div>
                     <?php endforeach; ?>
                     </div>
@@ -297,9 +341,9 @@ unset($_SESSION['flash']);
           <?php endif; ?>
         </div>
         <?php endif; ?>
-      </div>
+      </section>
     </main>
   </div>
-  <script src="../assets/js/app.js?v=7.4"></script>
+  <script src="../assets/js/app.js?v=<?= filemtime(__DIR__ . '/../assets/js/app.js') ?>"></script>
 </body>
 </html>

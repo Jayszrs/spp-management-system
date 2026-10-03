@@ -1,4 +1,9 @@
 <?php
+if (PHP_SAPI !== 'cli'
+    || !preg_match('/^db_spp_(?:test|audit)_[a-z0-9_]+$/i', (string)getenv('SPP_DB_NAME'))
+    || getenv('SPP_TEST_ALLOW_MUTATION') !== '1') {
+    throw new RuntimeException('Jalankan hanya pada database disposable db_spp_test_* atau db_spp_audit_* dengan SPP_TEST_ALLOW_MUTATION=1.');
+}
 require_once __DIR__ . '/../koneksi.php';
 require_once __DIR__ . '/../includes/daftar_ulang.php';
 
@@ -36,10 +41,26 @@ try {
         legacy_assert(($widths['bayar.LAIN_LAIN' . $slot] ?? 0) >= 100, 'Slot nama Biaya Lain legacy belum diperbesar.');
     }
 
-    $duplicateIndex = (int)$koneksi->query("SELECT COUNT(*) total FROM information_schema.STATISTICS
-        WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='siswa'
-          AND INDEX_NAME='uk_siswa_no_induk_diknas' AND NON_UNIQUE=0")->fetch_assoc()['total'];
-    legacy_assert($duplicateIndex === 1, 'Indeks unik NIS Diknas belum tersedia.');
+    $physicalStudentTable = $koneksi->query("SELECT TABLE_TYPE FROM information_schema.TABLES
+        WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='siswa'")->fetch_assoc()['TABLE_TYPE'] === 'VIEW'
+        ? 'siswa_data' : 'siswa';
+    $indexName = $physicalStudentTable === 'siswa_data'
+        ? 'uk_siswa_unit_diknas' : 'uk_siswa_no_induk_diknas';
+    $stmt = $koneksi->prepare("SELECT GROUP_CONCAT(COLUMN_NAME ORDER BY SEQ_IN_INDEX) AS columns_in_index,
+            MAX(NON_UNIQUE) AS non_unique
+        FROM information_schema.STATISTICS
+        WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=? AND INDEX_NAME=?");
+    $stmt->bind_param('ss', $physicalStudentTable, $indexName);
+    $stmt->execute();
+    $index = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+    $expectedColumns = $physicalStudentTable === 'siswa_data'
+        ? 'unit_id,NO_induk_diknas' : 'NO_induk_diknas';
+    legacy_assert(
+        ($index['columns_in_index'] ?? '') === $expectedColumns
+            && (int)($index['non_unique'] ?? 1) === 0,
+        'Indeks unik NIS Diknas tidak sesuai cakupan unit.'
+    );
 
     $number = legacy_random_student_number($koneksi);
     $duplicateNumber = legacy_random_student_number($koneksi);

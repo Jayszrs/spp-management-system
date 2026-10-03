@@ -6,20 +6,13 @@ require_once '../includes/auth.php';
 require_once '../includes/daftar_ulang.php';
 require_once '../includes/kelas.php';
 require_once '../includes/pagination.php';
-requireRole(['admin']);
+require_once '../includes/student_tariff_consistency.php';
+require_once '../includes/tagihan_sekali.php';
+require_once '../includes/spp_billing.php';
+requireRole(['admin', 'kasir']);
 
 if (empty($_SESSION['csrf_student'])) {
     $_SESSION['csrf_student'] = bin2hex(random_bytes(32));
-}
-
-function student_amount($value): float {
-    if ($value === null || $value === '') return 0.0;
-    $normalized = str_replace(['.', ','], ['', '.'], trim((string)$value));
-    $amount = is_numeric($normalized) ? (float)$normalized : NAN;
-    if (!is_finite($amount) || $amount < 0 || $amount > 9999999999999.99) {
-        throw new RuntimeException('Nominal harus berupa angka positif atau nol.');
-    }
-    return $amount;
 }
 
 function student_history_count(mysqli $db, string $noInduk): int {
@@ -38,39 +31,21 @@ function student_history_count(mysqli $db, string $noInduk): int {
     return $count;
 }
 
-function student_optional_fee_payments(mysqli $db, string $noInduk): array {
-    $stmt = $db->prepare('SELECT
-        COALESCE(SUM(U_MAKAN), 0) AS MAKAN,
-        COALESCE(SUM(U_SORGA), 0) AS SORGA,
-        COALESCE(SUM(U_INFAQ), 0) AS INFAQ
-        FROM bayar WHERE NO_INDUK = ?');
-    $stmt->bind_param('s', $noInduk);
-    $stmt->execute();
-    $paid = $stmt->get_result()->fetch_assoc() ?: [];
-    $stmt->close();
-    return [
-        'MAKAN' => (float)($paid['MAKAN'] ?? 0),
-        'SORGA' => (float)($paid['SORGA'] ?? 0),
-        'INFAQ' => (float)($paid['INFAQ'] ?? 0),
-    ];
-}
-
 function find_student(mysqli $db, int $id, bool $forUpdate = false): ?array {
     $stmt = $db->prepare('SELECT * FROM siswa WHERE id = ? LIMIT 1' . ($forUpdate ? ' FOR UPDATE' : ''));
     $stmt->bind_param('i', $id);
     $stmt->execute();
     $student = $stmt->get_result()->fetch_assoc() ?: null;
     $stmt->close();
+    if ($student && !empty($student['legacy_pending']) && $forUpdate) throw new RuntimeException('Gunakan Aktivasi Legacy; Pulihkan/Edit biasa tidak diizinkan.');
     if ($student) $student['history_count'] = student_history_count($db, $student['NO_INDUK']);
     return $student;
 }
 
 function student_snapshot(array $student): array {
     $keys = [
-        'id', 'NO_INDUK', 'NAMA', 'KELAS', 'master_kelas_id', 'SPP_PERBULAN', 'PANGKAL', 'BANGUNAN',
-        'SERAGAM', 'KEGIATAN', 'MAKAN', 'SORGA', 'INFAQ',
-        'PANGKAL_BAYAR', 'BANGUNAN_BAYAR', 'SERAGAM_BAYAR',
-        'KEGIATAN_BAYAR', 'POMG', 'DAFTAR_ULANG', 'NO_induk_diknas',
+        'id', 'NO_INDUK', 'NAMA', 'KELAS', 'master_kelas_id', 'SPP_PERBULAN', 'potongan_spp_persen', 'PANGKAL', 'PSB',
+        'asal_psb', 'POMG', 'DAFTAR_ULANG', 'NO_induk_diknas',
         'potong_pangkal', 'tot_pangkal', 'tot_du', 'potong_du', 'is_active'
     ];
     return array_intersect_key($student, array_flip($keys));
@@ -112,9 +87,23 @@ function validate_student_identity(mysqli $db, array $source): array {
     if ($name === '' || mb_strlen($name) > 100) {
         throw new RuntimeException('Nama siswa wajib diisi dan maksimal 100 karakter.');
     }
-    $class = class_find($db, $classId, true);
+    $class = class_find($db, $classId, true, true);
     if (!$class) throw new RuntimeException('Pilih kelas/rombel aktif dari Master Kelas.');
     return [$noInduk, $name, (string)$class['tingkat'], $classId];
+}
+
+function reject_removed_student_components(array $source): void {
+    $removed = [
+        'bangunan'=>'Uang Bangunan', 'seragam'=>'Uang Seragam', 'kegiatan'=>'Uang Kegiatan',
+        'makan'=>'Uang Makan', 'sorga'=>'Uang Sorga', 'surga'=>'Uang Surga', 'infaq'=>'Uang Infaq',
+        'pangkal_bayar'=>'Saldo awal Pangkal', 'bangunan_bayar'=>'Saldo awal Bangunan',
+        'seragam_bayar'=>'Saldo awal Seragam', 'kegiatan_bayar'=>'Saldo awal Kegiatan',
+    ];
+    foreach ($removed as $field => $label) {
+        if (array_key_exists($field, $source)) {
+            throw new RuntimeException($label . ' sudah tidak didukung pada Master Siswa.');
+        }
+    }
 }
 
 $flash = $_SESSION['flash'] ?? null;
@@ -132,12 +121,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     try {
         if ($action === 'tambah' || $action === 'update') {
+            reject_removed_student_components($_POST);
             $id = (int)($_POST['id'] ?? 0);
             if ($action === 'update') $returnLocation .= '?edit=' . $id;
             $koneksi->begin_transaction();
             $oldStudent = $action === 'update' ? find_student($koneksi, $id, true) : null;
             if ($action === 'update' && !$oldStudent) throw new RuntimeException('Data siswa tidak ditemukan.');
             [$noInduk, $name, $class, $classId] = validate_student_identity($koneksi, $_POST);
+            if ($oldStudent && $noInduk !== (string)$oldStudent['NO_INDUK']) {
+                throw new RuntimeException('Nomor induk tidak dapat diubah setelah siswa dibuat karena menjadi penghubung riwayat dan tagihan.');
+            }
 
             $stmtDuplicate = $koneksi->prepare('SELECT id FROM siswa WHERE NO_INDUK = ? AND id <> ? LIMIT 1');
             $stmtDuplicate->bind_param('si', $noInduk, $id);
@@ -147,24 +140,42 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($duplicate) throw new RuntimeException('Nomor induk sudah digunakan siswa lain.');
 
             $advanced = isset($_POST['advanced_enabled']) && $_POST['advanced_enabled'] === '1';
+            $komiteStartMonth = (string)($_POST['komite_mulai_bulan'] ?? '07');
+            if (!in_array($komiteStartMonth,['01','02','03','04','05','06','07','08','09','10','11','12'],true)) {
+                throw new RuntimeException('Pilih bulan mulai tagihan Komite yang valid.');
+            }
             $advancedColumns = [
-                'SPP_PERBULAN', 'PANGKAL', 'BANGUNAN', 'SERAGAM', 'KEGIATAN',
-                'MAKAN', 'SORGA', 'INFAQ', 'POMG', 'DAFTAR_ULANG',
+                'potongan_spp_persen', 'PANGKAL', 'PSB', 'POMG', 'DAFTAR_ULANG',
                 'potong_pangkal', 'potong_du'
             ];
             $postMap = [
-                'SPP_PERBULAN' => 'spp_perbulan', 'PANGKAL' => 'pangkal',
-                'BANGUNAN' => 'bangunan', 'SERAGAM' => 'seragam',
-                'KEGIATAN' => 'kegiatan', 'MAKAN' => 'makan',
-                'SORGA' => 'sorga', 'INFAQ' => 'infaq', 'POMG' => 'pomg',
+                'potongan_spp_persen' => 'potongan_spp_persen', 'PANGKAL' => 'pangkal',
+                'PSB' => 'psb', 'POMG' => 'pomg',
                 'DAFTAR_ULANG' => 'daftar_ulang', 'potong_pangkal' => 'potong_pangkal',
                 'potong_du' => 'potong_du'
             ];
+            if (!$advanced) {
+                $ignoredChanges = student_advanced_change_attempts($_POST, $oldStudent, $postMap);
+                if ($ignoredChanges) {
+                    throw new RuntimeException('Perubahan tarif atau data lanjutan terdeteksi. Aktifkan Advance sebelum menyimpan.');
+                }
+            }
             $values = [];
             foreach ($advancedColumns as $column) {
+                $rawValue = $_POST[$postMap[$column]] ?? 0;
+                if ($column === 'potongan_spp_persen') {
+                    $rawValue = str_replace(',', '.', trim((string)$rawValue));
+                    if ($rawValue === '' || !is_numeric($rawValue)) throw new RuntimeException('Potongan SPP harus berupa persentase yang valid.');
+                    $parsedValue = round((float)$rawValue, 2);
+                } else {
+                    $parsedValue = student_amount($rawValue);
+                }
                 $values[$column] = $advanced
-                    ? student_amount($_POST[$postMap[$column]] ?? 0)
+                    ? $parsedValue
                     : (float)($oldStudent[$column] ?? 0);
+            }
+            if ($values['potongan_spp_persen'] < 0 || $values['potongan_spp_persen'] > 100) {
+                throw new RuntimeException('Potongan SPP harus berada di antara 0% sampai 100%.');
             }
             $nisDiknas = $advanced
                 ? trim((string)($_POST['no_induk_diknas'] ?? ''))
@@ -189,54 +200,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $values['tot_pangkal'] = max(0, $values['PANGKAL'] - $values['potong_pangkal']);
             $values['tot_du'] = max(0, $values['DAFTAR_ULANG'] - $values['potong_du']);
 
-            if ($advanced && $oldStudent) {
-                $paidOptional = student_optional_fee_payments($koneksi, (string)$oldStudent['NO_INDUK']);
-                $optionalLabels = ['MAKAN'=>'Uang Makan', 'SORGA'=>'Uang Sorga', 'INFAQ'=>'Uang Infaq'];
-                foreach ($optionalLabels as $column => $label) {
-                    if ($values[$column] + .001 < $paidOptional[$column]) {
-                        throw new RuntimeException($label . ' tidak boleh lebih kecil dari total yang sudah dibayar, yaitu Rp ' . number_format($paidOptional[$column], 0, ',', '.') . '.');
-                    }
+            $asalPsb = $oldStudent ? (int)$oldStudent['asal_psb'] : ($class === '0' ? 1 : 0);
+            if (!$asalPsb && $values['PSB'] > 0.001) {
+                throw new RuntimeException('Uang PSB hanya dapat diatur untuk siswa yang pertama kali didaftarkan di kelas PSB.');
+            }
+            if ($action === 'tambah' && $class === '0' && $values['PSB'] <= 0.001) {
+                throw new RuntimeException('Nominal Uang PSB wajib diisi untuk siswa kelas PSB.');
+            }
+            if ($oldStudent) {
+                $oneTimePaid = one_time_fee_status($koneksi, (string)$oldStudent['NO_INDUK'], 0, true);
+                if ($values['tot_pangkal'] + 0.001 < $oneTimePaid['pangkal']['paid']) {
+                    throw new RuntimeException('Total Uang Pangkal tidak boleh lebih kecil dari yang sudah dibayar.');
+                }
+                if ($values['PSB'] + 0.001 < $oneTimePaid['psb']['paid']) {
+                    throw new RuntimeException('Uang PSB tidak boleh lebih kecil dari yang sudah dibayar.');
                 }
             }
 
-            $openingMap = [
-                'PANGKAL_BAYAR' => 'pangkal_bayar', 'BANGUNAN_BAYAR' => 'bangunan_bayar',
-                'SERAGAM_BAYAR' => 'seragam_bayar', 'KEGIATAN_BAYAR' => 'kegiatan_bayar'
-            ];
-            $canEditOpening = !$oldStudent || (int)$oldStudent['history_count'] === 0;
-            foreach ($openingMap as $column => $postName) {
-                $oldValue = (float)($oldStudent[$column] ?? 0);
-                if ($advanced && $canEditOpening) {
-                    $values[$column] = student_amount($_POST[$postName] ?? 0);
-                } else {
-                    $values[$column] = $oldValue;
-                    if (!$canEditOpening && isset($_POST[$postName]) && student_amount($_POST[$postName]) !== $oldValue) {
-                        throw new RuntimeException('Saldo awal tidak dapat diubah setelah siswa memiliki histori transaksi.');
-                    }
-                }
-            }
-            $openingLimits = [
-                'PANGKAL_BAYAR' => $values['tot_pangkal'],
-                'BANGUNAN_BAYAR' => $values['BANGUNAN'],
-                'SERAGAM_BAYAR' => $values['SERAGAM'],
-                'KEGIATAN_BAYAR' => $values['KEGIATAN']
-            ];
-            foreach ($openingLimits as $column => $limit) {
-                if ($values[$column] > $limit) throw new RuntimeException('Saldo awal tidak boleh melebihi nilai tagihan.');
-            }
-
-            $spp = $values['SPP_PERBULAN'];
+            $effectiveYear = $oldStudent
+                ? spp_student_effective_year($koneksi, (string)$oldStudent['NO_INDUK'])
+                : du_current_academic_year();
+            $effectiveSpp = spp_current_effective_rate($koneksi, $class, $values['potongan_spp_persen'], $effectiveYear);
+            $hasMasterSppRate = $effectiveSpp['year'] !== 'Belum disiapkan';
+            $spp = $class === '0' ? 0.0 : ($hasMasterSppRate ? (float)$effectiveSpp['net'] : (float)($oldStudent['SPP_PERBULAN'] ?? 0));
+            $sppDiscountPercent = $values['potongan_spp_persen'];
             $pangkal = $values['PANGKAL'];
-            $bangunan = $values['BANGUNAN'];
-            $seragam = $values['SERAGAM'];
-            $kegiatan = $values['KEGIATAN'];
-            $makan = $values['MAKAN'];
-            $sorga = $values['SORGA'];
-            $infaq = $values['INFAQ'];
-            $pangkalBayar = $values['PANGKAL_BAYAR'];
-            $bangunanBayar = $values['BANGUNAN_BAYAR'];
-            $seragamBayar = $values['SERAGAM_BAYAR'];
-            $kegiatanBayar = $values['KEGIATAN_BAYAR'];
+            $psb = $values['PSB'];
             $pomg = $values['POMG'];
             $daftarUlang = $values['DAFTAR_ULANG'];
             $potongPangkal = $values['potong_pangkal'];
@@ -245,35 +234,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $potongDu = $values['potong_du'];
             $active = (int)($oldStudent['is_active'] ?? 1);
 
-            if ($oldStudent) {
-                class_validate_tariff_snapshot_change(
-                    $koneksi,
-                    (string)$oldStudent['NO_INDUK'],
-                    (float)$oldStudent['SPP_PERBULAN'],
-                    $spp,
-                    (float)$oldStudent['POMG'],
-                    $pomg
-                );
-            }
-
             if ($action === 'tambah') {
                 $stmt = $koneksi->prepare("
                     INSERT INTO siswa (
-                      NO_INDUK, NAMA, KELAS, SPP_PERBULAN, PANGKAL, BANGUNAN, SERAGAM,
-                      KEGIATAN, MAKAN, SORGA, INFAQ,
-                      PANGKAL_BAYAR, BANGUNAN_BAYAR, SERAGAM_BAYAR, KEGIATAN_BAYAR,
+                      NO_INDUK, NAMA, KELAS, SPP_PERBULAN, potongan_spp_persen, PANGKAL, PSB, asal_psb,
                       POMG, DAFTAR_ULANG, NO_induk_diknas, potong_pangkal, tot_pangkal,
                       tot_du, potong_du, is_active
                     ) VALUES (
-                      ?, ?, ?,
-                      ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                      ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
                       NULLIF(?, ''), ?, ?, ?, ?, ?
                     )
                 ");
                 $stmt->bind_param(
-                    'sssddddddddddddddsddddi',
-                    $noInduk, $name, $class, $spp, $pangkal, $bangunan, $seragam, $kegiatan,
-                    $makan, $sorga, $infaq, $pangkalBayar, $bangunanBayar, $seragamBayar, $kegiatanBayar, $pomg,
+                    'sssddddiddsddddi',
+                    $noInduk, $name, $class, $spp, $sppDiscountPercent, $pangkal, $psb, $asalPsb, $pomg,
                     $daftarUlang, $nisDiknas, $potongPangkal, $totPangkal, $totDu, $potongDu, $active
                 );
                 $stmt->execute();
@@ -281,55 +255,131 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $stmt->close();
                 $stmtClass = $koneksi->prepare('UPDATE siswa SET master_kelas_id = ? WHERE id = ?');
                 $stmtClass->bind_param('ii', $classId, $id); $stmtClass->execute(); $stmtClass->close();
-                $placementId = class_sync_student_current_year($koneksi, $noInduk, $classId, $spp, $pomg, true);
+                $tariffSync = null;
+                $placementId = class_sync_student_current_year($koneksi, $noInduk, $classId, $spp, $pomg, true, $tariffSync);
+                if ($placementId) komite_set_start_month($koneksi,$placementId,$komiteStartMonth);
                 if ($placementId) du_create_bill_for_placement($koneksi, $placementId);
                 $after = find_student($koneksi, $id);
-                write_student_audit($koneksi, $id, $noInduk, 'tambah', null, student_snapshot($after));
+                $afterAudit = student_snapshot($after);
+                $afterAudit['_tariff_sync'] = $tariffSync;
+                write_student_audit($koneksi, $id, $noInduk, 'tambah', null, $afterAudit);
                 $successMessage = "Siswa $name berhasil ditambahkan.";
             } else {
                 $before = student_snapshot($oldStudent);
                 $stmt = $koneksi->prepare("
                     UPDATE siswa SET
-                      NO_INDUK=?, NAMA=?, KELAS=?, SPP_PERBULAN=?, PANGKAL=?, BANGUNAN=?,
-                      SERAGAM=?, KEGIATAN=?, MAKAN=?, SORGA=?, INFAQ=?,
-                      PANGKAL_BAYAR=?, BANGUNAN_BAYAR=?,
-                      SERAGAM_BAYAR=?, KEGIATAN_BAYAR=?, POMG=?, DAFTAR_ULANG=?,
+                      NO_INDUK=?, NAMA=?, KELAS=?, SPP_PERBULAN=?, potongan_spp_persen=?, PANGKAL=?, PSB=?,
+                      POMG=?, DAFTAR_ULANG=?,
                       NO_induk_diknas=NULLIF(?, ''), potong_pangkal=?, tot_pangkal=?,
                       tot_du=?, potong_du=? WHERE id=?
                 ");
                 $stmt->bind_param(
-                    'sssddddddddddddddsddddi',
-                    $noInduk, $name, $class, $spp, $pangkal, $bangunan, $seragam, $kegiatan,
-                    $makan, $sorga, $infaq, $pangkalBayar, $bangunanBayar, $seragamBayar, $kegiatanBayar, $pomg,
+                    'sssddddddsddddi',
+                    $noInduk, $name, $class, $spp, $sppDiscountPercent, $pangkal, $psb, $pomg,
                     $daftarUlang, $nisDiknas, $potongPangkal, $totPangkal, $totDu, $potongDu, $id
                 );
                 $stmt->execute();
                 $stmt->close();
                 $stmtClass = $koneksi->prepare('UPDATE siswa SET master_kelas_id = ? WHERE id = ?');
                 $stmtClass->bind_param('ii', $classId, $id); $stmtClass->execute(); $stmtClass->close();
-                $placementId = class_sync_student_current_year($koneksi, $noInduk, $classId, $spp, $pomg, $active === 1);
-                if ($placementId) du_create_bill_for_placement($koneksi, $placementId);
-                $duChanged =
-                    abs((float)$oldStudent['DAFTAR_ULANG'] - $daftarUlang) > .001 ||
-                    abs((float)$oldStudent['potong_du'] - $potongDu) > .001 ||
-                    abs((float)$oldStudent['tot_du'] - $totDu) > .001;
-                if ($duChanged) du_apply_current_student_override($koneksi, $noInduk);
+                $tariffSync = null;
+                $placementId = class_sync_student_current_year($koneksi, $noInduk, $classId, $spp, $pomg, $active === 1, $tariffSync);
+                $sppDiscountSync = $active === 1
+                    ? spp_sync_student_discount($koneksi, $noInduk, $sppDiscountPercent, $placementId)
+                    : ['updated' => 0, 'locked' => 0];
+                if ($placementId) komite_set_start_month($koneksi,$placementId,$komiteStartMonth);
+                $duBillBefore = du_find_bill($koneksi, $noInduk, (int)date('n'), (int)date('Y'), true);
+                $duBillId = $placementId ? du_create_bill_for_placement($koneksi, $placementId, false) : null;
+                $duSync = du_reconcile_current_student_override($koneksi, $noInduk);
+                if (!$duBillBefore && $duBillId) $duSync['status'] = 'synced';
                 $after = find_student($koneksi, $id);
-                write_student_audit($koneksi, $id, $noInduk, 'update', $before, student_snapshot($after));
-                $successMessage = "Data siswa $name berhasil diperbarui.";
+                $afterSnapshot = student_snapshot($after);
+                $requestedComponents = student_tariff_component_changes($before, $afterSnapshot);
+                $syncedComponents = $tariffSync['synced'] ?? [];
+                $lockedComponents = $tariffSync['locked'] ?? [];
+                if ($duSync['status'] === 'synced') $syncedComponents[] = 'daftar_ulang';
+                if ($duSync['status'] === 'locked') $lockedComponents[] = 'daftar_ulang';
+                $syncedComponents = array_values(array_unique($syncedComponents));
+                $lockedComponents = array_values(array_unique($lockedComponents));
+                $updatedComponents = array_values(array_intersect($syncedComponents, $requestedComponents));
+                $repairedComponents = array_values(array_diff($syncedComponents, $requestedComponents));
+                $lockedRequested = array_values(array_intersect($lockedComponents, $requestedComponents));
+                $masterChanged = student_snapshots_differ($before, $afterSnapshot);
+                $hasEffectiveChange = $masterChanged || count($syncedComponents) > 0;
+
+                if (!$hasEffectiveChange) {
+                    $koneksi->commit();
+                    $noChangeMessage = 'Tidak ada perubahan yang disimpan.';
+                    if ($lockedComponents) {
+                        $noChangeMessage .= ' ' . student_tariff_labels($lockedComponents) . ' tahun ' . ($tariffSync['tahun_ajaran'] ?? $duSync['tahun_ajaran']) . ' tetap terkunci karena sudah memiliki pembayaran.';
+                    }
+                    $_SESSION['flash'] = ['type' => 'warning', 'msg' => $noChangeMessage];
+                    student_redirect('daftar.php');
+                }
+
+                $syncAudit = [
+                    'tahun_ajaran' => $tariffSync['tahun_ajaran'] ?? $duSync['tahun_ajaran'],
+                    'diperbarui' => $updatedComponents,
+                    'diperbaiki_otomatis' => $repairedComponents,
+                    'terkunci' => $lockedComponents,
+                    'kelas_dipertahankan' => (bool)($tariffSync['kelas_dipertahankan'] ?? false),
+                ];
+                $afterAudit = $afterSnapshot;
+                $afterAudit['_tariff_sync'] = $syncAudit;
+                $afterAudit['_spp_discount_sync'] = $sppDiscountSync;
+                $auditAction = $masterChanged ? 'update' : 'rekonsiliasi_tarif';
+                write_student_audit($koneksi, $id, $noInduk, $auditAction, $before, $afterAudit);
+
+                $messageParts = [];
+                if ($masterChanged) $messageParts[] = "Data siswa $name berhasil diperbarui.";
+                if ($updatedComponents) {
+                    $messageParts[] = count($updatedComponents) . ' komponen tagihan tahun ' . $syncAudit['tahun_ajaran'] . ' ikut diperbarui.';
+                }
+                if ($repairedComponents) {
+                    $messageParts[] = 'Ketidaksinkronan ' . student_tariff_labels($repairedComponents) . ' diperbaiki otomatis.';
+                }
+                if ($lockedRequested) {
+                    $messageParts[] = student_tariff_labels($lockedRequested) . ' tahun ' . $syncAudit['tahun_ajaran'] . ' tetap karena sudah memiliki pembayaran; tarif baru berlaku untuk penerbitan tahun berikutnya.';
+                }
+                $lockedExisting = array_values(array_diff($lockedComponents, $lockedRequested));
+                if ($lockedExisting) {
+                    $messageParts[] = 'Snapshot yang tetap terkunci: ' . student_tariff_labels($lockedExisting) . '.';
+                }
+                $classChanged = (int)($before['master_kelas_id'] ?? 0) !== (int)($afterSnapshot['master_kelas_id'] ?? 0);
+                if ($classChanged && $syncAudit['kelas_dipertahankan']) {
+                    $messageParts[] = 'Kelas penempatan tahun berjalan dipertahankan untuk menjaga histori transaksi.';
+                }
+                $successMessage = implode(' ', $messageParts);
+                $successType = ($lockedComponents || ($classChanged && $syncAudit['kelas_dipertahankan'])) ? 'warning' : 'success';
             }
             $koneksi->commit();
-            $_SESSION['flash'] = ['type' => 'success', 'msg' => $successMessage];
+            $_SESSION['flash'] = ['type' => $successType ?? 'success', 'msg' => $successMessage];
             student_redirect('daftar.php');
         }
 
         if ($action === 'toggle_status') {
             $id = (int)($_POST['id'] ?? 0);
+            $targetStatus = (string)($_POST['target_active'] ?? '');
+            if (!in_array($targetStatus, ['0', '1'], true)) {
+                throw new RuntimeException('Status tujuan siswa tidak valid. Muat ulang halaman.');
+            }
             $koneksi->begin_transaction();
             $student = find_student($koneksi, $id, true);
             if (!$student) throw new RuntimeException('Data siswa tidak ditemukan.');
+            $stmtGraduate = $koneksi->prepare("SELECT 1 FROM siswa_tahun_ajaran WHERE no_induk=? AND status='lulus' LIMIT 1");
+            $graduateNoInduk = (string)$student['NO_INDUK'];
+            $stmtGraduate->bind_param('s', $graduateNoInduk);
+            $stmtGraduate->execute();
+            $isGraduate = (bool)$stmtGraduate->get_result()->fetch_row();
+            $stmtGraduate->close();
+            if ($isGraduate) throw new RuntimeException('Status lulusan tidak dapat diubah melalui arsip manual.');
+            $newStatus = (int)$targetStatus;
+            if ((int)$student['is_active'] === $newStatus) {
+                $koneksi->commit();
+                $_SESSION['flash'] = ['type' => 'warning', 'msg' => 'Status siswa sudah sesuai. Tidak ada perubahan.'];
+                student_redirect('daftar.php');
+            }
             $before = student_snapshot($student);
-            $newStatus = (int)$student['is_active'] === 1 ? 0 : 1;
             $stmt = $koneksi->prepare('UPDATE siswa SET is_active = ? WHERE id = ?');
             $stmt->bind_param('ii', $newStatus, $id);
             $stmt->execute();
@@ -369,7 +419,7 @@ $filterClass = (int)($_GET['kelas'] ?? 0);
 $classOptions = class_all($koneksi, true, true);
 if ($filterClass > 0 && !array_filter($classOptions, fn($row) => (int)$row['id'] === $filterClass)) $filterClass = 0;
 $filterStatus = (string)($_GET['status'] ?? 'active');
-if (!in_array($filterStatus, ['active', 'archived', 'all'], true)) $filterStatus = 'active';
+if (!in_array($filterStatus, ['active', 'archived', 'legacy', 'all'], true)) $filterStatus = 'active';
 $allowedPageSizes = [10, 25, 50];
 $perPage = page_size_param('per_page', $allowedPageSizes, 10);
 $page = page_int_param('page');
@@ -378,7 +428,7 @@ $listWhereSql = "
     FROM siswa s
     WHERE (? = '' OR s.NO_INDUK LIKE CONCAT('%', ?, '%') OR s.NAMA LIKE CONCAT('%', ?, '%') OR s.NO_induk_diknas LIKE CONCAT('%', ?, '%'))
       AND (? = 0 OR s.master_kelas_id = ?)
-      AND (? = 'all' OR s.is_active = IF(? = 'archived', 0, 1))
+      AND (? = 'all' OR CASE ? WHEN 'legacy' THEN s.legacy_pending=1 WHEN 'archived' THEN s.legacy_pending=0 AND s.is_active=0 ELSE s.legacy_pending=0 AND s.is_active=1 END)
 ";
 $listTypes = 'ssssiiss';
 $listParams = [$query, $query, $query, $query, $filterClass, $filterClass, $filterStatus, $filterStatus];
@@ -395,18 +445,18 @@ $offset = ($page - 1) * $perPage;
 
 $stmtList = $koneksi->prepare("
     SELECT s.*, mk.tingkat AS master_tingkat, mk.kode_rombel, mk.is_placeholder,
-      (SELECT COUNT(*) FROM bayar p WHERE p.NO_INDUK = s.NO_INDUK) AS jml_bayar,
-      ((SELECT COUNT(*) FROM bayar p WHERE p.NO_INDUK = s.NO_INDUK) +
-       (SELECT COUNT(*) FROM bayar_du du WHERE du.no_induk = s.NO_INDUK) +
-       (SELECT COUNT(*) FROM transaksi_m tm WHERE tm.NO_INDUK = s.NO_INDUK) +
-       (SELECT COUNT(*) FROM transaksi_k tk WHERE tk.NO_INDUK = s.NO_INDUK)) AS history_count
+      (SELECT COUNT(*) FROM bayar p WHERE p.NO_INDUK = s.NO_INDUK AND p.unit_id=s.unit_id) AS jml_bayar,
+      ((SELECT COUNT(*) FROM bayar p WHERE p.NO_INDUK = s.NO_INDUK AND p.unit_id=s.unit_id) +
+       (SELECT COUNT(*) FROM bayar_du du WHERE du.no_induk = s.NO_INDUK AND du.unit_id=s.unit_id) +
+       (SELECT COUNT(*) FROM transaksi_m tm WHERE tm.NO_INDUK = s.NO_INDUK AND tm.unit_id=s.unit_id) +
+       (SELECT COUNT(*) FROM transaksi_k tk WHERE tk.NO_INDUK = s.NO_INDUK AND tk.unit_id=s.unit_id)) AS history_count
     FROM siswa s
     LEFT JOIN master_kelas mk ON mk.id = s.master_kelas_id
     WHERE (? = '' OR s.NO_INDUK LIKE CONCAT('%', ?, '%') OR s.NAMA LIKE CONCAT('%', ?, '%') OR s.NO_induk_diknas LIKE CONCAT('%', ?, '%'))
       AND (? = 0 OR s.master_kelas_id = ?)
-      AND (? = 'all' OR s.is_active = IF(? = 'archived', 0, 1))
+      AND (? = 'all' OR CASE ? WHEN 'legacy' THEN s.legacy_pending=1 WHEN 'archived' THEN s.legacy_pending=0 AND s.is_active=0 ELSE s.legacy_pending=0 AND s.is_active=1 END)
     ORDER BY s.is_active DESC,
-      CASE WHEN s.KELAS REGEXP '^[1-6]$' THEN 0 ELSE 1 END,
+      CASE WHEN s.KELAS REGEXP '^([1-9]|1[0-2])$' THEN 0 ELSE 1 END,
       CAST(s.KELAS AS UNSIGNED), s.KELAS, s.NAMA ASC
     LIMIT ? OFFSET ?
 ");
@@ -416,19 +466,51 @@ $stmtList->bind_param($pageTypes, ...$pageParams);
 $stmtList->execute();
 $studentRows = $stmtList->get_result()->fetch_all(MYSQLI_ASSOC);
 $stmtList->close();
+$classHistories = [];
+$graduationYears = [];
+if ($studentRows) {
+    $historyStudentIds = array_values(array_map(fn($row) => (string)$row['NO_INDUK'], $studentRows));
+    $placeholders = implode(',', array_fill(0, count($historyStudentIds), '?'));
+    $stmtHistory = $koneksi->prepare("SELECT sta.unit_id,sta.no_induk,ta.label AS tahun_ajaran,
+            sta.kelas,sta.kelas_rombel_snapshot,sta.status
+        FROM siswa_tahun_ajaran sta
+        JOIN tahun_ajaran ta ON ta.id=sta.tahun_ajaran_id
+        WHERE sta.no_induk IN ($placeholders) AND CAST(sta.kelas AS UNSIGNED) " . unit_level_between_sql() . "
+        ORDER BY ta.label DESC,sta.id DESC");
+    $historyTypes = str_repeat('s', count($historyStudentIds));
+    $stmtHistory->bind_param($historyTypes, ...$historyStudentIds);
+    $stmtHistory->execute();
+    foreach ($stmtHistory->get_result()->fetch_all(MYSQLI_ASSOC) as $history) {
+        $nis = unit_student_key($history);
+        $classHistories[$nis][] = $history;
+        if ($history['status'] === 'lulus' && !isset($graduationYears[$nis])) {
+            $graduationYears[$nis] = (string)$history['tahun_ajaran'];
+        }
+    }
+    $stmtHistory->close();
+}
 $studentPaginationQuery = pagination_query(['per_page' => $perPage]);
 
 $formStudent = $editStudent ?? [];
+$komiteStartMonth = '07';
+$editStudentYear = $editStudent
+    ? spp_student_effective_year($koneksi, (string)$editStudent['NO_INDUK'])
+    : du_current_academic_year();
+if ($editStudent && !empty($editStudent['legacy_pending'])) { header('Location: aktivasi_legacy.php?id='.(int)$editStudent['id']); exit; }
+if ($editStudent) {
+    $stmtKomiteStart=$koneksi->prepare('SELECT sta.komite_mulai_bulan FROM siswa_tahun_ajaran sta JOIN tahun_ajaran ta ON ta.id=sta.tahun_ajaran_id WHERE sta.no_induk=? AND ta.label=? LIMIT 1');
+    $stmtKomiteStart->bind_param('ss',$editStudent['NO_INDUK'],$editStudentYear);$stmtKomiteStart->execute();
+    $komiteStartMonth=(string)($stmtKomiteStart->get_result()->fetch_assoc()['komite_mulai_bulan']??'07');$stmtKomiteStart->close();
+}
+$komiteStartMonth=(string)($oldInput['komite_mulai_bulan']??$komiteStartMonth);
 $fieldMap = [
     'no_induk' => 'NO_INDUK', 'nama' => 'NAMA', 'kelas' => 'KELAS',
     'master_kelas_id' => 'master_kelas_id',
     'no_induk_diknas' => 'NO_induk_diknas', 'spp_perbulan' => 'SPP_PERBULAN',
-    'pangkal' => 'PANGKAL', 'bangunan' => 'BANGUNAN', 'seragam' => 'SERAGAM',
-    'kegiatan' => 'KEGIATAN', 'makan' => 'MAKAN', 'sorga' => 'SORGA',
-    'infaq' => 'INFAQ', 'pomg' => 'POMG', 'daftar_ulang' => 'DAFTAR_ULANG',
-    'potong_pangkal' => 'potong_pangkal', 'potong_du' => 'potong_du',
-    'pangkal_bayar' => 'PANGKAL_BAYAR', 'bangunan_bayar' => 'BANGUNAN_BAYAR',
-    'seragam_bayar' => 'SERAGAM_BAYAR', 'kegiatan_bayar' => 'KEGIATAN_BAYAR'
+    'potongan_spp_persen' => 'potongan_spp_persen',
+    'pangkal' => 'PANGKAL', 'psb' => 'PSB', 'pomg' => 'POMG',
+    'daftar_ulang' => 'DAFTAR_ULANG', 'potong_pangkal' => 'potong_pangkal',
+    'potong_du' => 'potong_du'
 ];
 function form_student_value(string $key, array $oldInput, array $student, array $fieldMap, $default = '') {
     if (array_key_exists($key, $oldInput)) return $oldInput[$key];
@@ -439,19 +521,21 @@ function rupiah_value($value): string {
     return number_format((float)$value, 0, ',', '.');
 }
 $advancedOpen = isset($oldInput['advanced_enabled']) && $oldInput['advanced_enabled'] === '1';
-$canEditOpening = !$editStudent || (int)($editStudent['history_count'] ?? 0) === 0;
+$previewLevel = (string)($formStudent['KELAS'] ?? '');
+$previewDiscount = (float)form_student_value('potongan_spp_persen', $oldInput, $formStudent, $fieldMap, 0);
+$sppRatePreview = spp_current_effective_rate($koneksi, $previewLevel, $previewDiscount, $editStudentYear);
 ?>
 <!DOCTYPE html>
-<html lang="id">
+<html lang="id" data-palette="<?= unit_palette_for_view(isset($reportUnitId) ? (int)$reportUnitId : null) ?>">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Data Siswa | SistemSPP</title>
-  <link rel="icon" type="image/png" href="../assets/img/favicon.png" />
+  <link rel="icon" type="image/png" href="../assets/img/favicon.png?v=2" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="../assets/css/style.css?v=7.4" />
-  <script>(function(){var t=localStorage.getItem('spp_theme')||'dark';document.documentElement.setAttribute('data-theme',t);})();</script>
+  <link rel="stylesheet" href="../assets/css/style.css?v=unitpalette4&amp;mtime=<?= filemtime(__DIR__ . '/../assets/css/style.css') ?>" />
+  <script>(function(){var t=localStorage.getItem('spp_theme')||'light';document.documentElement.setAttribute('data-theme',t);})();</script>
 </head>
 <body>
   <div class="bg-orbs"><div class="orb orb-1"></div><div class="orb orb-2"></div><div class="orb orb-3"></div></div>
@@ -470,7 +554,21 @@ $canEditOpening = !$editStudent || (int)($editStudent['history_count'] ?? 0) ===
       <div class="alert alert-<?= htmlspecialchars($flash['type']) ?>" id="flash-msg"><?= htmlspecialchars($flash['msg']) ?></div>
       <?php endif; ?>
 
-      <div class="main-card">
+      <section class="main-card master-modern-shell student-master-shell">
+        <div class="master-modern-hero">
+          <div>
+            <span class="recap-class-overline">Data Master</span>
+            <h1>Data Siswa</h1>
+            <p>Kelola identitas siswa, rombel, tarif aktif, dan status siswa.</p>
+          </div>
+          <div class="master-modern-stats">
+            <div><span>Hasil Filter</span><strong><?= number_format($totalStudents) ?></strong></div>
+            <div><span>Per Halaman</span><strong><?= number_format($perPage) ?></strong></div>
+          </div>
+        </div>
+      </section>
+
+      <div class="main-card master-modern-card master-modern-form">
         <div class="card-title-row">
           <div class="card-title"><?= $editStudent ? 'Edit Siswa' : 'Tambah Siswa Baru' ?></div>
           <?php if ($editStudent): ?><span class="master-status <?= $editStudent['is_active'] ? 'is-active' : 'is-inactive' ?>"><?= $editStudent['is_active'] ? 'Aktif' : 'Diarsipkan' ?></span><?php endif; ?>
@@ -483,7 +581,8 @@ $canEditOpening = !$editStudent || (int)($editStudent['history_count'] ?? 0) ===
             <div class="field-row">
               <label class="field-label" for="nis-baru">No. Induk</label>
               <input class="field-input" type="text" inputmode="numeric" maxlength="10" id="nis-baru" name="no_induk" required
-                value="<?= htmlspecialchars((string)form_student_value('no_induk', $oldInput, $formStudent, $fieldMap)) ?>" />
+                value="<?= htmlspecialchars((string)($editStudent['NO_INDUK'] ?? form_student_value('no_induk', $oldInput, $formStudent, $fieldMap))) ?>" <?= $editStudent ? 'readonly aria-readonly="true"' : '' ?> />
+              <?php if ($editStudent): ?><small class="payment-auto-note">Nomor induk menjadi penghubung riwayat dan tagihan siswa.</small><?php endif; ?>
             </div>
             <div class="field-row">
               <label class="field-label" for="nama-baru">Nama Lengkap</label>
@@ -492,18 +591,50 @@ $canEditOpening = !$editStudent || (int)($editStudent['history_count'] ?? 0) ===
             </div>
             <div class="field-row">
               <label class="field-label" for="kelas-baru">Kelas/Rombel</label>
-              <select class="field-input field-select" id="kelas-baru" name="master_kelas_id" required data-class-combobox data-placeholder="Ketik kelas/rombel...">
-                <option value="">-- Pilih Kelas/Rombel --</option>
-                <?php $selectedClassId = (int)form_student_value('master_kelas_id', $oldInput, $formStudent, $fieldMap, 0); foreach ($classOptions as $classOption): ?>
-                <option value="<?= (int)$classOption['id'] ?>" <?= $selectedClassId === (int)$classOption['id'] ? 'selected' : '' ?>><?= htmlspecialchars($classOption['label']) ?></option>
+              <?php
+                $selectedClassId = (int)form_student_value('master_kelas_id', $oldInput, $formStudent, $fieldMap, 0);
+                $selectedClassLabel = '';
+                foreach ($classOptions as $classOption) {
+                    if ($selectedClassId === (int)$classOption['id']) {
+                        $selectedClassLabel = (string)$classOption['label'];
+                        break;
+                    }
+                }
+              ?>
+              <input type="hidden" id="kelas-baru" name="master_kelas_id" value="<?= $selectedClassId > 0 ? $selectedClassId : '' ?>" />
+              <div class="class-picker" data-class-picker>
+                <button class="field-input class-picker-button" type="button" data-class-picker-button aria-haspopup="listbox" aria-expanded="false">
+                  <span data-class-picker-label><?= htmlspecialchars($selectedClassLabel !== '' ? $selectedClassLabel : '-- Pilih Kelas/Rombel --') ?></span>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                </button>
+                <div class="class-picker-panel" data-class-picker-panel hidden role="listbox">
+                  <?php foreach ($classOptions as $classOption): ?>
+                  <button type="button" class="class-picker-option <?= $selectedClassId === (int)$classOption['id'] ? 'is-selected' : '' ?>"
+                    data-class-picker-option
+                    data-value="<?= (int)$classOption['id'] ?>"
+                    data-label="<?= htmlspecialchars($classOption['label'], ENT_QUOTES, 'UTF-8') ?>"
+                    role="option"
+                    aria-selected="<?= $selectedClassId === (int)$classOption['id'] ? 'true' : 'false' ?>">
+                    <?= htmlspecialchars($classOption['label']) ?>
+                  </button>
+                  <?php endforeach; ?>
+                </div>
+              </div>
+              <small class="payment-auto-note">Kelola pilihan melalui menu Master Kelas.</small>
+            </div>
+            <div class="field-row">
+              <label class="field-label" for="student-komite-start">Mulai Tagihan Komite</label>
+              <select class="field-input field-select" id="student-komite-start" name="komite_mulai_bulan" required>
+                <?php foreach (spp_academic_periods(du_current_academic_year()) as $period): ?>
+                <option value="<?= htmlspecialchars($period['bulan']) ?>" <?= $komiteStartMonth===$period['bulan']?'selected':'' ?>><?= htmlspecialchars(spp_month_label($period['bulan'])) ?></option>
                 <?php endforeach; ?>
               </select>
-              <small class="payment-auto-note">Kelola pilihan melalui menu Master Kelas.</small>
+              <small class="payment-auto-note">Siswa pindahan: pilih bulan mulai masuk.</small>
             </div>
           </div>
 
           <label class="advanced-switch" for="advanced-enabled">
-            <span><strong>Advance</strong><small>Data tarif dan saldo awal siswa</small></span>
+            <span><strong>Advance</strong><small>Tarif tambahan dan potongan SPP; tagihan yang pernah dibayar tetap terkunci</small></span>
             <input type="checkbox" id="advanced-enabled" name="advanced_enabled" value="1" <?= $advancedOpen ? 'checked' : '' ?> />
             <span class="advanced-switch-track"><span></span></span>
           </label>
@@ -519,13 +650,15 @@ $canEditOpening = !$editStudent || (int)($editStudent['history_count'] ?? 0) ===
             </div>
 
             <div class="section-divider"><span>Tarif Siswa</span></div>
+            <div class="spp-student-rate-summary">
+              <div><span>Tarif dasar SPP</span><strong id="student-spp-base">Rp <?= number_format((float)$sppRatePreview['base'],0,',','.') ?></strong></div>
+              <div><span>Tarif efektif</span><strong id="student-spp-effective">Rp <?= number_format((float)$sppRatePreview['net'],0,',','.') ?></strong></div>
+              <small>TA <?= htmlspecialchars((string)$sppRatePreview['year']) ?> · tarif dasar dikelola melalui Master Penerbitan SPP.</small>
+            </div>
             <div class="fields-grid student-money-grid">
               <?php
               $feeFields = [
-                'spp_perbulan' => 'SPP per Bulan', 'pangkal' => 'Uang Pangkal',
-                'bangunan' => 'Uang Bangunan', 'seragam' => 'Uang Seragam',
-                'kegiatan' => 'Uang Kegiatan', 'makan' => 'Uang Makan',
-                'sorga' => 'Uang Sorga', 'infaq' => 'Uang Infaq', 'pomg' => 'Uang Komite',
+                'pangkal' => 'Uang Pangkal', 'psb' => 'Uang PSB', 'pomg' => 'Uang Komite / Bulan',
                 'daftar_ulang' => 'Uang Daftar Ulang'
               ];
               foreach ($feeFields as $key => $label):
@@ -540,6 +673,12 @@ $canEditOpening = !$editStudent || (int)($editStudent['history_count'] ?? 0) ===
 
             <div class="section-divider"><span>Potongan</span></div>
             <div class="fields-grid student-money-grid">
+              <div class="field-row">
+                <label class="field-label" for="student-potongan-spp">Potongan SPP (%)</label>
+                <input class="field-input advanced-field" type="number" min="0" max="100" step="0.01" id="student-potongan-spp" name="potongan_spp_persen"
+                  value="<?= htmlspecialchars(number_format($previewDiscount, 2, '.', '')) ?>" />
+                <small class="payment-auto-note">Berlaku pada tagihan yang belum pernah menerima pembayaran.</small>
+              </div>
               <div class="field-row">
                 <label class="field-label" for="student-potong-pangkal">Potongan Pangkal</label>
                 <input class="field-input rupiah-input advanced-field derived-source" type="text" inputmode="numeric" id="student-potong-pangkal" name="potong_pangkal"
@@ -560,22 +699,6 @@ $canEditOpening = !$editStudent || (int)($editStudent['history_count'] ?? 0) ===
               </div>
             </div>
 
-            <div class="section-divider"><span>Migrasi Saldo Awal</span></div>
-            <div class="fields-grid student-money-grid">
-              <?php
-              $openingFields = [
-                'pangkal_bayar' => 'Pangkal Sudah Dibayar', 'bangunan_bayar' => 'Bangunan Sudah Dibayar',
-                'seragam_bayar' => 'Seragam Sudah Dibayar', 'kegiatan_bayar' => 'Kegiatan Sudah Dibayar'
-              ];
-              foreach ($openingFields as $key => $label):
-              ?>
-              <div class="field-row">
-                <label class="field-label" for="student-<?= $key ?>"><?= $label ?></label>
-                <input class="field-input rupiah-input advanced-field opening-balance" type="text" inputmode="numeric" id="student-<?= $key ?>" name="<?= $key ?>"
-                  value="<?= rupiah_value(form_student_value($key, $oldInput, $formStudent, $fieldMap, 0)) ?>" <?= $canEditOpening ? '' : 'disabled' ?> />
-              </div>
-              <?php endforeach; ?>
-            </div>
           </div>
 
           <div class="action-bar" style="margin-top:18px">
@@ -585,21 +708,21 @@ $canEditOpening = !$editStudent || (int)($editStudent['history_count'] ?? 0) ===
         </form>
       </div>
 
-      <div class="main-card" style="margin-top:0">
+      <div class="main-card master-modern-card master-modern-list" style="margin-top:0">
         <div class="card-title-row"><div class="card-title">Daftar Siswa (<?= number_format($totalStudents) ?>)</div></div>
         <form method="GET" action="daftar.php" class="filter-bar student-filter-bar">
           <div class="search-box">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
             <input type="search" name="q" value="<?= htmlspecialchars($query) ?>" placeholder="Cari nama, NIS, atau NIS Diknas..." />
           </div>
-          <select class="field-input field-select filter-sel" name="kelas" data-class-combobox data-placeholder="Semua kelas atau ketik rombel...">
+          <select class="field-input field-select filter-sel" name="kelas">
             <option value="">Semua Kelas</option>
             <?php foreach ($classOptions as $classOption): ?><option value="<?= (int)$classOption['id'] ?>" <?= $filterClass === (int)$classOption['id'] ? 'selected' : '' ?>><?= htmlspecialchars($classOption['label']) ?></option><?php endforeach; ?>
           </select>
           <select class="field-input field-select filter-sel" name="status">
             <option value="active" <?= $filterStatus === 'active' ? 'selected' : '' ?>>Aktif</option>
             <option value="archived" <?= $filterStatus === 'archived' ? 'selected' : '' ?>>Diarsipkan</option>
-            <option value="all" <?= $filterStatus === 'all' ? 'selected' : '' ?>>Semua Status</option>
+            <option value="legacy" <?= $filterStatus === 'legacy' ? 'selected' : '' ?>>Legacy</option><option value="all" <?= $filterStatus === 'all' ? 'selected' : '' ?>>Semua Status</option>
           </select>
           <select class="field-input field-select filter-sel" name="per_page" aria-label="Jumlah siswa per halaman">
             <?php foreach ($allowedPageSizes as $pageSize): ?>
@@ -607,6 +730,7 @@ $canEditOpening = !$editStudent || (int)($editStudent['history_count'] ?? 0) ===
             <?php endforeach; ?>
           </select>
           <button class="btn btn-primary" type="submit">Filter</button>
+          <a class="btn btn-ghost" target="_blank" rel="noopener" href="export_excel.php?<?= htmlspecialchars(http_build_query($_GET), ENT_QUOTES, 'UTF-8') ?>">Export Excel</a>
         </form>
         <div class="table-container">
           <table class="payment-table responsive-table">
@@ -615,29 +739,58 @@ $canEditOpening = !$editStudent || (int)($editStudent['history_count'] ?? 0) ===
               <?php if (!$studentRows): ?>
               <tr><td colspan="8"><div class="empty-state"><p>Data siswa tidak ditemukan</p></div></td></tr>
               <?php else: foreach ($studentRows as $index => $student):
-                $editUrl = 'daftar.php?edit=' . (int)$student['id'];
+                $editUrl = !empty($student['legacy_pending']) ? 'aktivasi_legacy.php?id='.(int)$student['id'] : 'daftar.php?edit=' . (int)$student['id'];
+                $historyRows = $classHistories[unit_student_key($student)] ?? [];
+                $graduateYear = $graduationYears[unit_student_key($student)] ?? '';
+                $isGraduate = $graduateYear !== '';
+                $historyId = 'class-history-' . (int)$student['id'];
               ?>
               <tr class="clickable-payment-row" data-edit-url="<?= htmlspecialchars($editUrl, ENT_QUOTES, 'UTF-8') ?>" tabindex="0" role="link" aria-label="Edit siswa <?= htmlspecialchars($student['NAMA'], ENT_QUOTES, 'UTF-8') ?>">
                 <td data-label="No"><?= $offset + $index + 1 ?></td>
                 <td data-label="No. Induk"><span class="badge-nis"><?= htmlspecialchars($student['NO_INDUK']) ?></span><?php if (!empty($student['NO_induk_diknas'])): ?><small class="du-history-nis">Diknas <?= htmlspecialchars($student['NO_induk_diknas']) ?></small><?php endif; ?></td>
-                <td data-label="Nama Siswa"><?= htmlspecialchars($student['NAMA']) ?></td>
-                <td data-label="Kelas"><?= htmlspecialchars(class_label([
+                <td data-label="Nama Siswa"><?= unit_record_badge($student) ?><?= htmlspecialchars($student['NAMA']) ?></td>
+                <td data-label="Kelas" class="student-class-col"><div class="student-class-cell"><span class="kelas-badge"><?= $isGraduate ? 'LULUS' : htmlspecialchars(class_label([
                   'tingkat' => $student['master_tingkat'] ?: $student['KELAS'],
                   'kode_rombel' => $student['kode_rombel'] ?? 'BELUM',
                   'is_placeholder' => $student['is_placeholder'] ?? 1,
-                ])) ?></td>
+                ])) ?></span><?php if($historyRows): ?><button type="button" class="student-class-history-toggle" aria-expanded="false" aria-controls="<?= $historyId ?>" aria-label="Buka Riwayat Kelas <?= htmlspecialchars($student['NAMA'], ENT_QUOTES, 'UTF-8') ?>" data-student-name="<?= htmlspecialchars($student['NAMA'], ENT_QUOTES, 'UTF-8') ?>"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 7v5l3 2"/></svg><span>Riwayat</span><span class="student-class-history-chevron" aria-hidden="true">⌄</span></button><?php endif; ?></div></td>
                 <td data-label="SPP/Bulan" class="nominal">Rp <?= number_format((float)$student['SPP_PERBULAN'], 0, ',', '.') ?></td>
-                <td data-label="Status"><span class="master-status <?= $student['is_active'] ? 'is-active' : 'is-inactive' ?>"><?= $student['is_active'] ? 'Aktif' : 'Diarsipkan' ?></span></td>
+                <td data-label="Status"><span class="master-status <?= $student['is_active'] ? 'is-active' : 'is-inactive' ?>"><?= !empty($student['legacy_pending']) ? 'Legacy — belum aktif' : ($isGraduate ? 'Lulus · TA ' . htmlspecialchars($graduateYear) : ($student['is_active'] ? 'Aktif' : 'Diarsipkan')) ?></span></td>
                 <td data-label="Riwayat Transaksi" class="student-history-col"><span class="badge-count"><?= (int)$student['history_count'] ?>x</span></td>
                 <td data-label="Aksi" class="aksi-col">
-                  <a class="btn-tbl btn-tbl-edit" href="<?= htmlspecialchars($editUrl) ?>">Edit</a>
-                  <form method="POST" action="daftar.php" style="display:inline" onsubmit="return confirm('<?= $student['is_active'] ? 'Arsipkan' : 'Pulihkan' ?> siswa <?= htmlspecialchars(addslashes($student['NAMA'])) ?>?')">
+                  <a class="btn-tbl btn-tbl-edit" href="<?= htmlspecialchars($editUrl) ?>"><?= !empty($student['legacy_pending']) ? 'Aktifkan & Tempatkan' : 'Edit' ?></a>
+                  <?php if(!$isGraduate && empty($student['legacy_pending'])): ?><form method="POST" action="daftar.php" style="display:inline" onsubmit="return confirm('<?= $student['is_active'] ? 'Arsipkan' : 'Pulihkan' ?> siswa <?= htmlspecialchars(addslashes($student['NAMA'])) ?>?')">
                     <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_student']) ?>" />
-                    <input type="hidden" name="aksi" value="toggle_status" /><input type="hidden" name="id" value="<?= (int)$student['id'] ?>" />
+                    <input type="hidden" name="aksi" value="toggle_status" /><input type="hidden" name="id" value="<?= (int)$student['id'] ?>" /><input type="hidden" name="target_active" value="<?= $student['is_active'] ? '0' : '1' ?>" />
                     <button type="submit" class="btn-tbl btn-tbl-toggle"><?= $student['is_active'] ? 'Arsipkan' : 'Pulihkan' ?></button>
-                  </form>
+                  </form><?php endif; ?>
                 </td>
               </tr>
+              <?php if($historyRows): ?>
+              <tr class="student-class-history-row" id="<?= $historyId ?>" hidden>
+                <td colspan="8">
+                  <section class="student-class-history-panel" aria-label="Riwayat kelas <?= unit_record_badge($student) ?><?= htmlspecialchars($student['NAMA']) ?>">
+                    <header class="student-class-history-head">
+                      <div class="student-class-history-head-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 7v5l3 2"/></svg></div>
+                      <div class="student-class-history-copy"><h4>Riwayat Kelas</h4><p><?= unit_record_badge($student) ?><?= htmlspecialchars($student['NAMA']) ?> · terbaru ke terlama</p></div>
+                      <span class="student-class-history-count"><?= count($historyRows) ?> catatan</span>
+                    </header>
+                    <ol class="student-class-timeline">
+                    <?php $currentShown=false; foreach($historyRows as $history):
+                      if($history['status']==='lulus') { $historyStatus='Lulus'; $historyTone='graduate'; }
+                      elseif(!$currentShown && $history['status']!=='pindah' && (int)$student['is_active']===1) { $historyStatus='Saat Ini'; $historyTone='current'; $currentShown=true; }
+                      else { $historyStatus='Pindah'; $historyTone='past'; }
+                    ?>
+                    <li class="student-class-timeline-item is-<?= $historyTone ?>">
+                      <span class="student-class-timeline-dot" aria-hidden="true"></span>
+                      <article><span class="student-class-year">TA <?= htmlspecialchars($history['tahun_ajaran']) ?></span><strong><?= htmlspecialchars($history['kelas_rombel_snapshot'] ?: ('Kelas '.$history['kelas'])) ?></strong><em><?= $historyStatus ?></em></article>
+                    </li>
+                    <?php endforeach; ?>
+                    </ol>
+                  </section>
+                </td>
+              </tr>
+              <?php endif; ?>
               <?php endforeach; endif; ?>
             </tbody>
           </table>
@@ -647,11 +800,13 @@ $canEditOpening = !$editStudent || (int)($editStudent['history_count'] ?? 0) ===
     </main>
   </div>
 
-  <script src="../assets/js/app.js?v=7.4"></script>
+  <script src="../assets/js/app.js?v=<?= filemtime(__DIR__ . '/../assets/js/app.js') ?>"></script>
   <script>
     document.addEventListener('DOMContentLoaded', function () {
       const toggle = document.getElementById('advanced-enabled');
       const panel = document.getElementById('student-advanced-panel');
+      const advancedFields = Array.from(document.querySelectorAll('.advanced-field'));
+      const initialAdvancedValues = new Map(advancedFields.map(input => [input, input.value]));
       const moneyInputs = Array.from(document.querySelectorAll('.rupiah-input:not(:disabled)'));
       const format = value => {
         const clean = String(value || '').replace(/\D/g, '');
@@ -662,10 +817,66 @@ $canEditOpening = !$editStudent || (int)($editStudent['history_count'] ?? 0) ===
         document.getElementById('student-total-pangkal').value = format(Math.max(0, number('student-pangkal') - number('student-potong-pangkal')));
         document.getElementById('student-total-du').value = format(Math.max(0, number('student-daftar_ulang') - number('student-potong-du')));
       };
+      const classPicker = document.querySelector('[data-class-picker]');
+      const classInput = document.getElementById('kelas-baru');
+      const classButton = classPicker?.querySelector('[data-class-picker-button]');
+      const classPanel = classPicker?.querySelector('[data-class-picker-panel]');
+      const classLabel = classPicker?.querySelector('[data-class-picker-label]');
+      const closeClassPicker = () => {
+        if (!classPicker || !classPanel || !classButton) return;
+        classPicker.classList.remove('is-open');
+        classPanel.hidden = true;
+        classButton.setAttribute('aria-expanded', 'false');
+      };
+      classButton?.addEventListener('click', function () {
+        const open = !classPicker.classList.contains('is-open');
+        classPicker.classList.toggle('is-open', open);
+        classPanel.hidden = !open;
+        classButton.setAttribute('aria-expanded', open ? 'true' : 'false');
+      });
+      classPicker?.querySelectorAll('[data-class-picker-option]').forEach(option => {
+        option.addEventListener('click', function () {
+          classInput.value = this.dataset.value || '';
+          classLabel.textContent = this.dataset.label || '-- Pilih Kelas/Rombel --';
+          classPicker.querySelectorAll('[data-class-picker-option]').forEach(item => {
+            const selected = item === this;
+            item.classList.toggle('is-selected', selected);
+            item.setAttribute('aria-selected', selected ? 'true' : 'false');
+          });
+          closeClassPicker();
+        });
+      });
+      document.addEventListener('click', function (event) {
+        if (classPicker && !classPicker.contains(event.target)) closeClassPicker();
+      });
+      document.addEventListener('keydown', function (event) {
+        if (event.key === 'Escape') closeClassPicker();
+      });
       const syncPanel = () => panel.classList.toggle('is-open', toggle.checked);
-      toggle.addEventListener('change', syncPanel);
+      toggle.addEventListener('change', function () {
+        if (!toggle.checked) {
+          const dirty = advancedFields.some(input => input.value !== initialAdvancedValues.get(input));
+          if (dirty && !window.confirm('Perubahan pada data Advance belum disimpan. Batalkan perubahan tersebut?')) {
+            toggle.checked = true;
+            syncPanel();
+            return;
+          }
+          if (dirty) {
+            advancedFields.forEach(input => { input.value = initialAdvancedValues.get(input); });
+            updateDerived();
+          }
+        }
+        syncPanel();
+      });
       moneyInputs.forEach(input => input.addEventListener('input', function () { this.value = format(this.value); updateDerived(); }));
-      document.getElementById('form-master-siswa').addEventListener('submit', function () {
+      document.getElementById('form-master-siswa').addEventListener('submit', function (event) {
+        if (!classInput.value) {
+          event.preventDefault();
+          classButton?.focus();
+          classPicker?.classList.add('has-error');
+          return;
+        }
+        classPicker?.classList.remove('has-error');
         if (toggle.checked) moneyInputs.forEach(input => input.value = input.value.replace(/\./g, ''));
       });
       syncPanel();

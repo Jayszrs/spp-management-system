@@ -1,9 +1,8 @@
 -- =========================================================
 -- Verifikasi schema SistemSPP (read-only)
 -- Jalankan setelah schema baru atau seluruh migrasi upgrade.
+-- Pilih database target saat memanggil mysql; jangan alihkan ke database aktif.
 -- =========================================================
-
-USE `db_spp`;
 
 SELECT requirement,
        IF(is_present = 1, 'OK', 'MISSING') AS status
@@ -13,6 +12,19 @@ FROM (
            SELECT 1 FROM information_schema.TABLES
            WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'bayar'
          ) AS is_present
+  UNION ALL
+  SELECT 'table.transaksi_otorisasi',
+         EXISTS(
+           SELECT 1 FROM information_schema.TABLES
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'transaksi_otorisasi'
+         )
+  UNION ALL
+  SELECT 'transaksi_otorisasi.snapshot_hash',
+         EXISTS(
+           SELECT 1 FROM information_schema.COLUMNS
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'transaksi_otorisasi'
+             AND COLUMN_NAME = 'snapshot_hash'
+         )
   UNION ALL
   SELECT 'table.bayar_du',
          EXISTS(
@@ -64,25 +76,48 @@ FROM (
              AND COLUMN_NAME = 'is_active'
          )
   UNION ALL
-  SELECT 'siswa.MAKAN',
+  SELECT 'siswa.PSB',
          EXISTS(
            SELECT 1 FROM information_schema.COLUMNS
            WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'siswa'
-             AND COLUMN_NAME = 'MAKAN'
+             AND COLUMN_NAME = 'PSB'
          )
   UNION ALL
-  SELECT 'siswa.SORGA',
+  SELECT 'siswa.asal_psb',
          EXISTS(
            SELECT 1 FROM information_schema.COLUMNS
            WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'siswa'
-             AND COLUMN_NAME = 'SORGA'
+             AND COLUMN_NAME = 'asal_psb'
          )
   UNION ALL
-  SELECT 'siswa.INFAQ',
+  SELECT 'bayar.U_PSB',
          EXISTS(
            SELECT 1 FROM information_schema.COLUMNS
-           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'siswa'
-             AND COLUMN_NAME = 'INFAQ'
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'bayar'
+             AND COLUMN_NAME = 'U_PSB'
+         )
+  UNION ALL
+  SELECT 'siswa_tahun_ajaran.spp_covered_by_psb',
+         EXISTS(
+           SELECT 1 FROM information_schema.COLUMNS
+           WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'siswa_tahun_ajaran'
+             AND COLUMN_NAME = 'spp_covered_by_psb'
+         )
+  UNION ALL
+  SELECT 'legacy_payment_columns.removed',
+         NOT EXISTS(
+           SELECT 1 FROM information_schema.COLUMNS
+           WHERE TABLE_SCHEMA = DATABASE()
+             AND (
+               (TABLE_NAME = 'siswa' AND COLUMN_NAME IN (
+                 'BANGUNAN','SERAGAM','KEGIATAN','MAKAN','SORGA','INFAQ',
+                 'PANGKAL_BAYAR','BANGUNAN_BAYAR','SERAGAM_BAYAR','KEGIATAN_BAYAR'
+               ))
+               OR
+               (TABLE_NAME = 'bayar' AND COLUMN_NAME IN (
+                 'U_BANGUNAN','U_SERAGAM','U_KEGIATAN','U_MAKAN','U_SORGA','U_INFAQ'
+               ))
+             )
          )
   UNION ALL
   SELECT 'bayar.U_KOMITE',
@@ -117,7 +152,21 @@ FROM (
   UNION ALL
   SELECT 'table.siswa_tahun_ajaran', EXISTS(SELECT 1 FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='siswa_tahun_ajaran')
   UNION ALL
+  SELECT 'siswa_tahun_ajaran.komite_mulai_bulan', EXISTS(SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='siswa_tahun_ajaran' AND COLUMN_NAME='komite_mulai_bulan')
+  UNION ALL
+  SELECT 'table.tagihan_komite', EXISTS(SELECT 1 FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='tagihan_komite')
+  UNION ALL
+  SELECT 'table.bayar_komite', EXISTS(SELECT 1 FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='bayar_komite')
+  UNION ALL
+  SELECT 'uk_tagihan_komite_periode', EXISTS(SELECT 1 FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='tagihan_komite' AND INDEX_NAME='uk_tagihan_komite_periode' AND NON_UNIQUE=0)
+  UNION ALL
+  SELECT 'spp_alokasi_batch.komite_required', EXISTS(SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='spp_alokasi_batch' AND COLUMN_NAME='komite_required')
+  UNION ALL
   SELECT 'table.tagihan_daftar_ulang', EXISTS(SELECT 1 FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='tagihan_daftar_ulang')
+  UNION ALL
+  SELECT 'table.tagihan_tahunan_siswa', EXISTS(SELECT 1 FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='tagihan_tahunan_siswa')
+  UNION ALL
+  SELECT 'table.bayar_tahunan_siswa', EXISTS(SELECT 1 FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='bayar_tahunan_siswa')
   UNION ALL
   SELECT 'table.daftar_ulang_audit_log', EXISTS(SELECT 1 FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='daftar_ulang_audit_log')
   UNION ALL
@@ -129,11 +178,11 @@ FROM (
            WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'bayar_spp_periode'
          )
   UNION ALL
-  SELECT 'idx_bayar_spp_siswa_periode',
+  SELECT 'uk_bayar_spp_siswa_periode',
          EXISTS(
            SELECT 1 FROM information_schema.STATISTICS
            WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'bayar_spp_periode'
-             AND INDEX_NAME = 'idx_bayar_spp_siswa_periode' AND NON_UNIQUE = 1
+             AND INDEX_NAME = 'uk_bayar_spp_siswa_periode' AND NON_UNIQUE = 0
          )
   UNION ALL
   SELECT 'uk_siswa_no_induk_diknas', EXISTS(
@@ -265,6 +314,16 @@ FROM (
       AND TABLE_NAME='tagihan_daftar_ulang' AND INDEX_NAME='uk_tagihan_du_siswa_tahun' AND NON_UNIQUE=0
   )
   UNION ALL
+  SELECT 'uk_tagihan_tahunan_siswa', EXISTS(
+    SELECT 1 FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=DATABASE()
+      AND TABLE_NAME='tagihan_tahunan_siswa' AND INDEX_NAME='uk_tagihan_tahunan_siswa' AND NON_UNIQUE=0
+  )
+  UNION ALL
+  SELECT 'uk_bayar_tahunan_bayar_component', EXISTS(
+    SELECT 1 FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=DATABASE()
+      AND TABLE_NAME='bayar_tahunan_siswa' AND INDEX_NAME='uk_bayar_tahunan_bayar_component' AND NON_UNIQUE=0
+  )
+  UNION ALL
   SELECT 'chk_tahun_ajaran_dates', EXISTS(
     SELECT 1 FROM information_schema.CHECK_CONSTRAINTS WHERE CONSTRAINT_SCHEMA=DATABASE()
       AND CONSTRAINT_NAME='chk_tahun_ajaran_dates'
@@ -273,6 +332,21 @@ FROM (
   SELECT 'chk_penempatan_kelas_sd', EXISTS(
     SELECT 1 FROM information_schema.CHECK_CONSTRAINTS WHERE CONSTRAINT_SCHEMA=DATABASE()
       AND CONSTRAINT_NAME='chk_penempatan_kelas_sd'
+  )
+  UNION ALL
+  SELECT 'chk_siswa_psb', EXISTS(
+    SELECT 1 FROM information_schema.CHECK_CONSTRAINTS WHERE CONSTRAINT_SCHEMA=DATABASE()
+      AND CONSTRAINT_NAME='chk_siswa_psb'
+  )
+  UNION ALL
+  SELECT 'chk_bayar_psb', EXISTS(
+    SELECT 1 FROM information_schema.CHECK_CONSTRAINTS WHERE CONSTRAINT_SCHEMA=DATABASE()
+      AND CONSTRAINT_NAME='chk_bayar_psb'
+  )
+  UNION ALL
+  SELECT 'chk_penempatan_psb_spp', EXISTS(
+    SELECT 1 FROM information_schema.CHECK_CONSTRAINTS WHERE CONSTRAINT_SCHEMA=DATABASE()
+      AND CONSTRAINT_NAME='chk_penempatan_psb_spp'
   )
   UNION ALL
   SELECT 'chk_tagihan_du_nominal', EXISTS(
@@ -285,12 +359,39 @@ FROM (
       AND CONSTRAINT_NAME='chk_tagihan_du_kelas'
   )
   UNION ALL
+  SELECT 'chk_tagihan_tahunan_nominal', EXISTS(
+    SELECT 1 FROM information_schema.CHECK_CONSTRAINTS WHERE CONSTRAINT_SCHEMA=DATABASE()
+      AND CONSTRAINT_NAME='chk_tagihan_tahunan_nominal'
+  )
+  UNION ALL
+  SELECT 'chk_bayar_tahunan_jumlah', EXISTS(
+    SELECT 1 FROM information_schema.CHECK_CONSTRAINTS WHERE CONSTRAINT_SCHEMA=DATABASE()
+      AND CONSTRAINT_NAME='chk_bayar_tahunan_jumlah'
+  )
+  UNION ALL
+  SELECT 'chk_tabungan_saldo_nonnegative', EXISTS(
+    SELECT 1 FROM information_schema.CHECK_CONSTRAINTS WHERE CONSTRAINT_SCHEMA=DATABASE()
+      AND CONSTRAINT_NAME='chk_tabungan_saldo_nonnegative'
+  )
+  UNION ALL
   SELECT 'fk_bayar_du_tagihan', EXISTS(
     SELECT 1 FROM information_schema.TABLE_CONSTRAINTS WHERE CONSTRAINT_SCHEMA=DATABASE()
       AND TABLE_NAME='bayar_du' AND CONSTRAINT_NAME='fk_bayar_du_tagihan' AND CONSTRAINT_TYPE='FOREIGN KEY'
   )
   UNION ALL
+  SELECT 'fk_bayar_tahunan_bayar', EXISTS(
+    SELECT 1 FROM information_schema.TABLE_CONSTRAINTS WHERE CONSTRAINT_SCHEMA=DATABASE()
+      AND TABLE_NAME='bayar_tahunan_siswa' AND CONSTRAINT_NAME='fk_bayar_tahunan_bayar' AND CONSTRAINT_TYPE='FOREIGN KEY'
+  )
+  UNION ALL
+  SELECT 'fk_bayar_tahunan_tagihan', EXISTS(
+    SELECT 1 FROM information_schema.TABLE_CONSTRAINTS WHERE CONSTRAINT_SCHEMA=DATABASE()
+      AND TABLE_NAME='bayar_tahunan_siswa' AND CONSTRAINT_NAME='fk_bayar_tahunan_tagihan' AND CONSTRAINT_TYPE='FOREIGN KEY'
+  )
+  UNION ALL
   SELECT 'table.master_kelas', EXISTS(SELECT 1 FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='master_kelas')
+  UNION ALL
+  SELECT 'master_kelas.psb', EXISTS(SELECT 1 FROM master_kelas WHERE tingkat=0 AND kode_rombel='PSB' AND is_active=1)
   UNION ALL
   SELECT 'siswa.master_kelas_id', EXISTS(SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='siswa' AND COLUMN_NAME='master_kelas_id')
   UNION ALL
@@ -344,6 +445,26 @@ FROM (
              AND TABLE_CONSTRAINTS.CONSTRAINT_TYPE = 'FOREIGN KEY'
              AND rc.DELETE_RULE = 'CASCADE' AND rc.UPDATE_RULE = 'CASCADE'
          )
+  UNION ALL
+  SELECT 'siswa.potongan_spp_persen', EXISTS(SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='siswa' AND COLUMN_NAME='potongan_spp_persen')
+  UNION ALL
+  SELECT 'retired_spp_deposit_absent', NOT EXISTS(SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND COLUMN_NAME IN ('U_TITIPAN_SPP','gunakan_titipan','titipan_digunakan','titipan_baru','nominal_dari_titipan')) AND NOT EXISTS(SELECT 1 FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME LIKE 'titipan_spp_mutasi%')
+  UNION ALL
+  SELECT 'table.master_spp_tahun', EXISTS(SELECT 1 FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='master_spp_tahun')
+  UNION ALL
+  SELECT 'table.master_spp_tarif', EXISTS(SELECT 1 FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='master_spp_tarif')
+  UNION ALL
+  SELECT 'table.tagihan_spp', EXISTS(SELECT 1 FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='tagihan_spp')
+  UNION ALL
+  SELECT 'table.spp_alokasi_batch', EXISTS(SELECT 1 FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='spp_alokasi_batch')
+  UNION ALL
+  SELECT 'table.spp_alokasi', EXISTS(SELECT 1 FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='spp_alokasi')
+  UNION ALL
+  SELECT 'table.spp_audit_log', EXISTS(SELECT 1 FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='spp_audit_log')
+  UNION ALL
+  SELECT 'uk_tagihan_spp_siswa_periode', EXISTS(SELECT 1 FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='tagihan_spp' AND INDEX_NAME='uk_tagihan_spp_siswa_periode' AND NON_UNIQUE=0)
+  UNION ALL
+  SELECT 'idx_spp_alokasi_batch_bayar_status', EXISTS(SELECT 1 FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='spp_alokasi_batch' AND INDEX_NAME='idx_spp_alokasi_batch_bayar_status')
 ) AS requirements
 ORDER BY requirement;
 

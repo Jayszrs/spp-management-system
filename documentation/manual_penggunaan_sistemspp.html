@@ -1,0 +1,555 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <title>Manual Penggunaan SistemSPP</title>
+  <style>
+    @page { size: A4 portrait; margin: 17mm 17mm 16mm; }
+    * { box-sizing: border-box; }
+    body { margin: 0; color: #173126; font: 12px/1.55 DejaVu Sans, Arial, sans-serif; }
+    .page { page-break-after: always; }
+    .page:last-child { page-break-after: auto; }
+    .topline { border-bottom: 2px solid #148552; padding-bottom: 9px; margin-bottom: 23px; color: #416454; font-size: 9px; }
+    .topline strong { color: #116742; font-size: 13px; }
+    .topline span { float: right; padding-top: 4px; }
+    .eyebrow { color: #168251; font-size: 9px; font-weight: bold; letter-spacing: 1.2px; text-transform: uppercase; }
+    h1 { margin: 7px 0 11px; font-size: 23px; line-height: 1.24; color: #102b1d; }
+    h2 { margin: 20px 0 8px; font-size: 14px; color: #116742; }
+    h3 { margin: 0 0 6px; font-size: 11px; color: #173126; }
+    p { margin: 0 0 10px; }
+    ol, ul { margin: 7px 0 13px; padding-left: 19px; }
+    li { margin-bottom: 5px; }
+    table { width: 100%; border-collapse: collapse; margin: 12px 0 15px; }
+    th, td { border: 1px solid #c7ddd0; padding: 7px 8px; vertical-align: top; }
+    th { background: #e7f3eb; color: #184a32; text-align: left; }
+    .lead { font-size: 12px; color: #425f4e; line-height: 1.7; }
+    .card { border: 1px solid #cce0d3; background: #f4faf6; padding: 13px 15px; margin: 12px 0; page-break-inside: avoid; }
+    .warning { border-left: 3px solid #d79029; background: #fff7e9; padding: 10px 13px; margin: 12px 0; page-break-inside: avoid; }
+    .steps { border-left: 3px solid #168251; padding: 1px 0 1px 14px; margin: 12px 0; }
+    .steps ol { margin-bottom: 0; }
+    .muted { color: #617b69; }
+    .small { font-size: 9px; }
+    .tag { display: inline-block; border: 1px solid #b9dbc6; border-radius: 8px; padding: 3px 7px; margin: 0 4px 5px 0; background: #eaf6ee; color: #176841; font-size: 8px; }
+    .flow { width: 100%; border-collapse: separate; border-spacing: 5px; margin: 12px 0 17px; }
+    .flow td { border: 1px solid #bddac7; background: #edf7f0; border-radius: 7px; padding: 10px 6px; text-align: center; font-weight: bold; }
+    .flow .arrow { width: 18px; border: 0; background: none; color: #168251; font-size: 14px; padding: 0; }
+    .footer { border-top: 1px solid #d3e3d8; padding-top: 7px; margin-top: 24px; color: #6a8172; font-size: 8px; }
+    .cover { min-height: 235mm; position: relative; }
+    .cover-band { background: #e8f5ed; border-left: 5px solid #148552; padding: 24px 27px; margin: 27mm 0 25mm; }
+    .cover-band h1 { font-size: 30px; max-width: 125mm; margin: 10px 0 13px; }
+    .cover-band p { max-width: 128mm; font-size: 12px; line-height: 1.7; }
+    .contents td { border: 0; border-bottom: 1px solid #dce9df; padding: 7px 0; }
+    .contents td:last-child { text-align: right; color: #168251; font-weight: bold; }
+    .cover-bottom { margin-top: 28mm; border-top: 1px solid #c9ddcf; padding-top: 13px; color: #597466; }
+    .manual-index td { padding: 5px 7px; font-size: 10px; }
+    .manual-index th { padding: 6px 7px; }
+    .note-list li { margin-bottom: 7px; }
+    .report-key { background: #eaf6ee; border-left: 3px solid #148552; padding: 8px 11px; margin: 10px 0; }
+    .report-key p { margin-bottom: 0; }
+    .two-col { width: 100%; margin: 10px 0; }
+    .two-col td { width: 50%; }
+  </style>
+</head>
+<body>
+  <section class="page cover">
+    <div class="topline"><strong>SistemSPP</strong><span>Panduan operasional | SD / SMP / SMA</span></div>
+    <div class="cover-band">
+      <div class="eyebrow">MANUAL BOOK</div>
+      <h1>Manual Penggunaan SistemSPP</h1>
+      <p>Panduan langkah demi langkah untuk mengelola siswa, pembayaran, tabungan, laporan, dan akun sekolah.</p>
+      <div class="tag">Administrator</div><div class="tag">Kasir</div><div class="tag">Bendahara TU</div><div class="tag">Super Admin</div>
+    </div>
+    <h2>Isi panduan</h2>
+    <table class="contents">
+      <tr><td>1. Masuk, unit, dan hak akses</td><td>2</td></tr>
+      <tr><td>2. Data Siswa dan data master</td><td>3</td></tr>
+      <tr><td>3. Mencatat pembayaran</td><td>4</td></tr>
+      <tr><td>4. Titipan SPP dan otorisasi</td><td>5</td></tr>
+      <tr><td>5. Tabungan siswa</td><td>6</td></tr>
+      <tr><td>6. Laporan dan pratinjau ekspor</td><td>7</td></tr>
+      <tr><td>7. Surat laporan</td><td>8</td></tr>
+      <tr><td>8. Akun, keluar, dan solusi masalah umum</td><td>9</td></tr>
+      <tr><td>9. Panduan rinci setiap menu operasional</td><td>10-20</td></tr>
+      <tr><td>10. Laporan Global: panduan umum dan 11 jenis laporan</td><td>21-32</td></tr>
+      <tr><td>11. Surat, akun, contoh alur dan pemecahan masalah</td><td>33-35</td></tr>
+    </table>
+    <div class="cover-bottom">Edisi 30 September 2026 | Contoh dalam panduan memakai data demo. Kata sandi tidak dicantumkan di manual ini.</div>
+  </section>
+
+  <section class="page">
+    <div class="topline"><strong>SistemSPP</strong><span>01 / Akses aplikasi</span></div>
+    <div class="eyebrow">LANGKAH PERTAMA</div><h1>Masuk dan memilih unit</h1>
+    <p class="lead">Aplikasi lokal dibuka di <b>http://localhost/spp-management-system/</b> saat Laragon dan database sudah berjalan. Gunakan username dan kata sandi dari PDF kredensial terbaru yang diberikan pengelola.</p>
+    <div class="steps"><ol><li>Buka alamat aplikasi pada browser.</li><li>Isi <b>Username</b> dan <b>Password</b>, lalu pilih <b>Masuk</b>.</li><li>Periksa nama dan unit pada bagian atas. Pilih menu dari sidebar.</li><li>Setelah selesai, gunakan tombol <b>Logout</b> di bagian bawah sidebar.</li></ol></div>
+    <h2>Unit operasional dan cakupan laporan</h2>
+    <p>Admin, kasir, dan bendahara bekerja pada unit akunnya: SD, SMP, atau SMA. Super Admin memilih <b>Unit operasional</b> di sidebar sebelum mengubah data. Pada dashboard dan laporan, Super Admin juga dapat memilih <b>Semua Unit</b> sebagai cakupan rekap; pilihan itu tidak memindahkan unit operasional.</p>
+    <h2>Hak akses ringkas</h2>
+    <table><thead><tr><th>Peran</th><th>Pekerjaan utama</th></tr></thead><tbody>
+      <tr><td>Kasir</td><td>Input pembayaran, Data Siswa dan master terkait, tabungan, laporan global, serta mengajukan edit atau hapus transaksi.</td></tr>
+      <tr><td>Administrator</td><td>Pekerjaan kasir, edit atau hapus langsung, memutuskan pengajuan, dan melihat laporan umum.</td></tr>
+      <tr><td>Bendahara TU</td><td>Melihat laporan, riwayat otorisasi, Titipan SPP, dan riwayat atau cetak tabungan.</td></tr>
+      <tr><td>Super Admin</td><td>Akses administrator pada unit terpilih, laporan Semua Unit, serta <b>Role Management</b>.</td></tr>
+    </tbody></table>
+    <div class="warning">Jika menu tidak tampil, periksa peran akun dan unit yang sedang aktif. Jangan memakai akun petugas lain untuk melewati pembatasan akses.</div>
+    <div class="footer">Manual Penggunaan SistemSPP | 2</div>
+  </section>
+
+  <section class="page">
+    <div class="topline"><strong>SistemSPP</strong><span>02 / Data dasar</span></div>
+    <div class="eyebrow">SEBELUM TRANSAKSI</div><h1>Data Siswa dan data master</h1>
+    <p class="lead">Pastikan siswa, kelas, tahun ajaran, dan tarif sudah benar sebelum mencatat pembayaran. Pilihan unit menentukan siswa dan master yang terlihat.</p>
+    <h2>Menambah atau memeriksa siswa</h2>
+    <div class="steps"><ol><li>Buka <b>Data Siswa</b> dan cari nama atau NIS untuk memastikan siswa belum terdaftar.</li><li>Isi identitas dan Kelas/Rombel. Gunakan panel <b>Advance</b> bila perlu mengisi tarif tambahan atau potongan.</li><li>Periksa kembali unit, NIS, kelas, dan nominal sebelum menyimpan.</li><li>Jika status atau kelas berubah, tinjau riwayat penempatan tahun ajaran agar tagihan berikutnya sesuai.</li></ol></div>
+    <h2>Urutan menyiapkan master</h2>
+    <table class="flow"><tr><td>Kelas/Rombel</td><td class="arrow">&gt;</td><td>Master Penerbitan SPP</td><td class="arrow">&gt;</td><td>Biaya Lain / Daftar Ulang</td><td class="arrow">&gt;</td><td>Data Siswa</td></tr></table>
+    <table><thead><tr><th>Menu</th><th>Yang diperiksa</th></tr></thead><tbody>
+      <tr><td>Master Kelas/Rombel</td><td>Tingkat dan nama rombel pada unit yang benar.</td></tr>
+      <tr><td>Master Penerbitan SPP</td><td>Tahun ajaran, status penerbitan, dan tarif SPP yang akan membentuk tagihan bulanan.</td></tr>
+      <tr><td>Master Biaya Lain</td><td>Jenis biaya dan tagihan yang memang perlu diterbitkan.</td></tr>
+      <tr><td>Master Daftar Ulang</td><td>Tarif dan tahun ajaran untuk kewajiban tahunan.</td></tr>
+    </tbody></table>
+    <div class="card"><h3>Contoh</h3><p>Untuk <b>Siswa Demo SMP 001</b>, pilih unit SMP dan kelas 7A. Periksa tarif pada master sebelum menilai apakah tagihan siswa sudah sesuai. Nama dan angka demo hanya contoh, bukan tarif resmi.</p></div>
+    <div class="footer">Manual Penggunaan SistemSPP | 3</div>
+  </section>
+
+  <section class="page">
+    <div class="topline"><strong>SistemSPP</strong><span>03 / Pembayaran</span></div>
+    <div class="eyebrow">TRANSAKSI HARIAN</div><h1>Mencatat pembayaran</h1>
+    <p class="lead">Gunakan <b>Input Pembayaran</b> untuk uang yang diterima sekolah. Tanggal bayar menunjukkan hari penerimaan; periode tagihan dapat berbeda.</p>
+    <div class="steps"><ol><li>Buka <b>Input Pembayaran</b>, lalu cari siswa menggunakan nama, NIS, atau NIS Diknas.</li><li>Periksa kelas dan tagihan yang tampil. Pilih kategori, bulan atau tahun tagihan, metode bayar, tanggal, dan nominal sesuai bukti pembayaran.</li><li>Untuk SPP, periksa bulan tertua yang belum lunas. Komite pada bulan yang sama harus sudah lunas atau ikut dibayar.</li><li>Periksa ringkasan sebelum menyimpan. Setelah berhasil, buka <b>Riwayat Pembayaran</b> untuk melihat atau mencetak struk.</li></ol></div>
+    <h2>Kategori yang perlu diperhatikan</h2>
+    <table><thead><tr><th>Kategori</th><th>Petunjuk</th></tr></thead><tbody>
+      <tr><td>SPP dan Komite</td><td>Pilih periode tagihan yang benar; satu transaksi SPP melunasi satu bulan.</td></tr>
+      <tr><td>Daftar Ulang</td><td>Pilih tahun ajaran/tagihan yang masih memiliki sisa. Periksa <b>Riwayat Daftar Ulang</b> setelah menyimpan.</td></tr>
+      <tr><td>Uang Pangkal, PSB, Biaya Lain</td><td>Bandingkan nominal dibayar dengan sisa kewajiban yang ditampilkan.</td></tr>
+    </tbody></table>
+    <div class="warning">Jangan mengubah periode tagihan hanya supaya nominal dapat tersimpan. Jika pembayaran SPP belum cukup atau melebihi sisa satu bulan, gunakan alur <b>Catat Titipan SPP</b> yang tersedia.</div>
+    <div class="card"><h3>Setelah transaksi</h3><p>Gunakan <b>Riwayat Pembayaran</b> untuk mencari transaksi berdasarkan tanggal atau siswa, memeriksa detail, dan mencetak bukti. Jika ada kesalahan, ikuti alur koreksi sesuai peran pada halaman berikutnya.</p></div>
+    <div class="footer">Manual Penggunaan SistemSPP | 4</div>
+  </section>
+
+  <section class="page">
+    <div class="topline"><strong>SistemSPP</strong><span>04 / Koreksi dan titipan</span></div>
+    <div class="eyebrow">KONTROL TRANSAKSI</div><h1>Titipan SPP dan otorisasi</h1>
+    <h2>Mencatat dan memakai Titipan SPP</h2>
+    <p>Titipan dipakai ketika nominal SPP belum dapat dialokasikan ke satu bulan tagihan atau terdapat kelebihan. Buka <b>Titipan SPP</b> untuk melihat penerimaan, penggunaan, pengembalian, dan saldo berjalan.</p>
+    <div class="steps"><ol><li>Pilih siswa dan periksa tunggakan serta saldo titipan yang sudah ada.</li><li>Catat penerimaan titipan hanya untuk uang baru yang benar-benar diterima.</li><li>Saat menggunakan titipan untuk SPP, konfirmasi periode dan jumlahnya; penggunaan ini tidak menambah penerimaan kas baru.</li><li>Periksa mutasi dan saldo akhir pada riwayat titipan.</li></ol></div>
+    <h2>Mengoreksi transaksi</h2>
+    <table><thead><tr><th>Peran</th><th>Alur</th></tr></thead><tbody>
+      <tr><td>Kasir</td><td>Dari riwayat, ajukan edit atau hapus. Pantau statusnya pada <b>Pengajuan Saya</b>. Perubahan berlaku setelah disetujui administrator.</td></tr>
+      <tr><td>Administrator</td><td>Dapat mengedit atau menghapus langsung, atau membuka <b>Otorisasi Transaksi</b> untuk menyetujui/menolak pengajuan kasir.</td></tr>
+      <tr><td>Bendahara TU</td><td>Membuka <b>Riwayat Otorisasi</b> untuk pemeriksaan, tanpa memutuskan pengajuan.</td></tr>
+    </tbody></table>
+    <div class="warning">Selalu cocokkan nomor transaksi, nama siswa, unit, tanggal, komponen, dan alasan sebelum menyetujui perubahan atau penghapusan.</div>
+    <div class="footer">Manual Penggunaan SistemSPP | 5</div>
+  </section>
+
+  <section class="page">
+    <div class="topline"><strong>SistemSPP</strong><span>05 / Tabungan</span></div>
+    <div class="eyebrow">DANA SISWA</div><h1>Tabungan masuk dan keluar</h1>
+    <p class="lead">Tabungan siswa mempunyai jurnal dan saldo sendiri. Setoran atau penarikan tabungan tidak dihitung sebagai komponen pembayaran sekolah.</p>
+    <h2>Tabungan Masuk</h2>
+    <div class="steps"><ol><li>Buka <b>Tabungan Masuk</b> dan cari siswa pada unit aktif.</li><li>Periksa NIS, nama, kelas, dan saldo yang terisi otomatis.</li><li>Isi tanggal, nominal setoran, dan keterangan bila perlu; simpan setelah sesuai uang yang diterima.</li></ol></div>
+    <h2>Tabungan Keluar</h2>
+    <div class="steps"><ol><li>Buka <b>Tabungan Keluar</b> dan pilih siswa.</li><li>Periksa saldo saat ini dan pastikan nominal penarikan tidak melebihi saldo tersedia.</li><li>Isi tanggal, nominal, dan keterangan; simpan setelah penyerahan uang dikonfirmasi.</li></ol></div>
+    <h2>Memeriksa dan mencetak</h2>
+    <p><b>Riwayat Tabungan</b> menampilkan mutasi siswa. Gunakan <b>Cetak Tabungan</b> untuk bukti atau buku tabungan; pada Laporan Global tersedia <b>Rekap Transaksi Tabungan Siswa</b>, <b>Rekap Saldo Tabungan</b>, dan <b>Rekap Kas Tabungan Harian</b>.</p>
+    <div class="card"><h3>Contoh pemeriksaan</h3><p>Jika siswa mempunyai saldo Rp100.000 lalu menabung Rp20.000, saldo berikutnya menjadi Rp120.000. Setelah menarik Rp30.000, saldo menjadi Rp90.000. Cocokkan angka ini pada riwayat sebelum menutup kas.</p></div>
+    <div class="footer">Manual Penggunaan SistemSPP | 6</div>
+  </section>
+
+  <section class="page">
+    <div class="topline"><strong>SistemSPP</strong><span>06 / Laporan</span></div>
+    <div class="eyebrow">PEMERIKSAAN DATA</div><h1>Laporan dan pratinjau ekspor</h1>
+    <p><b>Laporan Umum</b> menyediakan rekap keuangan. <b>Laporan Global</b> berisi laporan khusus sesuai kategori, tanggal, tahun ajaran, kelas, status, operator, dan pencarian siswa. Pilih cakupan unit terlebih dahulu bila memakai Super Admin.</p>
+    <div class="steps"><ol><li>Buka <b>Laporan Global</b> dan pilih jenis laporan.</li><li>Atur filter, pilih <b>Baris/Halaman</b>, lalu tekan <b>Tampilkan Rekap</b>.</li><li>Periksa jumlah baris, nama siswa, periode, serta total. Gunakan <b>Reset</b> bila ingin kembali ke filter awal.</li><li>Pilih <b>Cetak</b>, <b>PDF</b>, atau <b>Excel</b>. Periksa halaman pratinjau lebih dahulu, kemudian cetak atau unduh dari halaman itu.</li></ol></div>
+    <h2>Jenis Laporan Global</h2>
+    <table><tbody>
+      <tr><td>Status Pembayaran</td><td>Penerimaan Harian</td><td>SPP Tahun Ajaran per Kelas</td></tr>
+      <tr><td>Pembayaran per Item</td><td>Transaksi Tabungan Siswa</td><td>Saldo Tabungan</td></tr>
+      <tr><td>Riwayat Tagihan Siswa</td><td>Rekap Setoran Kas Harian</td><td>Rekap Kas Tabungan Harian</td></tr>
+      <tr><td>Riwayat Titipan SPP</td><td>Surat ke Kepala Sekolah</td><td></td></tr>
+    </tbody></table>
+    <div class="warning">Pratinjau mengikuti filter dan cakupan unit pada halaman laporan. Data dihitung kembali saat laporan dibuka; bila transaksi berubah kemudian, periksa ulang sebelum mengunduh.</div>
+    <div class="footer">Manual Penggunaan SistemSPP | 7</div>
+  </section>
+
+  <section class="page">
+    <div class="topline"><strong>SistemSPP</strong><span>07 / Surat</span></div>
+    <div class="eyebrow">KOMUNIKASI RESMI</div><h1>Surat laporan</h1>
+    <p class="lead">Buka menu <b>Surat Laporan</b> untuk memilih surat tunggakan kepada orang tua/wali atau rekap tunggakan kepada kepala sekolah. Keduanya memakai data tagihan yang berlaku saat surat dibuka.</p>
+    <h2>Surat ke Orang Tua</h2>
+    <div class="steps"><ol><li>Pilih <b>Surat ke Orang Tua</b>, lalu atur kelas, status siswa, dan pencarian.</li><li>Periksa daftar siswa serta sisa tagihan. Siswa yang sudah lunas tidak masuk daftar.</li><li>Pilih satu siswa, beberapa siswa, satu rombel, atau seluruh rombel sesuai kebutuhan.</li><li>Periksa hasil cetak sebelum menyerahkan surat.</li></ol></div>
+    <h2>Surat ke Kepala Sekolah</h2>
+    <div class="steps"><ol><li>Pilih <b>Surat ke Kepala Sekolah</b>, lalu atur cakupan kelas/rombel dan status siswa.</li><li>Periksa jumlah siswa menunggak serta total tunggakan pada setiap rombel.</li><li>Buka <b>Pratinjau Surat Pilihan</b>. Jika sedang memfilter kelas, gunakan <b>Pratinjau Seluruh Kelas</b> untuk melihat semua rombel.</li><li>Di pratinjau, cocokkan identitas sekolah, cakupan, jumlah siswa, dan total. Pilih <b>Cetak</b> atau <b>Download PDF</b> setelah sesuai.</li></ol></div>
+    <div class="card"><h3>Pratinjau Excel</h3><p>Pada surat kepala sekolah tersedia <b>Preview Excel</b> bila rekap perlu diperiksa sebagai tabel sebelum diunduh. Gunakan PDF untuk surat resmi.</p></div>
+    <div class="footer">Manual Penggunaan SistemSPP | 8</div>
+  </section>
+
+  <section class="page">
+    <div class="topline"><strong>SistemSPP</strong><span>08 / Akun dan bantuan</span></div>
+    <div class="eyebrow">PENGELOLAAN AKSES</div><h1>Akun, keluar, dan solusi masalah</h1>
+    <h2>Role Management</h2>
+    <p>Menu ini tersedia bagi <b>Super Admin</b>. Gunakan untuk menambah akun, mengatur status akun, dan mengganti kata sandi. Pilih unit dan peran dengan teliti. Kata sandi dalam PDF login gabungan hanya berlaku sampai diganti lagi pada menu ini.</p>
+    <h2>Keluar dari aplikasi</h2>
+    <p>Pilih <b>Logout</b> pada sidebar, terutama pada komputer yang dipakai bergantian. Tutup halaman PDF kredensial setelah dipakai.</p>
+    <h2>Jika terjadi kendala</h2>
+    <table><thead><tr><th>Gejala</th><th>Yang perlu diperiksa</th></tr></thead><tbody>
+      <tr><td>Login ditolak</td><td>Username, unit dan nomor akun, angka pada kata sandi, status akun, dan apakah memakai PDF kredensial terbaru.</td></tr>
+      <tr><td>Data siswa tidak ditemukan</td><td>Unit operasional, ejaan nama atau NIS, status siswa, serta filter kelas.</td></tr>
+      <tr><td>Laporan kosong</td><td>Rentang tanggal, tahun ajaran, kategori, status, dan cakupan unit. Coba <b>Reset</b>, lalu pilih filter kembali.</td></tr>
+      <tr><td>PDF tidak terbuka</td><td>Izinkan tab baru atau pop-up dari aplikasi, pastikan koneksi aplikasi tersedia, lalu buka pratinjau kembali.</td></tr>
+      <tr><td>Halaman lokal tidak terbuka</td><td>Pastikan Laragon dan MySQL berjalan, lalu gunakan alamat lokal yang benar. Hubungi pengelola sistem bila tetap gagal.</td></tr>
+    </tbody></table>
+    <div class="warning">Jangan mengimpor skema atau menjalankan reset data untuk memperbaiki masalah penggunaan harian. Hubungi pengelola sistem agar data tetap terjaga.</div>
+    <div class="footer">Manual Penggunaan SistemSPP | 9</div>
+  </section>
+  <section class="page">
+    <div class="topline"><strong>SistemSPP</strong><span>Referensi menu / 01</span></div>
+    <div class="eyebrow">PETA PANDUAN</div><h1>Cari menu yang ingin digunakan</h1>
+    <p class="lead">Delapan halaman pertama adalah panduan cepat. Halaman berikut menjelaskan fungsi, langkah, dan hasil yang perlu diperiksa pada setiap menu. Nama menu mengikuti sidebar aplikasi; tampilannya bergantung pada peran akun.</p>
+    <table class="manual-index"><thead><tr><th>Kelompok</th><th>Menu dan halaman rinci</th></tr></thead><tbody>
+      <tr><td>Menu Utama</td><td>Dashboard 11</td></tr>
+      <tr><td>Pembayaran</td><td>Input Pembayaran 12 | Riwayat Pembayaran 13 | Riwayat Daftar Ulang 13 | Titipan SPP 14 | Otorisasi Transaksi / Pengajuan Saya / Riwayat Otorisasi 14</td></tr>
+      <tr><td>Data Master</td><td>Data Siswa 15 | Master Kelas/Rombel 16 | Master Penerbitan SPP 16 | Master Biaya Lain 17 | Master Daftar Ulang 17</td></tr>
+      <tr><td>Tabungan</td><td>Tabungan Masuk 18 | Tabungan Keluar 18 | Riwayat Tabungan 19 | Cetak Tabungan 19</td></tr>
+      <tr><td>Laporan</td><td>Laporan Umum 20 | Laporan Global 21-32 | Surat Laporan 33</td></tr>
+      <tr><td>Pengaturan</td><td>Role Management 34 (khusus Super Admin)</td></tr>
+    </tbody></table>
+    <h2>Arti istilah pada laporan</h2>
+    <table class="manual-index"><tbody>
+      <tr><td><b>Tanggal transaksi</b></td><td>Hari uang diterima/dikeluarkan atau mutasi dicatat; berbeda dari bulan tagihan.</td></tr>
+      <tr><td><b>Periode tagihan</b></td><td>Bulan atau tahun ajaran kewajiban siswa.</td></tr>
+      <tr><td><b>Tagihan / Dibayar / Sisa</b></td><td>Nilai kewajiban, pembayaran yang dialokasikan, dan selisih yang masih harus dibayar.</td></tr>
+      <tr><td><b>Baris/Halaman</b></td><td>Jumlah data yang terlihat di satu halaman tabel; bukan batas total laporan.</td></tr>
+      <tr><td><b>Semua Unit</b></td><td>Gabungan unit pada rekap untuk Super Admin; identitas unit tetap perlu diperiksa.</td></tr>
+    </tbody></table>
+    <div class="warning">Data contoh pada gambar atau demonstrasi bukan tarif resmi sekolah. Gunakan unit, tanggal, dan tahun ajaran yang benar saat bekerja.</div>
+    <div class="footer">Manual Penggunaan SistemSPP | 10</div>
+  </section>
+
+  <section class="page">
+    <div class="topline"><strong>SistemSPP</strong><span>Menu Utama / Dashboard</span></div>
+    <div class="eyebrow">RINGKASAN OPERASIONAL</div><h1>Dashboard</h1>
+    <p class="lead">Dashboard memberi gambaran cepat keadaan pembayaran dan kegiatan sekolah. Gunakan untuk menentukan bagian yang perlu ditelusuri, kemudian buka menu rinci untuk memeriksa transaksi atau tagihan.</p>
+    <h2>Cara menggunakan</h2>
+    <div class="steps"><ol><li>Masuk dan pastikan unit pada bagian atas sesuai pekerjaan hari ini.</li><li>Baca kartu angka dan periode yang tertulis; perhatikan apakah angka merujuk hari ini, bulan ini, atau seluruh data.</li><li>Jika suatu angka perlu dijelaskan, buka <b>Riwayat Pembayaran</b>, <b>Riwayat Tabungan</b>, atau <b>Laporan Global</b> dengan filter yang sama.</li><li>Super Admin dapat memilih cakupan unit pada halaman rekap bila tersedia; cek apakah tertulis satu unit atau Semua Unit.</li></ol></div>
+    <h2>Jangan langsung menyimpulkan dari angka ringkas</h2>
+    <p>Kartu dashboard dan daftar transaksi menjawab pertanyaan berbeda. Misalnya, uang diterima hari ini memakai tanggal transaksi, sedangkan tunggakan SPP memakai periode tagihan. Untuk pemeriksaan kas, gunakan Rekap Setoran Kas Harian; untuk tunggakan, gunakan Laporan Status Pembayaran atau surat kepala sekolah.</p>
+    <div class="card"><h3>Contoh alur</h3><p>Jika penerimaan hari ini tampak rendah, buka <b>Rekap Penerimaan Harian</b> dengan tanggal yang sama. Periksa kategori, metode, dan operator sebelum membandingkan dengan uang atau bukti kasir.</p></div>
+    <div class="footer">Manual Penggunaan SistemSPP | 11</div>
+  </section>
+
+  <section class="page">
+    <div class="topline"><strong>SistemSPP</strong><span>Pembayaran / Input</span></div>
+    <div class="eyebrow">MENERIMA UANG SEKOLAH</div><h1>Input Pembayaran</h1>
+    <p class="lead">Menu ini dipakai admin dan kasir untuk mencatat pembayaran siswa. Pilih siswa lebih dahulu agar identitas, kelas, dan kewajibannya dapat diperiksa.</p>
+    <h2>Langkah kerja</h2>
+    <div class="steps"><ol><li>Cari siswa dengan nama, NIS, atau NIS Diknas; klik hasil yang sesuai. Pastikan unit dan kelas benar.</li><li>Pilih komponen pembayaran yang memang ditagihkan. Tentukan bulan/tahun tagihan, tanggal transaksi, metode pembayaran, dan nominal sesuai bukti.</li><li>Baca ringkasan tagihan, sudah dibayar, serta sisa. Pada SPP, selesaikan Komite bulan yang sama sesuai aturan aplikasi.</li><li>Simpan satu kali; tunggu pemberitahuan berhasil. Buka <b>Riwayat Pembayaran</b> dan cocokkan transaksi yang baru dibuat.</li></ol></div>
+    <h2>Memilih kategori</h2>
+    <table class="manual-index"><tbody>
+      <tr><td><b>SPP / Komite</b></td><td>Periksa bulan dan tahun tagihan, bukan hanya tanggal uang diterima.</td></tr>
+      <tr><td><b>Daftar Ulang</b></td><td>Periksa tahun ajaran dan sisa tagihan tahunan.</td></tr>
+      <tr><td><b>Pangkal / PSB / Biaya Lain</b></td><td>Periksa item yang diterbitkan dan nilai kewajiban siswa.</td></tr>
+      <tr><td><b>Titipan SPP</b></td><td>Gunakan alur titipan bila nominal belum dapat dialokasikan sebagai pelunasan SPP.</td></tr>
+    </tbody></table>
+    <div class="warning">Jangan menyimpan transaksi dua kali ketika halaman lambat. Periksa riwayat terlebih dahulu sebelum mencoba lagi. Jika salah input, gunakan alur edit atau otorisasi sesuai peran.</div>
+    <div class="footer">Manual Penggunaan SistemSPP | 12</div>
+  </section>
+
+  <section class="page">
+    <div class="topline"><strong>SistemSPP</strong><span>Pembayaran / Riwayat</span></div>
+    <div class="eyebrow">BUKTI DAN STATUS</div><h1>Riwayat Pembayaran dan Daftar Ulang</h1>
+    <h2>Riwayat Pembayaran</h2>
+    <p>Gunakan menu ini untuk mencari pembayaran yang sudah dicatat, memeriksa rincian, mencetak struk, atau memulai koreksi. Filter tanggal transaksi dan pencarian siswa membantu menemukan baris yang tepat.</p>
+    <div class="steps"><ol><li>Pilih rentang tanggal transaksi, lalu ketik nama atau NIS siswa; tekan tombol tampilkan/filter.</li><li>Periksa nomor transaksi, tanggal, siswa, kelas, kategori, nominal, dan metode bila tersedia.</li><li>Klik <b>Cetak</b> pada transaksi yang benar untuk membuka bukti; periksa lagi sebelum menyerahkan.</li><li>Jika perlu mengubah atau menghapus, admin dapat memakai tindakan langsung; kasir mengirim pengajuan yang menunggu otorisasi.</li></ol></div>
+    <h2>Riwayat Daftar Ulang</h2>
+    <p>Menu ini khusus memantau tagihan dan pembayaran Daftar Ulang. Filter siswa, kelas, tahun ajaran, serta status <b>Lunas</b> atau <b>Belum Lunas</b>. Periksa sisa per siswa sebelum menagih atau menerbitkan bukti.</p>
+    <div class="card"><h3>Perbedaan dua riwayat</h3><p>Riwayat Pembayaran berpusat pada transaksi yang terjadi. Riwayat Daftar Ulang berpusat pada kewajiban Daftar Ulang di tahun ajaran tertentu, sehingga siswa bisa tetap tampil ketika tagihannya belum lunas.</p></div>
+    <div class="warning">Saat nilai pada dua halaman tampak berbeda, samakan siswa, unit, tahun ajaran, dan rentang tanggal terlebih dahulu.</div>
+    <div class="footer">Manual Penggunaan SistemSPP | 13</div>
+  </section>
+
+  <section class="page">
+    <div class="topline"><strong>SistemSPP</strong><span>Pembayaran / Titipan dan kontrol</span></div>
+    <div class="eyebrow">SALDO TITIPAN DAN KOREKSI</div><h1>Titipan SPP dan Otorisasi Transaksi</h1>
+    <h2>Titipan SPP</h2>
+    <p>Titipan adalah uang siswa yang belum dialokasikan sebagai pelunasan bulan SPP. Cari siswa, baca saldo awal, lalu catat penerimaan, penggunaan untuk SPP, atau pengembalian sesuai tindakan yang tersedia bagi peran Anda. Penggunaan saldo titipan bukan penerimaan kas baru.</p>
+    <div class="steps"><ol><li>Periksa siswa dan saldo titipan yang sudah ada.</li><li>Untuk uang baru, catat nominal penerimaan titipan. Untuk alokasi, pilih kewajiban SPP yang tepat.</li><li>Setelah menyimpan, baca mutasi masuk/keluar dan saldo akhir; cocokkan dengan <b>Riwayat Titipan SPP</b> di Laporan Global.</li></ol></div>
+    <h2>Otorisasi Transaksi / Pengajuan Saya / Riwayat Otorisasi</h2>
+    <table class="manual-index"><tbody>
+      <tr><td><b>Kasir: Pengajuan Saya</b></td><td>Ajukan edit/hapus dari riwayat, tulis alasan yang jelas, lalu pantau Menunggu, Disetujui, atau Ditolak.</td></tr>
+      <tr><td><b>Admin: Otorisasi Transaksi</b></td><td>Filter antrean, buka rincian, bandingkan data lama dan usulan, lalu setujui atau tolak dengan alasan.</td></tr>
+      <tr><td><b>Bendahara: Riwayat Otorisasi</b></td><td>Periksa jejak keputusan dan alasan untuk audit; tidak memutuskan pengajuan.</td></tr>
+    </tbody></table>
+    <div class="warning">Sebelum koreksi, cocokkan unit, siswa, nomor transaksi, nominal, komponen, tanggal, dan bukti. Tolak pengajuan yang belum jelas agar kasir dapat memperbaikinya.</div>
+    <div class="footer">Manual Penggunaan SistemSPP | 14</div>
+  </section>
+
+  <section class="page">
+    <div class="topline"><strong>SistemSPP</strong><span>Data Master / Siswa</span></div>
+    <div class="eyebrow">IDENTITAS DAN TARIF</div><h1>Data Siswa</h1>
+    <p class="lead">Menu ini menambah, mencari, mengubah, dan memeriksa siswa pada unit aktif. Cek daftar lebih dahulu sebelum menambah agar NIS tidak ganda.</p>
+    <h2>Menambah siswa</h2>
+    <div class="steps"><ol><li>Gunakan pencarian dan filter kelas/status; pastikan siswa belum ada.</li><li>Isi NIS, nama, kelas/rombel, status, dan identitas lain pada formulir.</li><li>Buka <b>Advance</b> bila siswa mempunyai tarif Pangkal/PSB, Komite, Daftar Ulang, atau potongan. Nilai efektif SPP terkait master penerbitan tahun ajaran.</li><li>Periksa unit, NIS, kelas, serta nominal sebelum menekan <b>Tambah Siswa</b>.</li></ol></div>
+    <h2>Mengubah dan mengarsipkan</h2>
+    <p>Pilih siswa pada daftar lalu buka tindakan edit. Perubahan kelas/status perlu diperiksa bersama penempatan tahun ajaran dan tagihan yang sudah terbit. Gunakan status arsip/lulus untuk siswa yang tidak lagi aktif; riwayat pembayaran tetap perlu dapat ditelusuri.</p>
+    <div class="card"><h3>Jika kelas belum muncul</h3><p>Periksa <b>Master Kelas/Rombel</b> di unit yang sama. Rombel nyata harus dibuat sebelum dapat dipakai sebagai penempatan siswa.</p></div>
+    <div class="warning">Mengubah tarif sekarang tidak otomatis mengubah pembayaran yang sudah tercatat. Periksa tagihan yang telah diterbitkan sebelum menyimpulkan ada selisih.</div>
+    <div class="footer">Manual Penggunaan SistemSPP | 15</div>
+  </section>
+
+  <section class="page">
+    <div class="topline"><strong>SistemSPP</strong><span>Data Master / Kelas dan SPP</span></div>
+    <div class="eyebrow">MENYIAPKAN TAGIHAN</div><h1>Kelas/Rombel dan Penerbitan SPP</h1>
+    <h2>Master Kelas/Rombel</h2>
+    <p>Buat rombel nyata untuk tingkat pada unit aktif, misalnya 1A, 7A, atau 10A sesuai unit. Isi tingkat dan kode rombel, lalu simpan. Daftar dapat difilter berdasarkan tingkat, status, dan kata kunci. Proses tahun ajaran memindahkan siswa reguler berdasarkan riwayat kelas tahun asal; tahapnya berjalan dari kelas tertinggi terlebih dahulu.</p>
+    <div class="steps"><ol><li>Pastikan unit SD, SMP, atau SMA dan tahun ajaran tujuan benar.</li><li>Tambah rombel yang belum ada; hindari label ganda.</li><li>Periksa riwayat kelas tahun asal. Selesaikan kelulusan kelas tertinggi, lalu kenaikan kelas berikutnya sesuai tahap aktif.</li><li>Pilih rombel tujuan per siswa dan cocokkan hasil sebelum menerbitkan tagihan tahun berikutnya. Siswa PSB tidak ikut proses kenaikan.</li></ol></div>
+    <h2>Master Penerbitan SPP</h2>
+    <p>Menu ini mengatur tagihan SPP bulanan untuk tahun ajaran Juli-Juni. Pilih tahun ajaran, tinjau status draft/published/closed, siswa, rombel, tarif efektif, potongan, dan bulan mulai tagihan. Terbitkan untuk siswa yang tepat; periksa jumlah bulan tagihan setelah selesai.</p>
+    <div class="card"><h3>Urutan yang aman</h3><p>Rombel benar > siswa ditempatkan > tarif/potongan diperiksa > tahun ajaran dipilih > SPP diterbitkan > Laporan Status Pembayaran diperiksa.</p></div>
+    <div class="warning">Jangan menerbitkan ulang tanpa memeriksa tagihan yang sudah ada. Tagihan yang pernah menerima alokasi pembayaran dilindungi saat pembatalan.</div>
+    <div class="footer">Manual Penggunaan SistemSPP | 16</div>
+  </section>
+
+  <section class="page">
+    <div class="topline"><strong>SistemSPP</strong><span>Data Master / Biaya dan Daftar Ulang</span></div>
+    <div class="eyebrow">KEWAJIBAN TAMBAHAN</div><h1>Biaya Lain dan Daftar Ulang</h1>
+    <h2>Master Biaya Lain</h2>
+    <p>Gunakan untuk membuat item biaya beserta nominalnya, lalu menerbitkan tagihan kepada sasaran yang dipilih. Sasaran dapat berupa seluruh siswa aktif, satu tingkat, satu rombel, atau siswa tertentu. Buat master biaya lebih dahulu, kemudian gunakan bagian penerbitan. Periksa nama item, nominal, target, serta jumlah tagihan yang terbentuk.</p>
+    <div class="steps"><ol><li>Tambah item biaya dengan nama dan nominal yang jelas.</li><li>Pilih item pada bagian penerbitan, lalu tentukan target siswa.</li><li>Periksa daftar target sebelum mengonfirmasi dan cocokkan hasil pada Riwayat Tagihan Siswa.</li></ol></div>
+    <h2>Master Daftar Ulang</h2>
+    <p>Menu ini mengelola kewajiban tahunan Daftar Ulang. Pilih tahun ajaran yang benar, periksa status penerbitan, tarif/penyesuaian, serta riwayat kelas siswa pada tahun tersebut. Tahun ajaran lampau memakai penempatan historis; untuk tahun berikutnya, selesaikan proses kenaikan kelas dahulu. Setelah menerbitkan, cocokkan jumlah tagihan. Pembayaran dan sisa dipantau lewat <b>Riwayat Daftar Ulang</b>.</p>
+    <div class="warning">Penerbitan tagihan adalah tindakan yang memengaruhi kewajiban siswa. Verifikasi tahun ajaran, unit, sasaran, dan nominal sebelum menekan tombol penerbitan.</div>
+    <div class="footer">Manual Penggunaan SistemSPP | 17</div>
+  </section>
+
+  <section class="page">
+    <div class="topline"><strong>SistemSPP</strong><span>Tabungan / Transaksi</span></div>
+    <div class="eyebrow">MUTASI SALDO SISWA</div><h1>Tabungan Masuk dan Tabungan Keluar</h1>
+    <p class="lead">Tabungan memakai saldo terpisah dari tagihan sekolah. Pada kedua menu, pilih siswa terlebih dahulu agar NIS, nama, kelas, dan saldo terisi otomatis.</p>
+    <h2>Tabungan Masuk</h2>
+    <div class="steps"><ol><li>Cari siswa dengan nama atau NIS; klik hasil yang benar.</li><li>Periksa saldo awal, tanggal setoran, nominal masuk, dan keterangan opsional.</li><li>Simpan setelah uang diterima. Pastikan transaksi muncul di Riwayat Tabungan dan saldo bertambah.</li></ol></div>
+    <h2>Tabungan Keluar</h2>
+    <div class="steps"><ol><li>Pilih siswa dan periksa saldo tabungan saat ini.</li><li>Isi tanggal penarikan, nominal keluar, dan keterangan yang menjelaskan penyerahan uang.</li><li>Pastikan nominal tidak melebihi saldo tersedia, lalu simpan. Periksa saldo sesudahnya di riwayat.</li></ol></div>
+    <div class="card"><h3>Contoh</h3><p>Saldo awal Rp100.000; setoran Rp20.000; penarikan Rp30.000. Saldo akhir Rp90.000. Laporan Kas Tabungan Harian menunjukkan arus masuk dan keluar pada tanggal transaksi, sedangkan Rekap Saldo Tabungan menunjukkan saldo saat ini.</p></div>
+    <div class="warning">Jika siswa salah dipilih, hentikan sebelum menyimpan. Jangan gunakan menu tabungan untuk melunasi SPP atau Daftar Ulang.</div>
+    <div class="footer">Manual Penggunaan SistemSPP | 18</div>
+  </section>
+
+  <section class="page">
+    <div class="topline"><strong>SistemSPP</strong><span>Tabungan / Riwayat dan cetak</span></div>
+    <div class="eyebrow">PEMERIKSAAN SALDO</div><h1>Riwayat Tabungan dan Cetak Tabungan</h1>
+    <h2>Riwayat Tabungan</h2>
+    <p>Atur rentang tanggal transaksi dan cari siswa untuk melihat setoran serta penarikan. Bagian ringkasan menunjukkan total masuk, total keluar, dan jumlah transaksi sesuai filter. Daftar saldo siswa membantu menemukan siswa dengan saldo tertentu.</p>
+    <div class="steps"><ol><li>Pilih rentang tanggal dan siswa, lalu tampilkan riwayat.</li><li>Baca tanggal, jenis mutasi, nominal masuk/keluar, dan saldo setelah transaksi bila tersedia.</li><li>Jika perlu laporan formal, buka <b>Cetak Laporan</b> atau jenis tabungan di Laporan Global.</li></ol></div>
+    <h2>Cetak Tabungan</h2>
+    <p>Menu ini menyiapkan buku tabungan untuk seorang siswa. Pilih kelas bila perlu, cari siswa, lalu periksa identitas dan pratinjau buku. Tekan <b>Pratinjau &amp; Cetak</b> setelah siswa dan mutasinya benar; cetak dari halaman pratinjau sesuai kebutuhan.</p>
+    <div class="card"><h3>Jika saldo tidak cocok</h3><p>Samakan unit, siswa, dan rentang tanggal. Riwayat yang difilter tanggal bisa hanya menampilkan sebagian mutasi; saldo terkini dihitung dari seluruh transaksi siswa.</p></div>
+    <div class="footer">Manual Penggunaan SistemSPP | 19</div>
+  </section>
+
+  <section class="page">
+    <div class="topline"><strong>SistemSPP</strong><span>Laporan / Umum</span></div>
+    <div class="eyebrow">REKAP KEUANGAN</div><h1>Laporan Umum</h1>
+    <p class="lead">Menu ini memberi rekap keuangan berdasarkan tanggal transaksi atau periode terpilih. Gunakan ketika perlu melihat pembayaran secara umum sebelum membuka laporan khusus.</p>
+    <h2>Memakai filter</h2>
+    <div class="steps"><ol><li>Tentukan tanggal mulai dan akhir transaksi.</li><li>Pilih <b>Jenis laporan</b>, pengurutan, dan <b>Per Halaman</b>. Cari siswa bila hanya ingin transaksi satu siswa.</li><li>Tampilkan hasil dan baca kartu total serta rincian komponen.</li><li>Untuk bukti transaksi, gunakan <b>Cetak</b> pada baris yang sesuai. Gunakan <b>Cetak Dipilih</b> setelah mencentang baris yang benar.</li></ol></div>
+    <h2>Memahami hasil</h2>
+    <p>Total pembayaran adalah penerimaan pada periode yang dipilih, bukan otomatis sisa tunggakan. Untuk kewajiban belum dibayar per siswa, buka <b>Laporan Status Pembayaran</b>. Untuk pembukuan harian per komponen dan metode, buka <b>Rekap Setoran Kas Harian</b> di Laporan Global.</p>
+    <div class="warning">Saat memakai Super Admin, periksa cakupan unit di halaman sebelum membandingkan total dengan kas satu sekolah.</div>
+    <div class="footer">Manual Penggunaan SistemSPP | 20</div>
+  </section>
+
+  <section class="page">
+    <div class="topline"><strong>SistemSPP</strong><span>Laporan / Global</span></div>
+    <div class="eyebrow">CARA PAKAI UMUM</div><h1>Laporan Global</h1>
+    <p class="lead">Katalog Laporan Global menampilkan 10 jenis rekap; surat kepala sekolah memakai mesin laporan yang sama dan diakses melalui Surat Laporan. Semuanya memakai pola: atur filter, tampilkan rekap, periksa angka, lalu buka pratinjau sebelum mencetak atau mengunduh.</p>
+    <div class="steps"><ol><li>Super Admin: pilih satu unit atau <b>Semua Unit</b> pada cakupan laporan. Pengguna lain hanya melihat unit akunnya.</li><li>Pilih kartu laporan dan tekan <b>Buka laporan</b>.</li><li>Atur tanggal transaksi atau periode tagihan sesuai tujuan; pilih kategori, status, kelas, operator, atau siswa bila tersedia.</li><li>Tekan <b>Tampilkan Rekap</b>. Baca judul, subtitle periode, jumlah baris, total, serta tabel. <b>Reset</b> mengembalikan filter awal.</li><li>Klik <b>Cetak</b> atau <b>PDF</b> untuk pratinjau PDF; klik <b>Excel</b> untuk pratinjau tabel Excel. Periksa isi sebelum memilih Cetak/Download pada pratinjau.</li></ol></div>
+    <table class="manual-index"><thead><tr><th>Kontrol</th><th>Arti</th></tr></thead><tbody>
+      <tr><td>Baris/Halaman</td><td>Mengubah tampilan tabel per halaman, bukan jumlah seluruh data.</td></tr>
+      <tr><td>Cari Siswa</td><td>Memilih siswa melalui saran nama/NIS/NIS Diknas; periksa identitas yang dipilih.</td></tr>
+      <tr><td>0 baris / Tidak ada data</td><td>Tidak ada hasil pada filter saat ini; periksa unit, periode, kategori, dan data master.</td></tr>
+    </tbody></table>
+    <h2>Pilih laporan sesuai pertanyaan</h2>
+    <table class="manual-index"><tbody>
+      <tr><td>Siapa belum lunas?</td><td>Status Pembayaran (22), SPP Tahunan (24), atau Pembayaran per Item (25).</td></tr>
+      <tr><td>Berapa uang masuk hari ini?</td><td>Penerimaan Harian (23) dan Setoran Kas Harian (30).</td></tr>
+      <tr><td>Mengapa saldo tabungan berubah?</td><td>Transaksi Tabungan Siswa (26), Saldo Tabungan (27), Kas Tabungan Harian (31).</td></tr>
+      <tr><td>Tagihan atau titipan mana yang berubah?</td><td>Riwayat Tagihan Siswa (28) atau Riwayat Titipan SPP (32).</td></tr>
+      <tr><td>Perlu surat untuk pimpinan?</td><td>Cetak Surat ke Kepala Sekolah (29).</td></tr>
+    </tbody></table>
+    <div class="warning">Data pada pratinjau dihitung saat dibuka. Jika ada transaksi baru setelah itu, ulangi pratinjau untuk memperoleh hasil terbaru.</div>
+    <div class="footer">Manual Penggunaan SistemSPP | 21</div>
+  </section>
+  <section class="page">
+    <div class="topline"><strong>SistemSPP</strong><span>Laporan Global / 01 dari 11</span></div>
+    <div class="eyebrow">KEWAJIBAN PER SISWA</div><h1>Laporan Status Pembayaran</h1>
+    <p class="lead">Pakai untuk menjawab: siswa mana yang lunas, masih cicilan, belum membayar, atau mempunyai sisa pada satu kategori dan periode tagihan.</p>
+    <h2>Filter yang perlu dipilih</h2>
+    <p><b>Tahun Ajaran</b>, <b>Kategori</b>, <b>Bulan Tagihan</b>, <b>Kelas/Rombel</b>, <b>Status</b>, dan <b>Status Siswa</b>. Baris/Halaman mengatur tampilan; Cari Siswa menyaring satu siswa. Beberapa kategori tidak memakai bulan dengan cara yang sama, jadi baca subtitle periode hasil.</p>
+    <div class="steps"><ol><li>Pilih unit/cakupan, tahun ajaran, kategori kewajiban, dan bulan tagihan bila relevan.</li><li>Untuk mencari penunggak, pilih status <b>Memiliki Tunggakan</b> atau status pembayaran yang diperlukan, lalu tekan Tampilkan Rekap.</li><li>Baca <b>Tagihan</b>, <b>Terbayar</b>, <b>Sisa</b>, dan <b>Status</b> per siswa. Buka pratinjau PDF/Excel bila hasil akan dibagikan.</li></ol></div>
+    <div class="report-key"><p><b>Cara membaca:</b> Sisa = tagihan dikurangi pembayaran yang dialokasikan. Status “Belum Bayar” berbeda dari “Tidak Ditagihkan”; yang kedua berarti kewajiban belum terbit untuk pilihan itu.</p></div>
+    <div class="warning">Jika hasil 0 baris, periksa kategori, tahun ajaran, bulan, status siswa, dan unit. Jangan menganggap seluruh siswa lunas tanpa mengecek filter.</div>
+    <div class="footer">Manual Penggunaan SistemSPP | 22</div>
+  </section>
+
+  <section class="page">
+    <div class="topline"><strong>SistemSPP</strong><span>Laporan Global / 02 dari 11</span></div>
+    <div class="eyebrow">PENERIMAAN PEMBAYARAN</div><h1>Rekap Penerimaan Harian</h1>
+    <p class="lead">Pakai untuk melihat uang pembayaran sekolah yang masuk dalam rentang tanggal transaksi, dirinci per siswa dan komponen.</p>
+    <h2>Filter</h2><p><b>Tanggal Transaksi</b>, <b>Kategori</b> (Semua kategori atau satu kategori), <b>Kelas/Rombel</b>, <b>Operator</b>, <b>Metode</b>, dan Cari Siswa. Tanggal adalah tanggal penerimaan uang, bukan bulan tagihan.</p>
+    <div class="steps"><ol><li>Pilih satu tanggal untuk kas harian atau rentang tanggal untuk periode yang lebih panjang.</li><li>Gunakan Semua kategori untuk total lintas komponen, atau pilih satu kategori untuk menelusuri selisih.</li><li>Periksa baris siswa, nominal per komponen, kolom <b>Total</b>, serta ringkasan hasil. Cocokkan dengan bukti transaksi dan operator.</li></ol></div>
+    <div class="report-key"><p><b>Contoh:</b> Pembayaran SPP untuk tagihan Agustus yang diterima tanggal 29 September muncul pada penerimaan 29 September. Bulan tagihannya tetap Agustus.</p></div>
+    <div class="warning">Jika semua kategori kosong, periksa tanggal transaksi, metode, operator, dan unit. Nilai 0 pada hari tanpa pembayaran adalah hasil yang wajar.</div>
+    <div class="footer">Manual Penggunaan SistemSPP | 23</div>
+  </section>
+
+  <section class="page">
+    <div class="topline"><strong>SistemSPP</strong><span>Laporan Global / 03 dari 11</span></div>
+    <div class="eyebrow">SPP JULI-JUNI</div><h1>Rekap SPP Tahun Ajaran per Kelas</h1>
+    <p class="lead">Pakai untuk melihat perkembangan SPP siswa sepanjang tahun ajaran, dari Juli sampai Juni, dalam satu tabel.</p>
+    <h2>Filter</h2><p><b>Tahun Ajaran</b>, <b>Kelas/Rombel</b>, <b>Status</b>, <b>Status Siswa</b>, Baris/Halaman, dan Cari Siswa. Pilih rombel bila ingin memeriksa kelas tertentu.</p>
+    <div class="steps"><ol><li>Pilih tahun ajaran yang benar; perhatikan status draft/published pada pilihan tahun.</li><li>Batasi kelas bila perlu, lalu tampilkan rekap.</li><li>Gulir tabel secara horizontal untuk membaca semua bulan hingga Juni; periksa penanda lunas, cicilan, atau belum bayar pada bulan yang dimaksud.</li><li>Untuk membahas satu bulan tertentu, bandingkan dengan Laporan Status Pembayaran pada bulan yang sama.</li></ol></div>
+    <div class="report-key"><p><b>Cara membaca:</b> Satu baris mewakili siswa; kolom bulan menunjukkan kondisi tagihan SPP bulanan. Tabel lebar memang perlu digulir agar bulan di kanan terlihat.</p></div>
+    <div class="warning">Tahun ajaran yang belum diterbitkan dapat menampilkan hasil kosong atau tagihan belum tersedia. Periksa Master Penerbitan SPP sebelum menagih siswa.</div>
+    <div class="footer">Manual Penggunaan SistemSPP | 24</div>
+  </section>
+
+  <section class="page">
+    <div class="topline"><strong>SistemSPP</strong><span>Laporan Global / 04 dari 11</span></div>
+    <div class="eyebrow">SATU KOMPONEN PEMBAYARAN</div><h1>Rekap Pembayaran per Item</h1>
+    <p class="lead">Pakai saat perlu memeriksa tagihan, pembayaran, dan sisa untuk satu jenis biaya, misalnya SPP, Komite, Daftar Ulang, atau item lain yang tersedia.</p>
+    <h2>Filter berubah mengikuti kategori</h2>
+    <table class="manual-index"><tbody>
+      <tr><td><b>Kategori bulanan</b></td><td>Periode Tagihan (bulan awal-akhir) dan Rentang Tahun Tagihan.</td></tr>
+      <tr><td><b>Kategori tahunan</b></td><td>Tahun Ajaran yang berlaku.</td></tr>
+      <tr><td><b>Kategori transaksi</b></td><td>Tanggal Transaksi untuk mencari penerimaan pada rentang waktu.</td></tr>
+    </tbody></table>
+    <div class="steps"><ol><li>Pilih kategori lebih dahulu; perhatikan filter periode yang muncul setelah pilihan berubah.</li><li>Pilih kelas/status dan cari siswa bila perlu, lalu tekan Tampilkan Rekap.</li><li>Baca nilai <b>Total Tagihan</b>, <b>Total Bayar</b>, <b>Tunggakan/Sisa</b>, dan status. Pada kategori SPP, periksa rincian per bulan yang dipilih.</li></ol></div>
+    <div class="report-key"><p><b>Tip:</b> Jika Anda berpindah dari SPP ke biaya tahunan, isi periode sesuai kontrol baru. Filter lama yang tersembunyi tidak perlu dijadikan acuan.</p></div>
+    <div class="warning">Pastikan kategori dan periode pada judul/subtitle hasil cocok dengan tujuan sebelum mengunduh laporan.</div>
+    <div class="footer">Manual Penggunaan SistemSPP | 25</div>
+  </section>
+
+  <section class="page">
+    <div class="topline"><strong>SistemSPP</strong><span>Laporan Global / 05 dari 11</span></div>
+    <div class="eyebrow">JURNAL TABUNGAN</div><h1>Rekap Transaksi Tabungan Siswa</h1>
+    <p class="lead">Daftar setiap setoran dan penarikan tabungan dalam rentang waktu yang dipilih. Gunakan untuk mencari transaksi, operator, dan saldo yang ditampilkan pada baris.</p>
+    <h2>Filter</h2><p><b>Tanggal Transaksi</b>, <b>Kelas/Rombel</b>, <b>Operator</b>, <b>Jenis Mutasi</b> (Semua, Masuk, Keluar), Baris/Halaman, dan Cari Siswa.</p>
+    <div class="steps"><ol><li>Pilih tanggal mulai dan akhir, kemudian jenis mutasi bila hanya mencari setoran atau penarikan.</li><li>Batasi operator/siswa jika ada perbedaan bukti; tekan Tampilkan Rekap.</li><li>Periksa tanggal/waktu, NIS, nama, jenis, nominal <b>Masuk</b>/<b>Keluar</b>, <b>Saldo Saat Ini</b>, dan operator.</li></ol></div>
+    <div class="report-key"><p><b>Perbedaan:</b> Laporan ini menunjukkan transaksi per baris. Rekap Saldo Tabungan menunjukkan satu saldo terkini per siswa; Rekap Kas Tabungan Harian menunjukkan total arus kas tabungan.</p></div>
+    <div class="warning">Jika tidak ada baris, longgarkan filter tanggal, operator, mutasi, atau siswa. Jangan gunakan transaksi tabungan untuk menghitung penerimaan SPP.</div>
+    <div class="footer">Manual Penggunaan SistemSPP | 26</div>
+  </section>
+
+  <section class="page">
+    <div class="topline"><strong>SistemSPP</strong><span>Laporan Global / 06 dari 11</span></div>
+    <div class="eyebrow">POSISI SALDO</div><h1>Rekap Saldo Tabungan</h1>
+    <p class="lead">Menampilkan saldo tabungan siswa saat laporan dibuka. Gunakan untuk mencari siswa yang masih mempunyai saldo atau yang saldonya nol.</p>
+    <h2>Filter</h2><p><b>Kelas/Rombel</b>, <b>Status Siswa</b> (Aktif, Arsip/Lulus, Semua), <b>Status Saldo</b> (Semua, Ada Saldo, Saldo Nol), Baris/Halaman, dan Cari Siswa.</p>
+    <div class="steps"><ol><li>Pilih unit/cakupan dan status siswa yang ingin dihitung.</li><li>Pilih Status Saldo; gunakan Ada Saldo untuk daftar saldo positif.</li><li>Tekan Tampilkan Rekap, lalu baca NIS, nama, kelas, dan <b>Saldo Saat Ini</b>. Gunakan Riwayat Tabungan untuk menelusuri penyebab angka per siswa.</li></ol></div>
+    <div class="report-key"><p><b>Cara membaca:</b> Saldo adalah posisi terkini seluruh transaksi siswa, bukan total setoran dalam rentang tanggal tertentu. Laporan ini tidak memiliki filter tanggal transaksi.</p></div>
+    <div class="warning">Jika saldo yang diharapkan tidak muncul, periksa status siswa, kelas, unit, dan apakah transaksi telah disimpan pada siswa yang benar.</div>
+    <div class="footer">Manual Penggunaan SistemSPP | 27</div>
+  </section>
+
+  <section class="page">
+    <div class="topline"><strong>SistemSPP</strong><span>Laporan Global / 07 dari 11</span></div>
+    <div class="eyebrow">TAGIHAN YANG DITERBITKAN</div><h1>Riwayat Tagihan Siswa</h1>
+    <p class="lead">Gunakan untuk menelusuri tagihan yang dibuat bagi siswa, termasuk komponen, periode, nilai tagihan, pembayaran, sisa, dan status.</p>
+    <h2>Filter</h2><p><b>Tanggal Tagihan Dibuat</b> (dapat Semua tanggal), <b>Kelas/Rombel</b>, <b>Komponen</b>, <b>Status</b>, <b>Status Siswa</b>, <b>Siswa/Halaman</b>, dan Cari Siswa.</p>
+    <div class="steps"><ol><li>Untuk mencari penerbitan baru, isi rentang tanggal pembuatan tagihan. Untuk melihat seluruh riwayat, biarkan Semua tanggal.</li><li>Pilih komponen atau status bila ingin menyelidiki satu jenis kewajiban.</li><li>Periksa identitas siswa, rincian komponen dan periode, <b>Tagihan</b>, <b>Sudah Dibayar</b>, <b>Sisa</b>, dan status.</li></ol></div>
+    <div class="report-key"><p><b>Penting:</b> Tanggal tagihan dibuat bukan tanggal pembayaran. Jika sedang mencari uang masuk, gunakan Rekap Penerimaan Harian atau Riwayat Pembayaran.</p></div>
+    <div class="warning">Status “Tidak Ditagihkan”, “Perlu Rekonsiliasi”, atau “Dibatalkan” perlu dibaca sesuai detail baris; jangan menyamakannya dengan tunggakan aktif.</div>
+    <div class="footer">Manual Penggunaan SistemSPP | 28</div>
+  </section>
+
+  <section class="page">
+    <div class="topline"><strong>SistemSPP</strong><span>Laporan Global / 08 dari 11</span></div>
+    <div class="eyebrow">SURAT RESMI</div><h1>Cetak Surat ke Kepala Sekolah</h1>
+    <p class="lead">Rekap tunggakan siswa untuk pimpinan sekolah. Jenis ini berada dalam mesin Laporan Global, tetapi dibuka melalui <b>Surat Laporan > Kepala Sekolah</b>, bukan dari kartu katalog laporan biasa.</p>
+    <h2>Menyiapkan isi surat</h2>
+    <div class="steps"><ol><li>Pilih unit, lalu tentukan cakupan <b>Seluruh Kelas/Rombel</b>, seluruh rombel pada satu tingkat, atau satu rombel. Pilih status siswa Aktif, Arsip/Lulus, atau Semua.</li><li>Tekan <b>Tampilkan Rekap</b> dan cocokkan jumlah siswa menunggak serta total tiap rombel dengan total pilihan.</li><li>Buka <b>Pratinjau Surat Pilihan</b>. Jika cakupan sedang dibatasi, <b>Pratinjau Seluruh Kelas</b> menampilkan semua rombel pada unit yang sama.</li><li>Periksa kop sekolah, tanggal, cakupan, jumlah siswa per rombel, total, dan ruang tanda tangan. Setelah benar, klik Cetak atau Download PDF.</li></ol></div>
+    <div class="report-key"><p><b>Pratinjau Excel:</b> Gunakan bila perlu memeriksa atau mengunduh tabel rekap. PDF adalah bentuk surat resmi.</p></div>
+    <div class="warning">Surat kepala sekolah memuat ringkasan per rombel tanpa nama atau NIS siswa. Periksa total seluruh halaman sebelum menyerahkannya kepada kepala sekolah.</div>
+    <div class="footer">Manual Penggunaan SistemSPP | 29</div>
+  </section>
+
+  <section class="page">
+    <div class="topline"><strong>SistemSPP</strong><span>Laporan Global / 09 dari 11</span></div>
+    <div class="eyebrow">PENUTUPAN KAS PEMBAYARAN</div><h1>Rekap Setoran Kas Harian</h1>
+    <p class="lead">Ringkasan penerimaan pembayaran sekolah untuk membantu kasir dan bendahara mencocokkan setoran kas dengan transaksi yang tersimpan.</p>
+    <h2>Filter</h2><p><b>Tanggal Transaksi</b>, <b>Operator</b>, dan <b>Metode</b> pembayaran. Pilih satu hari untuk tutup kas harian atau rentang tanggal untuk pemeriksaan periode.</p>
+    <div class="steps"><ol><li>Atur tanggal yang sama dengan hari penutupan kas.</li><li>Jika memeriksa petugas tertentu, pilih operator. Pilih metode untuk menelusuri Tunai, VA, atau Qris.</li><li>Tekan Tampilkan Rekap; baca rincian komponen, ringkasan metode, jumlah transaksi, dan total setoran.</li><li>Bandingkan total berdasarkan metode dengan bukti uang fisik dan bukti non-tunai.</li></ol></div>
+    <div class="report-key"><p><b>Perbedaan:</b> Rekap Penerimaan Harian merinci penerimaan per siswa/komponen; Rekap Setoran Kas Harian merangkum arus kas berdasarkan komponen dan metode.</p></div>
+    <div class="warning">Jika total tidak cocok, samakan tanggal, unit, operator, serta metode. Periksa pula koreksi atau pembatalan transaksi yang terjadi pada periode itu.</div>
+    <div class="footer">Manual Penggunaan SistemSPP | 30</div>
+  </section>
+
+  <section class="page">
+    <div class="topline"><strong>SistemSPP</strong><span>Laporan Global / 10 dari 11</span></div>
+    <div class="eyebrow">PENUTUPAN KAS TABUNGAN</div><h1>Rekap Kas Tabungan Harian</h1>
+    <p class="lead">Ringkasan setoran dan penarikan tabungan siswa pada rentang tanggal transaksi, terpisah dari pembayaran sekolah.</p>
+    <h2>Filter</h2><p><b>Tanggal Transaksi</b> dan <b>Operator</b>. Tidak ada filter siswa karena halaman ini merangkum kas tabungan, bukan buku tabungan seorang siswa.</p>
+    <div class="steps"><ol><li>Pilih satu hari untuk memeriksa kas tabungan harian.</li><li>Pilih operator bila memeriksa transaksi petugas tertentu; tekan Tampilkan Rekap.</li><li>Baca total <b>Masuk</b>, <b>Keluar</b>, dan <b>Mutasi Bersih</b>, beserta jumlah transaksi.</li><li>Untuk mengetahui transaksi penyebab selisih, buka Rekap Transaksi Tabungan Siswa dengan tanggal dan operator yang sama.</li></ol></div>
+    <div class="report-key"><p><b>Rumus:</b> Mutasi bersih periode = tabungan masuk dikurangi tabungan keluar. Nilai ini bukan jumlah seluruh saldo tabungan siswa.</p></div>
+    <div class="warning">Jangan menjumlahkan mutasi bersih tabungan ke setoran pembayaran sekolah tanpa pemisahan pembukuan.</div>
+    <div class="footer">Manual Penggunaan SistemSPP | 31</div>
+  </section>
+
+  <section class="page">
+    <div class="topline"><strong>SistemSPP</strong><span>Laporan Global / 11 dari 11</span></div>
+    <div class="eyebrow">BUKU BESAR TITIPAN</div><h1>Riwayat Titipan SPP</h1>
+    <p class="lead">Menelusuri penerimaan titipan, penggunaan untuk SPP, pengembalian, serta saldo berjalan per siswa. Gunakan untuk menjawab asal dan pemakaian saldo titipan.</p>
+    <h2>Filter</h2><p><b>Tanggal Transaksi</b>, <b>Operator</b>, <b>Kelas/Rombel</b>, Baris/Halaman, dan Cari Siswa. Ringkasan menyertakan saldo awal periode agar mutasi dalam rentang tanggal dapat dijelaskan.</p>
+    <div class="steps"><ol><li>Pilih tanggal mulai/akhir dan siswa jika ingin menelusuri satu saldo.</li><li>Tekan Tampilkan Rekap; baca baris tanggal, jenis mutasi, <b>Masuk</b>, <b>Keluar</b>, <b>Saldo Berjalan</b>, operator, referensi, dan keterangan.</li><li>Cocokkan ringkasan <b>Saldo Awal + Penerimaan - Dipakai SPP - Pengembalian = Saldo Akhir</b>.</li></ol></div>
+    <div class="report-key"><p><b>Perbedaan:</b> Penerimaan titipan menambah kas dan saldo titipan; pemakaian titipan untuk SPP mengurangi saldo titipan tanpa uang baru masuk.</p></div>
+    <div class="warning">Jika saldo tampak berbeda, periksa rentang tanggal, siswa, unit, serta transaksi sebelum awal periode yang membentuk saldo awal.</div>
+    <div class="footer">Manual Penggunaan SistemSPP | 32</div>
+  </section>
+  <section class="page">
+    <div class="topline"><strong>SistemSPP</strong><span>Laporan / Surat</span></div>
+    <div class="eyebrow">KOMUNIKASI DENGAN ORANG TUA DAN PIMPINAN</div><h1>Surat Laporan</h1>
+    <p class="lead">Menu ini menyediakan dua tujuan yang berbeda. Pilih <b>Orang Tua</b> untuk surat siswa per siswa; pilih <b>Kepala Sekolah</b> untuk rekap tunggakan resmi.</p>
+    <h2>Cetak Surat ke Orang Tua</h2>
+    <div class="steps"><ol><li>Pilih kelas/rombel, status siswa, dan cari siswa bila perlu; tekan Tampilkan siswa.</li><li>Baca jumlah tagihan dan sisa per siswa. Siswa yang sudah lunas tidak termasuk daftar tunggakan.</li><li>Cetak satu siswa, siswa yang dicentang, satu kelas/rombel, atau semua rombel sesuai kebutuhan.</li><li>Periksa nama siswa, identitas sekolah, rincian kewajiban, total, serta halaman sebelum mencetak.</li></ol></div>
+    <h2>Surat ke Kepala Sekolah</h2>
+    <p>Gunakan pilihan surat kepala sekolah untuk ringkasan tunggakan per rombel tanpa identitas siswa. Pilihan cakupan dan tombol pratinjau dijelaskan pada halaman 29. Periksa PDF sebelum diberikan kepada pimpinan; Excel ditujukan sebagai rekap tabel.</p>
+    <div class="warning">Jangan mengirim satu surat massal orang tua yang memuat identitas siswa lain. Pilih keluaran sesuai penerima dan periksa semua halaman.</div>
+    <div class="footer">Manual Penggunaan SistemSPP | 33</div>
+  </section>
+
+  <section class="page">
+    <div class="topline"><strong>SistemSPP</strong><span>Pengaturan / Akun</span></div>
+    <div class="eyebrow">HANYA SUPER ADMIN</div><h1>Role Management</h1>
+    <p class="lead">Menu ini mengelola akun pengguna, peran, unit, status aktif, dan kata sandi. Hanya Super Admin yang dapat membukanya.</p>
+    <h2>Membuat akun</h2>
+    <div class="steps"><ol><li>Isi nama lengkap dan username yang belum dipakai.</li><li>Pilih peran Administrator, Kasir, Bendahara TU, atau Super Admin. Tetapkan SD/SMP/SMA untuk akun unit, atau Semua Unit bagi Super Admin.</li><li>Isi kata sandi baru dan konfirmasi; simpan. Berikan kredensial melalui jalur yang aman kepada pemilik akun.</li></ol></div>
+    <h2>Mengelola akun yang ada</h2>
+    <p>Gunakan daftar akun untuk memeriksa nama, username, peran, unit, dan status aktif. Ubah status jika seseorang tidak lagi boleh masuk. Saat mereset kata sandi, pastikan akun yang dipilih benar dan beri tahu pemilik akun bahwa kata sandi sebelumnya tidak berlaku.</p>
+    <div class="card"><h3>Pemisahan tugas</h3><p>Kasir mencatat transaksi dan mengajukan koreksi; admin memutuskan otorisasi; bendahara memeriksa laporan. Pilih peran sesuai pekerjaan, bukan agar semua menu muncul.</p></div>
+    <div class="warning">PDF kredensial memuat informasi sensitif. Simpan di lokasi terbatas; jangan menaruhnya di folder web, mengirim ke grup umum, atau memasukkan kata sandi ke manual ini.</div>
+    <div class="footer">Manual Penggunaan SistemSPP | 34</div>
+  </section>
+
+  <section class="page">
+    <div class="topline"><strong>SistemSPP</strong><span>Contoh alur / Bantuan</span></div>
+    <div class="eyebrow">KETIKA RAGU MEMILIH MENU</div><h1>Tiga alur kerja yang sering dipakai</h1>
+    <table class="manual-index"><thead><tr><th>Tujuan</th><th>Urutan menu</th></tr></thead><tbody>
+      <tr><td>Menerima pembayaran</td><td>Data Siswa > Input Pembayaran > Riwayat Pembayaran > Cetak struk.</td></tr>
+      <tr><td>Menagih tunggakan</td><td>Master Penerbitan SPP/Daftar Ulang > Laporan Status Pembayaran > Riwayat Tagihan Siswa > Surat Laporan.</td></tr>
+      <tr><td>Menutup kas harian</td><td>Riwayat Pembayaran > Rekap Penerimaan Harian > Rekap Setoran Kas Harian; tabungan diperiksa terpisah melalui Rekap Kas Tabungan Harian.</td></tr>
+    </tbody></table>
+    <h2>Jika hasil tidak sesuai harapan</h2>
+    <ul class="note-list">
+      <li><b>Hasil kosong:</b> cek unit/cakupan, tanggal transaksi versus periode tagihan, tahun ajaran, kategori, kelas, status siswa, dan kata kunci; gunakan Reset lalu pilih ulang.</li>
+      <li><b>Nominal berbeda:</b> cocokkan transaksi, alokasi pembayaran, saldo titipan, serta apakah laporan memakai seluruh siswa atau satu filter.</li>
+      <li><b>Tombol cetak/ekspor membuka tab baru:</b> izinkan tab/pop-up dari aplikasi, periksa pratinjau, lalu tekan Cetak atau Download di sana.</li>
+      <li><b>Akun tidak bisa masuk:</b> cek username, kata sandi terbaru, status aktif, dan hubungi Super Admin bila perlu reset.</li>
+    </ul>
+    <div class="card"><h3>Rujukan cepat</h3><p>Halaman 10 adalah indeks menu. Halaman 21 menjelaskan kontrol umum Laporan Global. Halaman 22-32 menguraikan semua jenis laporan satu per satu.</p></div>
+    <div class="footer">Manual Penggunaan SistemSPP | 35</div>
+  </section>
+</body>
+</html>

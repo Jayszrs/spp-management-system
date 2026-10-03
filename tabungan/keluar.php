@@ -6,25 +6,28 @@ session_start();
 require_once '../koneksi.php';
 require_once '../includes/auth.php';
 requireRole(['admin', 'kasir']);
+if (empty($_SESSION['csrf_savings'])) $_SESSION['csrf_savings'] = bin2hex(random_bytes(32));
+$savingsRequestKey = bin2hex(random_bytes(16));
 
 $flash = $_SESSION['flash'] ?? null;
 unset($_SESSION['flash']);
 
 $prefill_nis = preg_replace('/[^\w.-]/', '', trim($_GET['nis'] ?? ''));
+$today = date('Y-m-d');
 $siswa_list = $koneksi->query("SELECT id, NO_INDUK, NO_induk_diknas, NAMA, KELAS FROM siswa WHERE is_active = 1 ORDER BY NAMA ASC");
 ?>
 <!DOCTYPE html>
-<html lang="id">
+<html lang="id" data-palette="<?= unit_palette_for_view(isset($reportUnitId) ? (int)$reportUnitId : null) ?>">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Tabungan Keluar | SistemSPP</title>
-  <link rel="icon" type="image/png" href="../assets/img/favicon.png" />
+  <link rel="icon" type="image/png" href="../assets/img/favicon.png?v=2" />
   <meta name="description" content="Form input tabungan keluar siswa." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
-  <script>(function(){var t=localStorage.getItem('spp_theme')||'dark';document.documentElement.setAttribute('data-theme',t);})();</script>
-  <link rel="stylesheet" href="../assets/css/style.css?v=5.8" />
+  <script>(function(){var t=localStorage.getItem('spp_theme')||'light';document.documentElement.setAttribute('data-theme',t);})();</script>
+  <link rel="stylesheet" href="../assets/css/style.css?v=unitpalette4&amp;mtime=<?= filemtime(__DIR__ . '/../assets/css/style.css') ?>" />
 </head>
 <body>
   <div class="bg-orbs">
@@ -55,19 +58,27 @@ $siswa_list = $koneksi->query("SELECT id, NO_INDUK, NO_induk_diknas, NAMA, KELAS
       <?php endif; ?>
 
       <div class="page-content">
-        <div class="main-card">
-          <div class="card-header">
-            <h3 class="card-title">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 17H18M12 22V2M7 7l5-5 5 5"/></svg>
-              Input Tabungan Keluar
-            </h3>
+        <section class="main-card savings-entry-shell savings-entry-out">
+          <div class="savings-entry-hero">
+            <div>
+              <span class="recap-class-overline">Tabungan Keluar</span>
+              <h1>Input Penarikan Tabungan</h1>
+              <p>Pilih siswa, pastikan saldo cukup, lalu catat nominal penarikan yang diberikan.</p>
+            </div>
+            <div class="savings-entry-panel is-warning">
+              <span>Saldo Tersedia</span>
+              <strong id="saldo-preview">Pilih siswa dulu</strong>
+              <small>Penarikan akan ditolak jika nominal melebihi saldo.</small>
+            </div>
           </div>
 
-          <form method="POST" action="proses.php" id="form-tabungan">
+          <form method="POST" action="proses.php" id="form-tabungan" class="savings-entry-form">
             <input type="hidden" name="aksi" value="keluar" />
+            <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_savings'], ENT_QUOTES, 'UTF-8') ?>" />
+            <input type="hidden" name="request_key" value="<?= $savingsRequestKey ?>" />
 
             <div class="section-divider"><span>Data Siswa</span></div>
-            <div class="fields-grid">
+            <div class="fields-grid savings-student-grid">
               <div class="field-row full-span">
                 <label class="field-label" for="siswa-search">Cari Siswa (Nama / NIS / NIS Diknas)</label>
                 <div class="search-box">
@@ -78,7 +89,7 @@ $siswa_list = $koneksi->query("SELECT id, NO_INDUK, NO_induk_diknas, NAMA, KELAS
                 </div>
                 <datalist id="siswa-list">
                   <?php while ($s = $siswa_list->fetch_assoc()): ?>
-                  <option value="<?= htmlspecialchars($s['NO_INDUK']) ?> — <?= htmlspecialchars($s['NAMA']) ?>"
+                  <option value="<?= htmlspecialchars($s['NAMA']) ?>"
                     data-nis="<?= htmlspecialchars($s['NO_INDUK']) ?>"
                     data-diknas="<?= htmlspecialchars((string)($s['NO_induk_diknas'] ?? '')) ?>"
                     data-nama="<?= htmlspecialchars($s['NAMA']) ?>"
@@ -86,23 +97,23 @@ $siswa_list = $koneksi->query("SELECT id, NO_INDUK, NO_induk_diknas, NAMA, KELAS
                   <?php endwhile; ?>
                 </datalist>
               </div>
-              <div class="field-row">
+              <div class="field-row savings-student-mini">
                 <label class="field-label">No. Induk</label>
                 <input class="field-input" type="text" id="disp-nis" name="no_induk" readonly placeholder="Otomatis terisi" />
               </div>
-              <div class="field-row">
+              <div class="field-row savings-student-mini is-name">
                 <label class="field-label">Nama Siswa</label>
                 <input class="field-input" type="text" id="disp-nama" readonly placeholder="Otomatis terisi" />
               </div>
-              <div class="field-row">
+              <div class="field-row savings-student-mini is-class">
                 <label class="field-label">Kelas</label>
                 <input class="field-input" type="text" id="disp-kelas" readonly placeholder="Otomatis terisi" />
               </div>
             </div>
 
             <div class="section-divider"><span>Info Saldo</span></div>
-            <div class="fields-grid">
-              <div class="field-row">
+            <div class="fields-grid savings-balance-grid">
+              <div class="field-row savings-balance-row">
                 <label class="field-label">Saldo Tabungan Saat Ini</label>
                 <input class="field-input" type="text" id="disp-saldo" readonly placeholder="Pilih siswa dulu"
                   style="background:rgba(99,102,241,0.08);color:var(--accent);font-weight:700;" />
@@ -114,7 +125,7 @@ $siswa_list = $koneksi->query("SELECT id, NO_INDUK, NO_induk_diknas, NAMA, KELAS
             <div class="fields-grid">
               <div class="field-row">
                 <label class="field-label" for="tgl-keluar">Tanggal</label>
-                <input class="field-input" type="date" id="tgl-keluar" name="tanggal" required />
+                <input class="field-input" type="date" id="tgl-keluar" name="tanggal" value="<?= htmlspecialchars($today) ?>" readonly required />
               </div>
               <div class="field-row">
                 <label class="field-label" for="nominal-keluar">Nominal Keluar (Rp)</label>
@@ -122,7 +133,7 @@ $siswa_list = $koneksi->query("SELECT id, NO_INDUK, NO_induk_diknas, NAMA, KELAS
               </div>
               <div class="field-row full-span">
                 <label class="field-label" for="ket-keluar">Keterangan (opsional)</label>
-                <input class="field-input" type="text" id="ket-keluar" name="keterangan" placeholder="Misal: Penarikan tunai, dll." />
+                <input class="field-input" type="text" id="ket-keluar" name="keterangan" maxlength="255" placeholder="Misal: Penarikan tunai, dll." />
               </div>
             </div>
 
@@ -141,7 +152,7 @@ $siswa_list = $koneksi->query("SELECT id, NO_INDUK, NO_induk_diknas, NAMA, KELAS
               </a>
             </div>
           </form>
-        </div>
+        </section>
       </div>
     </main>
   </div>
@@ -157,7 +168,7 @@ $siswa_list = $koneksi->query("SELECT id, NO_INDUK, NO_induk_diknas, NAMA, KELAS
     </div>
   </div>
 
-  <script src="../assets/js/app.js?v=6.2"></script>
+  <script src="../assets/js/app.js?v=<?= filemtime(__DIR__ . '/../assets/js/app.js') ?>"></script>
   <script>
     document.addEventListener('DOMContentLoaded', function () {
       const tgl = document.getElementById('tgl-keluar');
@@ -207,6 +218,8 @@ $siswa_list = $koneksi->query("SELECT id, NO_INDUK, NO_induk_diknas, NAMA, KELAS
           const saldo = parseInt(d.saldo || 0);
           const saldoEl = document.getElementById('disp-saldo');
           if (saldoEl) saldoEl.value = 'Rp ' + saldo.toLocaleString('id-ID');
+          const preview = document.getElementById('saldo-preview');
+          if (preview) preview.textContent = 'Rp ' + saldo.toLocaleString('id-ID');
           const rawEl = document.getElementById('raw-saldo');
           if (rawEl) rawEl.value = saldo;
         }).catch(() => {});

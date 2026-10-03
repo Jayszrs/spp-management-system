@@ -1,4 +1,4 @@
-﻿# Riwayat Perubahan AI SistemSPP
+# Riwayat Perubahan AI SistemSPP
 
 File ini mencatat perubahan proyek secara reverse chronological. Baca [PROJECT_CONTEXT.md](./PROJECT_CONTEXT.md) terlebih dahulu untuk memahami arsitektur, aturan bisnis, dan kewajiban dokumentasi.
 
@@ -12,6 +12,453 @@ File ini mencatat perubahan proyek secara reverse chronological. Baca [PROJECT_C
 - Jangan mencantumkan data siswa nyata, password, token, cookie, atau secret.
 - Jangan menghapus atau menulis ulang entri lama. Tambahkan entri koreksi bila diperlukan.
 - Perubahan implementasi dan entri changelog wajib masuk commit yang sama.
+
+## 2026-10-03 - Script pemeriksaan db_spp untuk DBeaver
+
+- Aktor: Codex, permintaan pemilik untuk database lokal `db_spp` yang sudah diperbarui.
+- Perubahan: `sql/dbeaver_verify_legacy_db_spp.sql` membaca skema, siswa/manifest per unit, angka keuangan dan 26 invariant melalui tabel fisik seluruh unit. Transaksi read-only; tidak menerapkan DDL, impor, aktivasi atau perubahan data.
+- Verifikasi: seluruh script dijalankan melalui klien MySQL 8.4; tujuh pemeriksaan skema dan 26 integritas OK. Pemeriksaan query hanya memakai USE/START TRANSACTION/SELECT/COMMIT. Antarmuka DBeaver tidak diuji langsung.
+- Dokumentasi: cara penggunaan dan batas cakupan ditambahkan pada runbook Legacy. Tidak ada perubahan API, skema atau data.
+
+## 2026-10-03 - Penerapan trial Legacy dan penutupan audit
+
+- Aktor: Codex, atas otorisasi pemilik; kode `62dd273` dipindahkan ke main, migrasi dan tiga sumber diterapkan setelah simulasi/backup/restore lulus.
+- Hasil: 1.137 identitas Legacy pending, 8 baris ditahan, 142 GK dipisahkan. Trial 222 menjadi 1.359 siswa; tidak ada aktivasi massal atau penerapan keuangan legacy.
+- Baseline segera sesudah importer: 1.018 pembayaran/Rp577.145.000, seluruh nilai existing dan 31 tabel original lain identik. Aktivitas sesudah aplikasi dibuka: dua pembayaran SD +Rp645.000 dan perubahan tarif SD dari sesi Super Admin. Pemeriksaan akhir 1.020 pembayaran/Rp577.790.000; original pembayaran/detail/alokasi serta Tabungan 12/Rp1.050.000 tetap utuh. Perubahan tarif aktual dibedakan dari hasil migrasi.
+- Verifikasi akhir: restore pembanding per primary key, 26 invariant nol, health OK, 24 keadaan UI main baca saja. Clone/server/instance khusus tes dibersihkan setelah pemeriksaan kepemilikan; worker dan sumber privat trial dipertahankan.
+- Batas: siap untuk trial identitas pada tiga profil yang diaudit; startup worker manual setelah restart/logoff, histori keuangan/restore web penuh/throughput 100 MiB belum dinyatakan siap. [Audit implementasi](LEGACY_IMPORT_BACKEND_20261003.md) dan [runbook](LEGACY_IMPORT_RUNBOOK_20261003.md).
+
+## 2026-10-03 - Backend identitas Legacy dan aktivasi manual
+
+- Aktor: Codex, rencana pemilik; implementasi di atas `926753b`, diuji dalam worktree/clone sebelum penerapan trial.
+- Perilaku: impor `.dat` identitas melalui worker CLI LocalDB privat dan SQLite, upload/status/pratinjau/konfirmasi/cancel/CSV ber-CSRF; progress aktual. Backup/Restore dan kategori keuangan tetap tidak tersedia.
+- Identitas: NIS unik per unit, FK/indeks/join/agregasi/selection ID/struk/buku mengikuti pemilik. Legacy pending tidak aktif, tidak ditempatkan, tanpa kewajiban/saldo; aktivasi manual satu transaksi oleh admin/kasir/Super Admin, replay ditolak, tarif master dikonfirmasi, tanpa tagihan otomatis.
+- Penerbitan: master SPP menyiapkan pasangan Komite bagi penempatan manual, mempertahankan snapshot/tagihan berbayar.
+- Database: migrasi CLI terpisah DDL, backup/maintenance gate; marker, manifest, unique/FK unit/NIS dan trigger Legacy. Clone bersih 222?1.359 siswa, pembayaran 1.018/Rp577.145.000 dan Tabungan 12/Rp1.050.000 utuh; baseline trial final dicatat dalam audit backend.
+- Verifikasi: tiga backup nyata, 1.137 diterima/8 ditahan/142 GK; reimport/recovery/rollback, migrasi parsial/replay/restore/install, tiga siklus reguler/PSB serta tiga dari identitas impor sampai kelulusan, NIS sama tiga unit, finansial/races/307 akses, layar/Excel/PDF, UI empat tema dan aktivasi; sintaks, CSS, 26 integritas. Batas throughput upload 100 MiB dicatat terpisah dari kelulusan validasi ukuran.
+- Dokumentasi: [audit backend](LEGACY_IMPORT_BACKEND_20261003.md), [runbook](LEGACY_IMPORT_RUNBOOK_20261003.md), audit sumber/UI historis diberi penanda; seluruh data pribadi/backup/log/screenshot berada di luar Git. Startup worker manual lokal, bukan layanan deployment umum.
+
+## 2026-10-03 - Antarmuka Backup, Restore dan Import Legacy
+
+- Aktor: Codex, implementasi rencana pemilik pada `main` di atas `de10aef`.
+- Perilaku: menu Backup & Restore khusus Super Admin; dua mode dengan ringkasan koneksi/estimasi ukuran baca saja, cakupan seluruh database, riwayat belum tersedia, pemilihan SQL lokal dan modal penjelasan penggantian data. Backup/restore/pemetaan/penerapan tetap nonaktif; tidak ada upload atau eksekusi SQL. Unit sumber legacy SD/SMP/SMA tidak memengaruhi sidebar; NIS/status dan kompatibilitas belum diselesaikan otomatis.
+- Tampilan: mengikuti referensi dan tema existing melalui CSS/JS khusus ber-versi filemtime; stylesheet bersama tidak diubah. Desktop empat ringkasan/dua kartu, tablet dua ringkasan, ponsel vertikal.
+- Database/API/migrasi: tidak ada. Clone khusus `db_spp_audit_backup_ui_20261003`; fingerprint 32 tabel utama dan clone identik sebelum/sesudah. Utama tetap 222 siswa, 1.018 pembayaran/Rp577.145.000, Tabungan 12 rekening/Rp1.050.000.
+- Verifikasi: parser CSS khusus/acuan CSS bersama, lint PHP/JS, tes file dan modal aksesibel, 48 keadaan tampilan (empat palette, dua tema, tiga viewport, dua mode), tablet, tes sesi/role/metode tulis, guard CSRF/Semua Unit dan regresi kontrol browser lintas unit lulus. Tidak ada upload atau error JavaScript.
+- Dokumentasi/bukti: [audit UI](BACKUP_RESTORE_UI_20261003.md), [audit kelayakan legacy](LEGACY_IMPORT_FEASIBILITY_20261003.md) yang sebelumnya belum di-commit, serta konteks diperbarui. Backup/fingerprint/screenshot disimpan di luar repo dalam folder `backup_restore_ui_20261003`; server/clone khusus dibersihkan setelah pemeriksaan.
+
+## 2026-10-03 - Empat tombol akses cepat cakupan Dashboard
+
+- Aktor: Codex, implementasi rencana pemilik pada `main` di atas `f16d06d`.
+- Perilaku: kartu Cakupan Rekap menampilkan SD, SMP, SMA dan Semua Unit melalui formulir POST/CSRF ke endpoint pergantian unit yang sama dengan sidebar. Pilihan memperbarui sesi, rekap, palette dan sidebar, lalu kembali ke Dashboard tanpa query lama. URL baca `dashboard.php?unit=all` tetap tersedia tanpa mengubah sesi. Form khusus pemilih unit tetap dapat digunakan dalam mode baca gabungan.
+- Tampilan: empat tombol sejajar di desktop, dua baris di ponsel dengan target sentuh minimal 44px; pilihan aktif memakai warna tema unit. Acuan regresi CSS hanya mengizinkan perubahan komponen Dashboard ini selain penyesuaian sebelumnya.
+- Database/API/migrasi: tidak ada perubahan kontrak endpoint, skema atau data utama. Pengujian memakai clone baru `db_spp_audit_dashboard_scope_20261003`; fingerprint seluruh 32 tabel utama dan clone tetap sama setelah tes. Utama tetap 1.018 pembayaran/Rp577.145.000; data Tabungan termasuk dalam pembandingan fingerprint.
+- Verifikasi: `all_units_http_test.php` lulus untuk CSRF, role/sesi, penolakan tulis gabungan dan gate transaksi. `all_units_browser_test.js` lulus, termasuk Semua Unit → SD → SMP → SMA → Semua Unit, jumlah gabungan, tautan ekspor dan URL lama. Pemeriksaan langsung Chromium mencakup 24 kasus (empat cakupan × dua tema × viewport 1440/2560/390), susunan tombol, tidak ada overflow dan kesesuaian nominal/jumlah transaksi dengan query tabel sumber. Respons ekspor PDF preview/Excel empat cakupan, lint dua PHP, sintaks JS dan parser/acuan CSS lulus.
+- Bukti lokal: screenshot dan hasil pemeriksaan ada di `C:\laragon\backups\spp-management-system\dashboard_scope_20261003`. Pengambilan screenshot menonaktifkan transisi selama pengujian agar perubahan viewport selesai sebelum diukur. Backup dipertahankan; server dan clone khusus paket ini dibersihkan setelah identitas serta fingerprint diverifikasi.
+
+## 2026-10-03 - Ukuran pill unit mengikuti Role Management
+
+- Aktor: Codex, implementasi permintaan pemilik pada `main` di atas `a84c6c6`.
+- Perilaku: badge SD/SMP/SMA dari `unit_record_badge()` memakai kelas khusus dengan lebar mengikuti teks, padding 5px/10px, font 13px dan pembulatan seperti pill Unit Role Management. Warna badge data tetap memakai warna sebelumnya; pill kelas dan tema unit tetap sama. Selector khusus juga mencegah gaya teks sekunder Riwayat Tabungan mengecilkan badge.
+- Database/migrasi/kompatibilitas: tidak ada perubahan skema, API bisnis atau data. Sampel HTML halaman dibaca dalam transaksi database read-only lalu di-rollback; tidak ada transaksi pembayaran atau Tabungan yang ditulis.
+- Verifikasi: lint PHP helper, parser CSS dan pembandingan seluruh aturan desain terhadap acuan dengan satu tambahan gaya pill, serta pemeriksaan sintaks dua JS terkait lulus. Chromium memeriksa 36 kasus render HTML aktual (delapan halaman dan halaman kedua Daftar Ulang, dua tema, viewport 1440/390). Dimensi SD/SMP/SMA cocok dengan pill Role Management; ukuran/warna/font pill kelas tetap sama. Screenshot sebelum/sesudah desktop/ponsel terang/gelap diperiksa. Artefak lokal ada di `C:\laragon\backups\spp-management-system\unit_pill_20261003`.
+- Catatan: pemeriksaan browser memakai snapshot HTML dengan skrip aplikasi dinonaktifkan; paket ini mengubah ukuran badge dan tidak mengulang pengujian alur transaksi. Acuan regresi CSS hanya menambahkan aturan badge khusus; aturan desain lainnya tetap diperiksa penuh.
+
+## 2026-10-03 - Semua Unit untuk baca data dan rekap
+
+- Aktor: Codex, implementasi rencana pemilik pada `main` di atas `c8f5ac9`.
+- Perilaku: pilihan Semua Unit khusus Super Admin disimpan di sesi dan diselaraskan dengan Dashboard/pemilih laporan. Input/edit pembayaran, Tabungan Masuk/Keluar dan otorisasi hanya memiliki SD/SMP/SMA; sesi gabungan meminta pemilihan eksplisit sebelum form dimuat. Semua mutasi siswa/master/penerbitan/kenaikan/pengaturan ditolak dalam mode gabungan, termasuk request lama/manipulasi. Filter terkait unit dibersihkan saat berpindah, tanggal dipertahankan.
+- Data/kompatibilitas: identitas unit pada daftar/pencarian/rombel/ekspor, overview tarif tahunan gabungan, PSB terpisah, struk/buku/surat individual memakai sekolah pemilik. Join tahun ajaran jurnal Tabungan diperbaiki agar gabungan tidak melipatgandakan transaksi; detail rombel memakai label asli dan unit. URL laporan lama tetap didukung untuk baca; aturan pembayaran, histori dan pengaman sebelumnya tetap berlaku.
+- Database/migrasi/UI: tidak ada perubahan skema/data utama/stylesheet. Tema tiga unit dan palette super tetap memakai desain yang dipulihkan. Utama tetap 222 siswa, 1.018 pembayaran/Rp577.145.000; Tabungan 12 rekening/Rp1.050.000, 12 jurnal masuk/6 keluar; fingerprint seluruh 32 tabel identik, health OK dan 14 invariant nol.
+- Verifikasi: enam perjalanan reguler/PSB SD/SMP/SMA sampai kelulusan, pembayaran/otorisasi/Tabungan, kenaikan dan laporan historis, 307 request akses, pengaman Semua Unit dengan fingerprint tetap, sepuluh template sumber/layar/Excel/PDF serta sekolah pemilik cetak. Browser empat alur dan kontrol tiga unit lulus; matriks final 768 kasus empat cakupan/dua tema/tiga viewport cocok dengan acuan. Tes visual memakai penghitungan ulang layout yang sama pada kedua gambar, tanpa toleransi raster tambahan. 28 PHP, dua JS dan parser CSS/CSSOM lulus.
+- Bukti/batas: [audit Semua Unit](ALL_UNITS_AUDIT_20261003.md), [data](all-units-20261003-data.png), [gate transaksi](all-units-20261003-transaction.png), [ponsel](all-units-20261003-mobile.png). Status kesiapan lokal tetap siap terbatas dengan syarat; deployment dinilai tersendiri. Backup di luar Git dipertahankan; hanya dua server/clone milik paket ini dibersihkan.
+
+## 2026-10-02 - Pemulihan UI sesuai 7647608
+
+- Aktor: Codex, atas permintaan pemilik memperbaiki seluruh regresi UI hasil audit; basis `e479606` pada `main`.
+- Penyebab: pembersihan Titipan SPP merusak 10 penutup selector `:is(...)`, target turunan dan aturan responsif bersama; aturan tema/layout di bagian berikutnya tidak terbaca. Audit sebelumnya melewatkan kerusakan visual meski interaksi dan database lulus.
+- Perilaku tampilan: seluruh aturan komponen aktif mengikuti desain `7647608`, tema SD hijau/SMP biru/SMA merah dan mode terang/gelap kembali. Pembersihan selector titipan memakai AST, menjaga cabang bersama. Tombol logout POST/CSRF tetap memakai penyesuaian tampilannya. 23 pemanggil stylesheet PHP memakai versi `filemtime`.
+- API/database: tidak ada perubahan bisnis, JavaScript aplikasi, migrasi atau data utama. Titipan SPP tetap dihapus; pembayaran langsung dan hasil perbaikan audit tetap berlaku. Tabungan tetap utuh.
+- Verifikasi: sintaks/AST CSS, CSSOM Chromium, 576 screenshot dari 32 halaman/varian x tiga unit x dua tema x tiga viewport lulus dengan nol selisih piksel/overflow/error JavaScript. Kontrol sidebar/unit/tema/dropdown DU/filter/ekspor/preview tiga unit dan empat alur browser pembayaran/pendaftaran/otorisasi/kenaikan lulus dengan verifikasi database. Utama health CLI/HTTP OK, 14 invariant nol, 222 siswa/1.018 pembayaran/Rp577.145.000. Seluruh tabel bisnis sama dengan clone visual; fingerprint tiga tabel Tabungan tetap sama.
+- Bukti: [audit UI](UI_RECOVERY_AUDIT_20261002.md), [sebelum/sesudah](ui-recovery-20261002-before-after.png), [tema unit](ui-recovery-20261002-palettes.png). Kegagalan alat/fixture dicatat terpisah dan diperbaiki sebelum hasil final.
+
+## 2026-10-02 - Penggabungan hasil audit ke main
+
+- Aktor: Codex, atas permintaan pemilik untuk menjadikan seluruh hasil audit sebagai versi main.
+- Git: ambil perubahan origin terbaru, lalu gabungkan 11 commit `audit/readiness-20261001` sampai `6a95cc0` ke `main` dari `7647608` dengan fast-forward. Tidak ada divergensi atau konflik; kode aplikasi identik dengan branch audit. Branch audit dipertahankan sebagai referensi.
+- Perilaku/API: tidak ada perubahan implementasi tambahan; dokumentasi status penggabungan diselaraskan.
+- Database/migrasi: tidak ada perubahan atau penerapan ulang. Tetap 222 siswa, 1.018 pembayaran/Rp577.145.000; Tabungan 12 rekening/Rp1.050.000 dan jurnal 12 masuk/6 keluar.
+- Verifikasi: health CLI OK, HTTP 200 `ok`, 14 pemeriksaan integritas bersih. Hasil regresi yang tercatat pada audit berlaku karena kode aplikasi tidak berubah; batas siap terbatas dengan syarat tetap berlaku.
+
+## 2026-10-02 - Penghapusan Titipan SPP, pembayaran langsung
+
+- Aktor: Codex; implementasi rencana pemilik pada branch `audit/readiness-20261001` di atas `ec3db42`. Main belum digabung.
+- Hapus menu/endpoint/saldo/modal/penggunaan/pengembalian/laporan Titipan SPP, field status dan snapshot baru. URL lama 404; request lama pencatatan/penggunaan ditolak tanpa transaksi baru. Satu bulan SPP harus tepat sisa tagihan, dengan urutan tertua dan pasangan Komite tetap berlaku.
+- Pembayaran tahun tujuan menunggu penempatan hasil kenaikan resmi dan penerbitan tagihan. Konfirmasi periode mendatang, snapshot kelas/tarif, dan isolasi unit tetap dipakai.
+- Migrasi CLI `sql/remove_spp_deposit.php`: audit bawaan, apply eksplisit dengan gate backup, preflight/fingerprint, transaksi data terpisah dari DDL, verifikasi semua tabel lain. Schema instalasi, definisi legacy, guard enum, seed dan tes diselaraskan.
+- Database dummy lokal: hapus tepat 19 header/batch/mutasi tidak terpakai senilai Rp2.475.000. Pembayaran 1.037 menjadi 1.018; penerimaan Rp579.620.000 menjadi Rp577.145.000. Siswa/penempatan/tagihan/alokasi normal utuh. Tabungan 12 rekening/Rp1.050.000, 12 jurnal masuk/6 keluar; ketiga fingerprint tetap sama.
+- Verifikasi: enam lifecycle reguler/PSB SD/SMP/SMA, pembayaran tepat/kurang/lebih, urutan lintas tahun, edit/hapus/otorisasi/replay, race SPP/Komite/DU dan Tabungan, 307 request akses, browser pembayaran/pendaftaran/kenaikan/otorisasi, rekonsiliasi layar/Excel/PDF, 15 PDF surat, fresh install, seed 988, restore backup/kegagalan preflight/DDL/rerun. Utama health OK, 14 invariant nol, 61 FK dan 18 CHECK/dua trigger cocok. Bukti dan batas ada di audit/runbook terbaru.
+
+## 2026-10-02 - Penutupan regresi kesiapan lokal
+
+**AI/Aktor:** Codex bersama pemilik proyek.
+
+**Tujuan:** Menuntaskan temuan audit, penerimaan lintas unit, dan sinkronisasi status migrasi.
+
+**Perilaku:** Laporan membedakan SPP belum diterbitkan/dibatalkan dan memisahkan penerimaan berdasarkan snapshot kelas; tarif aktif yang belum dibayar mengikuti master tujuan; default kenaikan mengikuti rombel aktif dengan histori asal terlindungi; status formulir eksplisit sehingga replay tidak membalik; penerbitan ulang Biaya Lain dan delete-publish terlindungi. Komite memakai current read setelah lock agar dua kasir tidak membayar tagihan sama dua kali. Koreksi keterangan lama: Komite mandiri hanya ketika SPP periode itu tidak lagi terutang atau belum diterbitkan; ketika keduanya terutang, bayar bersama.
+
+**Database/migrasi:** Empat migrasi yang sudah disiapkan diterapkan pada `db_spp` dummy dengan izin pemilik dan backup; tidak ada migrasi tambahan untuk paket perbaikan ini. Utama tetap 222 siswa, 1.037 pembayaran, Rp579.620.000 dan 14 invariant nol; health/skema cocok.
+
+**Kompatibilitas:** Tidak mengubah API publik atau struktur tambahan. Riwayat/nominal berbayar dipertahankan; formulir lama tanpa status/kunci penerbitan valid diminta dimuat ulang. PSB SD kelas 1 menanggung SPP; PSB SMP/SMA mengikuti aturan tarif reguler unit.
+
+**Verifikasi:** Enam lifecycle HTTP reguler/PSB sampai kelulusan SD/SMP/SMA; regresi CLI/HTTP keuangan; race SPP/Komite/DU; 333 request matrix akses; refresh sesi; rekonsiliasi layar/Excel/PDF lintas unit; 15 PDF surat; browser pendaftaran/pembayaran/dropdown/kenaikan/keputusan otorisasi dengan verifier DB. Rincian, kegagalan alat, baseline dan batas kesiapan ada di `READINESS_AUDIT_20261001.md`. Helper tes memilih CSRF form yang benar dan memverifikasi server clone. Kesiapan target deployment terpisah.
+
+## 2026-09-19 - Persiapan Railway privat
+
+**AI/Aktor:** Codex bersama pemilik proyek.
+
+**Tujuan:** Menyiapkan deployment PHP/MySQL tanpa mengekspos seed dan data demo.
+
+**Perubahan fitur dan perilaku:** Menambahkan Dockerfile PHP 8.2/Apache, pembatasan akses berkas server, konfigurasi sesi produksi, healthcheck, dan port database dari environment. Error database tidak lagi ditampilkan ke pengunjung. Menambahkan panduan deployment Railway.
+
+**Database dan migrasi:** `sql/bootstrap_production.php` membentuk schema kosong dan satu admin ber-hash kuat dari schema referensi; database non-kosong ditolak. Tidak ada perubahan pada data lokal akibat perubahan kode ini.
+
+**Kompatibilitas:** Koneksi lokal tetap memakai default XAMPP ketika variable Railway tidak disetel. Image tidak membawa backup SQL atau data demo. Project Railway dan service web telah dibuat privat, belum dideploy atau diberi domain.
+
+**Verifikasi:** Bootstrap pada database disposable menghasilkan 30 tabel, 61 kelas/rombel, satu admin, dan nol siswa demo; percobaan ulang ditolak. `sql/verify_schema.sql` pada database tersebut tidak menemukan requirement hilang. Build Docker dan deploy Railway masih menunggu service MySQL resmi serta koneksi source GitHub.
+
+## 2026-09-19 - SPP dan Komite per Bulan
+
+**AI/Aktor:** Codex bersama pemilik proyek.
+
+**Tujuan:** Mengembalikan pemilihan periode SPP secara manual, membatasi satu bulan per transaksi, dan mewajibkan Komite bulan yang sama.
+
+**Perubahan fitur dan perilaku:** Form melabeli bulan/tahun tagihan serta tanggal penerimaan secara terpisah. SPP harus tepat melunasi tagihan terbit tertua yang dipilih; modal tunggakan tetap dipakai. Titipan hanya dicatat lewat tindakan eksplisit dan penggunaannya dikonfirmasi. Komite per bulan dapat dibayar sendiri secara penuh, tetapi tidak boleh tertinggal ketika SPP bulan itu dibayar. Master Siswa menyediakan tarif Komite per bulan dan bulan mulai siswa pindahan. Struk, histori, status, laporan, PDF, dan Excel membaca periode Komite yang sesuai.
+
+**Database dan migrasi:** `sql/migrate_komite_bulanan.sql` menambah tagihan/rincian Komite bulanan dan penanda pembayaran SPP baru yang wajib berpasangan dengan Komite. Data Komite tahunan demo dihapus dari rincian dan nominal transaksi, sedangkan header transaksi serta komponen lain dipertahankan. Schema referensi dan pemeriksaan schema diperbarui.
+
+**Kompatibilitas:** Pembayaran SPP lama tetap terbaca; aturan pasangan Komite berlaku untuk pembayaran SPP baru dan perubahan setelah migrasi. Migrasi harus dijalankan satu kali setelah backup. Tidak ada pemindahan nominal Komite tahunan lama ke tagihan bulanan.
+
+**Verifikasi:** Migrasi database disposable dan database aktif masing-masing mempertahankan 218 header transaksi; Komite tahunan Rp2.666.500 dihapus sehingga total kas demo menjadi Rp84.817.500. Terdapat 672 tagihan Komite bulanan dan tidak ada relasi yatim. Backup database aktif disimpan sebelum migrasi. Seluruh 22 tes PHP serta lint PHP perubahan lulus pada database uji. Sintaks JavaScript valid melalui parser Chrome headless; render form desktop diperiksa dan nama bulan ditampilkan lengkap. Helper computer-use Windows tidak tersedia sehingga interaksi manual browser tidak dapat diuji pada sesi ini. Pemeriksaan skema baru lulus; beberapa constraint baseline lama sudah tidak ada sebelum migrasi.
+
+## 2026-09-15 - Master Penerbitan dan Titipan SPP
+
+**AI/Aktor:** Codex berbasis GPT-5, bersama pemilik proyek
+
+**Tujuan:** Mengganti pembayaran SPP berbasis periode bebas menjadi tagihan bulanan yang diterbitkan, mendukung pembayaran muka secara aman, serta menjaga snapshot tarif ketika harga berubah.
+
+**Perubahan fitur dan perilaku:**
+
+- Menambahkan Master Penerbitan SPP khusus administrator dengan tarif kelas 1–6, status Draft/Terbit/Ditutup, filter rombel/siswa, bulan mulai siswa pindahan, penerbitan 12 bulan Juli–Juni, dan pembatalan tagihan siswa keluar.
+- Tagihan diterbitkan hanya dari penempatan kelas yang tersimpan dan bersifat idempoten. Kelas 1 pertama asal PSB serta potongan 100% menghasilkan tagihan Rp0 dengan status yang berbeda.
+- Pembayaran SPP kini mengalokasikan uang ke tagihan tertua. Dana yang belum cukup satu bulan atau melebihi seluruh tagihan terbit disimpan sebagai Titipan SPP; saldo lama hanya dipakai setelah kasir mengonfirmasi pratinjau.
+- Perubahan tarif atau potongan hanya memperbarui tagihan yang belum pernah menerima alokasi. Tagihan berbayar, tahun tertutup, struk lama, dan snapshot historis tetap dipertahankan.
+- Form pembayaran, edit admin, struk, histori, Rekap Setoran Kas, PDF, Excel, dan laporan global memakai relasi tagihan/alokasi baru. Penerimaan SPP dan Titipan SPP dipisahkan, sedangkan penggunaan saldo lama tidak menambah kas hari ini.
+- Menambahkan buku besar Titipan SPP, rekap saldo, penggunaan, dan pengembalian admin. Lulusan dapat melunasi tagihan lama tetapi tidak dapat membentuk titipan baru yang tidak mungkin diterbitkan menjadi tagihan.
+- Memperbaiki edit pembayaran agar batch lama dapat berstatus `reversed` dan batch pengganti tetap dibuat tanpa menghapus histori audit.
+
+**Database dan migrasi:**
+
+- Menambahkan `siswa.potongan_spp_persen`, `bayar.U_TITIPAN_SPP`, master tahun/tarif SPP, tagihan bulanan, batch dan rincian alokasi, buku besar titipan, serta audit SPP melalui `sql/add_spp_billing_and_deposit.sql`.
+- Menambahkan migrasi historis `sql/migrate_spp_billing.php` dan koreksi indeks edit idempoten `sql/fix_spp_allocation_edit.sql`.
+- Migrasi telah diterapkan pada database pengembangan setelah backup: 672 tagihan historis dan 62 alokasi terbentuk, tidak ada alokasi yatim, dan total kas legacy tetap konsisten.
+
+**Kompatibilitas dan data lama:**
+
+- `siswa.SPP_PERBULAN` dipertahankan sebagai nilai kompatibilitas read-only; tagihan baru selalu memakai Master SPP dan snapshot penempatan.
+- Pembayaran lama yang cocok dipetakan ke tagihan historis. Nominal SPP tanpa penempatan/tagihan yang dapat dipastikan menjadi Titipan SPP tanpa mengubah tanggal, metode, atau total penerimaan aslinya.
+- `bayar_spp_periode` tidak lagi menjadi sumber utama, tetapi tetap tersedia untuk pembacaan data legacy.
+
+**Verifikasi:**
+
+- Lint PHP seluruh file berubah, `node --check assets/js/app.js`, dan `git diff --check` lulus.
+- Instalasi baru dari `sql/schema.sql` berhasil membentuk seluruh tabel Master SPP; pemeriksaan schema memastikan seluruh struktur baru tersedia.
+- Seluruh unit/regression test lulus, termasuk penerbitan idempoten, perubahan tarif/potongan, snapshot terkunci, potongan penuh, urutan tagihan, laporan, dan saldo titipan.
+- Integration test HTTP pada database disposable lulus untuk pembayaran beberapa bulan, uang kurang/lebih, penggunaan titipan, edit batch, pemindahan Daftar Ulang, struk, Master Siswa PSB, serta pembatasan role.
+
+**Catatan tindak lanjut:**
+
+- Pemeriksaan visual otomatis melalui plugin browser tidak dapat dijalankan karena browser tidak tersedia pada lingkungan sesi; struktur halaman tetap diverifikasi melalui render HTTP, kontrak HTML, dan pengujian responsif yang sudah ada.
+
+## 2026-09-14 - Pemilih Tunggakan Daftar Ulang dan Riwayat Kelas
+
+**AI/Aktor:** Codex berbasis GPT-5, bersama pemilik proyek
+
+**Tujuan:** Memungkinkan kasir memilih tagihan Daftar Ulang lintas tahun secara aman serta menampilkan perjalanan kelas dan tahun kelulusan siswa.
+
+**Perubahan fitur dan perilaku:**
+
+- Baris Daftar Ulang menampilkan dropdown ketika ada tunggakan lama. Tahun berjalan tetap menjadi default; tanpa tagihan tahun berjalan, tunggakan tertua dipilih.
+- Pemilih Daftar Ulang dirapikan mengikuti tema visual pembayaran: label tunggal, panel berstruktur, status dan nominal yang mudah dipindai, serta tampilan responsif desktop/mobile. Aturan `hidden` dipertegas agar label dan dropdown tidak pernah tampil ganda.
+- Riwayat Kelas dirancang ulang menjadi kontrol ringkas di samping badge kelas dan panel timeline yang memiliki header, jumlah catatan, garis waktu, serta status Saat Ini/Pindah/Lulus. Mode mobile memperoleh perhitungan tinggi panel agar detail tidak bertumpuk dengan kartu siswa berikutnya.
+- Tampilan baru Rekap Setoran Kas dan Rekap Kas Tabungan diaudit ulang untuk tema terang/gelap. Warna permukaan, teks, total, footer tabel, dan kondisi negatif kini mengikuti token tema tanpa warna terang hard-coded pada mode gelap.
+- Opsi memuat tahun ajaran, kelas snapshot, tagihan, terbayar, sisa, dan status Tahun Berjalan/Tunggakan. Pergantian opsi mereset input bayar.
+- Pembayaran Daftar Ulang lama dapat digabung dengan komponen berjalan; struk biasa, struk tahunan, histori ringkas, dan PDF mencantumkan tahun tagihan Daftar Ulang.
+- Lulusan yang masih mempunyai tunggakan Daftar Ulang tetap muncul pada pencarian pembayaran dengan label `LULUS · TA …`; seluruh komponen selain Daftar Ulang dikunci dan juga ditolak backend.
+- Data Siswa memiliki baris expandable Riwayat Kelas dari snapshot yang benar-benar tersimpan. Masa PSB tidak ditampilkan; kelulusan baru dicatat pada tahun kelas 6 diselesaikan dan tidak membuat penempatan palsu pada tahun berikutnya.
+- Penempatan tahun sebelumnya ditandai `pindah` saat kenaikan kelas baru, sementara arsip manual tetap dibedakan dari status lulus.
+
+**Database dan migrasi:**
+
+- Tidak ada tabel, kolom, migrasi, atau perubahan data historis. Implementasi memakai relasi dan unique key yang sudah ada.
+
+**Kompatibilitas dan data lama:**
+
+- Submit Daftar Ulang baru wajib mengirim `tagihan_daftar_ulang_id`; request lama tanpa ID ditolak agar tahun/kelas browser tidak menjadi sumber kebenaran.
+- Transaksi lama tetap dapat dilihat. Tahun kelulusan lama ditampilkan sesuai snapshot yang sudah tersimpan dan tidak dipindahkan otomatis.
+- Admin dapat memindahkan pembayaran Daftar Ulang ke tagihan lain saat edit; saldo asal dan tujuan divalidasi di dalam transaksi yang sama.
+
+**Verifikasi:**
+
+- Lint seluruh PHP dan smoke test JavaScript melalui Chrome headless lulus, termasuk tampilan Riwayat Kelas desktop/mobile, accordion tanpa overlap, pemilih Daftar Ulang, serta Rekap Kas dalam tema terang/gelap.
+- Seluruh unit/regression test lulus, termasuk test baru untuk payload tagihan, penolakan ID tanpa pemilik/masa depan, pengembalian saldo saat edit, tahun kelulusan, dan snapshot kelas 6.
+- Integration test database disposable lulus untuk pembayaran gabungan lintas tahun, pemindahan tagihan saat edit, label tahun pada struk, lulusan, role pembayaran, SPP, dan Master Siswa PSB.
+
+## 2026-09-14 - Penyederhanaan Komponen Pembayaran dan Uang PSB
+
+**AI/Aktor:** Codex berbasis GPT-5, bersama pemilik proyek
+
+**Tujuan:** Menghapus komponen pembayaran lama, menerapkan paket Uang PSB, membebaskan SPP tahun pertama kelas 1 bagi siswa asal PSB, dan membatasi mutasi pembayaran ke administrator.
+
+**Perubahan fitur dan perilaku:**
+
+- Master Siswa hanya memuat SPP, Pangkal, PSB, Komite, Daftar Ulang, dan potongan yang masih berlaku; bagian saldo awal legacy dihapus.
+- Siswa yang dibuat di kelas PSB wajib memiliki nominal PSB dan memperoleh penanda `asal_psb` permanen. Siswa non-PSB tidak dapat diberi PSB melalui request.
+- Pangkal dan PSB menjadi tagihan satu kali berbasis seluruh histori siswa, dapat dicicil, dan tidak memakai tagihan tahunan.
+- Siswa kelas PSB hanya dapat membayar Pangkal, PSB, dan Biaya Lain. Sisa PSB tetap dapat dibayar setelah pindah kelas.
+- Penempatan aktif kelas 1 pertama bagi siswa asal PSB menyimpan snapshot SPP Rp0 serta status `Tercakup Uang PSB`; sinkronisasi tidak menimpa snapshot tersebut dan tahun berikutnya kembali memakai tarif normal.
+- Form, proses, histori, laporan, struk, PDF, dan Excel memakai Uang PSB dan tidak lagi memuat Bangunan, Seragam, Kegiatan, Makan, Sorga, atau Infaq sebagai komponen utama.
+- Input, lihat, dan cetak pembayaran tetap tersedia bagi admin dan kasir. Edit/update/hapus hanya tersedia bagi admin; hapus diubah menjadi POST dengan CSRF.
+- Registry sembilan laporan dan pemisahan Rekap Setoran Kas dari Rekap Kas Tabungan tetap dipertahankan.
+
+**Database dan migrasi:**
+
+- Menambahkan `siswa.PSB`, `siswa.asal_psb`, `siswa_tahun_ajaran.spp_covered_by_psb`, serta `bayar.U_PSB` berikut check constraint terkait.
+- Menghapus enam kolom tarif siswa, empat kolom saldo awal/mirror, dan enam kolom transaksi komponen lama.
+- Menambahkan migrasi satu kali `sql/simplify_payment_components_and_add_psb.sql`. Migrasi menghapus seluruh transaksi yang mengandung komponen lama, mengandalkan cascade untuk detail, menghapus tagihan/alokasi tahunan selain Komite, serta menghitung ulang total pembayaran dan saldo tabungan.
+- Pada database pengembangan, 182 dari 400 transaksi terhapus sesuai kriteria; 218 transaksi valid bertahan. Tidak ada tabel arsip dan snapshot SQL lama tidak diubah sesuai keputusan proyek.
+- `sql/schema.sql`, pemeriksaan schema, dan seluruh seed demo aktif disesuaikan dengan kontrak baru.
+
+**Kompatibilitas dan data lama:**
+
+- Backend secara eksplisit menolak nama field siswa maupun pembayaran lama dari cache browser atau request yang dimanipulasi.
+- Uang Pangkal valid yang tidak berada pada transaksi berkandungan komponen lama tetap dipertahankan.
+- Kolom kompatibilitas Biaya Lain tetap tersedia; Makan, Surga, dan Infak tidak dibuat otomatis sebagai Master Biaya Lain.
+- `koneksi.php` mendukung override environment database agar integration test dapat memakai database disposable tanpa mengubah konfigurasi default.
+
+**Verifikasi:**
+
+- PHP lint lulus untuk seluruh 60 file PHP; `git diff --check` tidak menemukan error whitespace.
+- Dua belas unit/regression test lulus, termasuk sembilan template laporan, kategori PSB, rekap kas terpisah, cakupan SPP kelas 1, urutan SPP, dan konsistensi tarif.
+- Tiga integration test mutasi lulus pada database disposable: proses pembayaran, akses role, dan Master Siswa PSB.
+- Schema baru lulus 79 requirement pada `verify_schema.sql`; simulasi migrasi schema lama membuktikan transaksi komponen lama terhapus, Pangkal valid bertahan, dan tidak ada relasi yatim.
+- Database aktif memiliki nol kolom lama, empat kolom baru, tiga check constraint baru, nol selisih total pembayaran, nol selisih saldo tabungan, nol relasi yatim yang diperiksa, dan hanya Komite pada registry tagihan tahunan.
+- Smoke test HTTP menghasilkan halaman web, cetak, Excel, dan PDF valid dari filter PSB yang sama; output non-PDF memuat Uang PSB dan tidak memuat label komponen lama.
+- `node --check assets/js/app.js` lulus memakai binary portable sementara yang telah dibersihkan kembali. Dompdf dipasang dari `composer.lock`; CLI XAMPP masih memerlukan aktivasi ekstensi GD/ZIP untuk instalasi Composer standar dan logo PDF.
+
+## 2026-09-13 - Pemisahan Rekap Kas Pembayaran dan Tabungan
+
+**AI/Aktor:** Codex berbasis GPT-5, bersama pemilik proyek
+
+**Tujuan:** Memisahkan penerimaan pembayaran sekolah dari mutasi tabungan pada rekap kas harian.
+
+**Perubahan fitur dan perilaku:**
+
+- Rekap Setoran Kas Harian hanya memuat komponen dan metode pembayaran; Tabungan Masuk dan Tabungan Keluar tidak lagi masuk ke total setoran.
+- Menambahkan Rekap Kas Tabungan Harian dengan total masuk, total keluar, mutasi bersih, serta jumlah transaksi masuk dan keluar.
+- Kedua rekap memakai filter dan desain ringkas yang konsisten untuk web, cetak, PDF, dan Excel.
+- Katalog Laporan Global sekarang berisi sembilan template dan menempatkan kedua laporan pada kelompok Rekap Kas.
+
+**Database dan migrasi:**
+
+- Tidak ada perubahan schema, migrasi, maupun data transaksi.
+
+**Kompatibilitas dan data lama:**
+
+- URL template `setoran` tetap tersedia dan mempertahankan perhitungan total Tunai + VA + QRIS.
+- Laporan baru memakai jurnal `transaksi_m` dan `transaksi_k` yang sudah ada tanpa mengasumsikan metode pembayaran tabungan.
+
+**Verifikasi:**
+
+- PHP lint pada sumber laporan, halaman web, ekspor, dan test lulus; `git diff --check` lulus.
+- Pengujian agregasi kosong, masuk saja, keluar saja, mutasi negatif, dan data jurnal lokal lulus.
+- Smoke test render web dan cetak memastikan filter, tabel, kartu ringkasan, total, serta tanda tangan tersedia dan laporan pembayaran tidak memuat tabungan.
+- `modular_reports_test.php` masih berhenti pada prasyarat lama karena database lokal tidak memiliki enam placeholder kelas aktif.
+
+## 2026-09-10 - Rekap Riwayat Tagihan per Siswa
+
+**AI/Aktor:** Codex berbasis GPT-5, bersama pemilik proyek
+
+**Tujuan:** Merapikan Riwayat Tagihan ketika laporan difilter berdasarkan rombel atau tingkat tanpa mengubah sumber dan nominal tagihan.
+
+**Perubahan fitur dan perilaku:**
+
+- Filter rombel dan tingkat menampilkan satu baris per siswa dengan total tagihan, terbayar, sisa, serta seluruh rincian yang lolos filter.
+- Pagination pada mode kelompok menghitung siswa. Pemilihan satu siswa melalui NIS/NIS Diknas tetap memakai tabel detail satu tagihan per baris.
+- Komponen memakai urutan bisnis tetap dan SPP memakai kode periode `YYYY-MM`, sehingga bulan tampil kronologis dalam kalender tahun ajaran.
+- Cetak, PDF, dan Excel memakai representasi kelompok yang sama, sementara total laporan tetap dihitung dari data tagihan datar.
+- Tampilan kelompok dibuat responsif untuk desktop, tablet, ponsel, serta mode terang dan gelap.
+
+**Database dan migrasi:**
+
+- Tidak ada perubahan schema, migrasi, transaksi, atau nominal tagihan.
+
+**Kompatibilitas dan data lama:**
+
+- Filter Semua Kelas dan pencarian satu siswa mempertahankan format detail sebelumnya.
+- Data historis hanya dibaca dan diurutkan; tidak ada backfill atau perubahan snapshot.
+
+**Verifikasi:**
+
+- PHP lint seluruh 59 file, pemeriksaan sintaks `assets/js/app.js`, dan `git diff --check` lulus.
+- Unit test pengelompokan, total, pemilihan mode, pagination siswa, dan urutan SPP lulus.
+- Integration test database lokal secara read-only membuktikan jumlah rincian dan seluruh total tidak berubah setelah pengelompokan.
+- Smoke test render HTML web dan cetak membuktikan mode kelompok, label pagination siswa, versi stylesheet, dan kolom ekspor tersedia.
+- `modular_reports_test.php` tidak dapat diselesaikan karena database lokal tidak memiliki enam placeholder kelas aktif yang menjadi prasyarat test lama. Pengujian visual interaktif tidak dijalankan karena browser pengujian tidak tersedia.
+
+## 2026-09-10 - Popup Peringatan Status SPP
+
+**AI/Aktor:** Codex berbasis GPT-5, bersama pemilik proyek
+
+**Tujuan:** Memberi peringatan singkat dan mudah dipahami sebelum kasir mencoba membayar SPP yang terblokir.
+
+**Perubahan fitur dan perilaku:**
+
+- Input dan Edit Pembayaran memeriksa status SPP terbaru melalui endpoint read-only setelah siswa serta bulan/tahun lengkap dipilih.
+- Popup hanya muncul untuk penghalang pembayaran, termasuk tunggakan pertama, periode lunas, pembayaran lama sebagian, tarif kosong, siswa belum memenuhi syarat, nominal tidak penuh, dan proteksi perubahan transaksi lama.
+- Kolom SPP dikunci saat pemeriksaan atau saat terblokir. Pembayaran komponen lain tetap dapat disimpan bila SPP tidak diisi.
+- Endpoint dan proses simpan memakai layanan status yang sama; penolakan backend setelah perubahan data bersamaan dikembalikan sebagai popup yang seragam.
+- Dialog mendukung mode terang/gelap, layar kecil, keyboard, pengembalian fokus, dan reduced motion.
+
+**Database dan migrasi:**
+
+- Tidak ada perubahan schema, migrasi, transaksi, atau nominal historis.
+
+**Kompatibilitas dan data lama:**
+
+- Pembayaran legacy sebagian tidak ditambah sebagai cicilan baru; kasir diarahkan untuk mengoreksi transaksi lama.
+- Aturan SPP penuh, urutan lintas tahun ajaran, serta pengecualian penempatan `pindah`/`lulus` tetap dipertahankan.
+
+**Verifikasi:**
+
+- PHP lint seluruh 56 file dan pemeriksaan sintaks `assets/js/app.js` lulus.
+- `spp_payment_status_test.php`, `spp_sequence_test.php`, `class_snapshot_test.php`, dan `student_tariff_consistency_test.php` lulus.
+- Endpoint tanpa sesi mengembalikan HTTP 401 dengan JSON singkat dan header `no-store`.
+- Integration test mutasi tidak dijalankan karena database disposable dan kredensial test tidak tersedia. Smoke test visual interaktif tidak dijalankan karena browser kontrol tidak tersedia pada sesi verifikasi.
+
+## 2026-09-10 - Proteksi Konsistensi Tarif Siswa dan Tagihan
+
+**AI/Aktor:** Codex berbasis GPT-5, bersama pemilik proyek
+
+**Tujuan:** Mencegah edit tarif siswa dilaporkan berhasil ketika tarif tidak tersimpan atau snapshot tagihan tahun berjalan tidak ikut diproses.
+
+**Perubahan fitur dan perilaku:**
+
+- Perubahan field Advance ditolak bila switch Advance tidak aktif; browser juga meminta konfirmasi sebelum membuang perubahan panel.
+- Sinkronisasi kelas dipisahkan dari tarif. Kelas penempatan berbayar tetap menjadi histori, tetapi tidak lagi menghentikan sinkronisasi komponen lain.
+- SPP, komponen tahunan, dan Daftar Ulang dikunci per komponen yang sudah dibayar. Tarif master baru tetap tersimpan untuk penerbitan berikutnya.
+- Snapshot tanpa pembayaran direkonsiliasi otomatis saat siswa disimpan, diverifikasi sebelum commit, dan hasilnya dicatat dalam JSON audit siswa.
+- Alert membedakan tidak ada perubahan, sinkronisasi, perbaikan otomatis, tarif terkunci, dan kelas historis yang dipertahankan.
+
+**Database dan migrasi:**
+
+- Tidak ada perubahan schema atau migrasi database.
+
+**Kompatibilitas dan data lama:**
+
+- Pembayaran, nominal, dan kelas historis tidak diubah. Pembayaran legacy pada tabel `bayar` ikut diperiksa sebelum snapshot dianggap aman untuk diperbarui.
+- Anomali lama diperbaiki hanya ketika siswa terkait disimpan dan hanya untuk komponen tanpa pembayaran.
+
+**Verifikasi:**
+
+- PHP lint pada 52 file dan pemeriksaan sintaks `assets/js/app.js` serta skrip inline Data Siswa lulus.
+- `php tests/student_tariff_consistency_test.php` dan `php tests/class_snapshot_test.php` lulus.
+- Simulasi rekonsiliasi Hafizz dijalankan dalam transaksi rollback: kelas historis tetap, sedangkan komponen tanpa pembayaran tersinkron.
+- Test lain lulus, kecuali `modular_reports_test.php` yang terhenti karena database lokal tidak memiliki enam placeholder kelas aktif; integration test pembayaran tetap melewati dirinya karena database disposable dan kredensial test tidak disediakan.
+- Endpoint Data Siswa merespons redirect autentikasi normal. Smoke test interaktif tidak dijalankan karena browser kontrol tidak tersedia pada sesi verifikasi.
+
+**Catatan tindak lanjut:**
+
+- Test suite database penuh tetap harus dijalankan pada database disposable yang memenuhi seluruh fixture laporan.
+
+## 2026-09-09 - Urutan SPP Penuh Lintas Tahun Ajaran
+
+**AI/Aktor:** Codex berbasis GPT-5, bersama pemilik proyek
+
+**Tujuan:** Menutup celah ketika SPP Juli tahun ajaran baru dapat dibayar walaupun ada tunggakan pada penempatan aktif tahun ajaran sebelumnya.
+
+**Perubahan fitur dan perilaku:**
+
+- SPP tetap wajib dibayar penuh satu kali pada setiap periode.
+- Validasi backend dan petunjuk form kini menyusun urutan dari seluruh `siswa_tahun_ajaran` berstatus `aktif`; Juli tidak lagi otomatis dianggap bebas dari prasyarat histori siswa.
+- Tarif tunggakan memakai `spp_perbulan_snapshot` dari tahun ajaran asal, sehingga perubahan tarif siswa saat ini tidak mengubah kewajiban periode lama.
+- Penempatan `pindah` dan `lulus`, waktu sebelum penempatan aktif pertama, serta jeda tanpa penempatan aktif tidak menjadi utang SPP otomatis.
+- Edit atau hapus periode prasyarat ditolak bila menyebabkan pembayaran pada periode sesudahnya, termasuk lintas tahun ajaran, menjadi bolong.
+
+**Database dan migrasi:**
+
+- Tidak ada perubahan schema, migrasi, backfill, maupun perubahan nominal transaksi lama.
+
+**Kompatibilitas dan data lama:**
+
+- Pembayaran legacy tetap dihitung bila periodenya cocok; sistem tidak mencoba merekonstruksi kewajiban sebelum penempatan aktif yang tercatat.
+- Test cicilan SPP yang tidak lagi sesuai diganti dengan test urutan SPP penuh lintas tahun ajaran.
+
+**Verifikasi:**
+
+- PHP lint pada file yang diubah dan `node --check assets/js/app.js` lulus.
+- `php tests/spp_sequence_test.php` lulus tanpa database.
+- Test HTTP integrasi kini menolak berjalan tanpa penanda database disposable eksplisit.
+
+## 2026-08-20 - Pemulihan Rekap Pembayaran per Kelas
+
+**AI/Aktor:** Codex berbasis GPT-5, bersama pemilik proyek
+
+**Tujuan:** Mengembalikan halaman mandiri rekap pembayaran per kelas dari riwayat Git tanpa menghapus sistem Laporan Global yang baru.
+
+**Perubahan fitur dan perilaku:**
+
+- Memulihkan versi penuh terakhir `laporan/rekap_kelas.php` dari commit `a3497e2`, sebelum file tersebut diganti menjadi redirect pada commit `75e6b4f`.
+- Mengembalikan menu `Rekap per Kelas` untuk admin dan bendahara, termasuk status menu aktif saat membuka detail siswa.
+- Rekap lama kembali menyediakan filter kelas 1–6, bulan, tahun, pencarian siswa, ringkasan, tabel komponen pembayaran, tampilan mobile, detail siswa, dan cetak browser.
+- Laporan Global dan template Per Item tetap tersedia sebagai fitur terpisah.
+
+**Database dan migrasi:**
+
+- Tidak ada perubahan schema atau migrasi database.
+
+**Kompatibilitas dan data lama:**
+
+- Halaman memakai kolom tingkat legacy `siswa.KELAS` yang tetap dipertahankan pada schema saat ini, sehingga siswa dari seluruh rombel pada tingkat yang sama dirangkum bersama.
+- URL lama `rekap_kelas.php?kelas={1-6}&bulan={01-12}&tahun={YYYY}&q={pencarian}` kembali merender halaman dan tidak lagi mengalihkan ke Laporan Global.
+
+**Verifikasi:**
+
+- Lint PHP, pemeriksaan HTTP untuk halaman dan filter, pembandingan sumber dengan blob historis, `node --check`, serta `git diff --check` dijalankan setelah pemulihan.
+
+**Catatan tindak lanjut:**
+
+- Rekap mandiri mempertahankan konsep tingkat kelas 1–6 dari versi lama; laporan per rombel seperti 1A/1B tetap tersedia melalui Laporan Global.
+
+## 2026-08-20 - Perombakan Dashboard menjadi Closing Harian
+
+**AI/Aktor:** Antigravity, bersama pemilik proyek
+
+**Tujuan:** Merombak keseluruhan antarmuka Dashboard agar berfokus 100% pada *closing harian* (rekap penerimaan uang hari ini) dan menyembunyikan metrik/statistik *all-time* (global) yang kurang relevan bagi operasional kasir.
+
+**Perubahan Perilaku / Kode:**
+- **`dashboard.php`**: Dihapus kueri lama yang meload metrik *all-time* (seperti total siswa, total transaksi keseluruhan). Mengimpor `includes/reports.php` dan memanfaatkan fungsi `report_settlement_data()` khusus untuk tanggal hari ini.
+- Mengubah 4 kotak metrik statistik di atas menjadi representasi uang masuk hari ini (Transaksi Hari ini, Total Penerimaan Kotor, Tunai Diterima, dan Kas Disetorkan/Tunai Bersih).
+- Mengubah tautan "Quick Actions" untuk mengarahkan pengguna pada operasi *closing*: Input Pembayaran, Mutasi Tabungan (arah ke riwayat tabungan), dan Rincian Setoran Lengkap.
+- Menghapus tabel "Transaksi Terbaru" agar fokus UI tidak terdistraksi.
+- Menjadikan tabel "Rekap Setoran Kas Fisik Hari Ini" sebagai satu-satunya tabel yang tampil di dashboard, lengkap dengan fungsionalitas Export Excel yang otomatis disesuaikan untuk mengekspor rekap tanggal hari berjalan.
+
+**Kompatibilitas:** Sepenuhnya *backward-compatible*. Data tidak berubah, ini murni perombakan cara menampilkan agregasi data laporan pada halaman depan.
+
+**Tindak Lanjut / Verifikasi:**
+- Uji sintaks `php -l dashboard.php` lolos tanpa *error*.
+- Memastikan navigasi tombol aksi cepat (`tabungan/riwayat.php`) berfungsi tanpa error.
+- Tampilan dievaluasi melalui tangkapan visual, dan fitur *export Excel* dipastikan menuju *endpoint* yang sudah ada dengan parameter `tanggal_awal=TODAY&tanggal_akhir=TODAY`.
 
 ## 2026-08-18 - Laporan Global Modular dan Master Kelas/Rombel
 

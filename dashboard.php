@@ -1,6 +1,6 @@
 <?php
 // ============================================
-// dashboard.php
+// dashboard.php - Daily Closing Dashboard
 // ============================================
 session_start();
 if (!isset($_SESSION['admin_id'])) {
@@ -10,37 +10,80 @@ if (!isset($_SESSION['admin_id'])) {
 require_once 'koneksi.php';
 require_once 'includes/auth.php';
 requireRole(['admin', 'bendahara']);
+// Rekap gabungan hanya tersedia bagi Super Admin; unit operasional tetap tersimpan.
+$reportUnitId=unit_report_scope($koneksi,(string)($_GET['unit']??''));
+require_once 'includes/reports.php';
 
-// Stats
-$total_siswa    = $koneksi->query("SELECT COUNT(*) as c FROM siswa WHERE is_active = 1")->fetch_assoc()['c'];
-$total_bayar    = $koneksi->query("SELECT COUNT(*) as c FROM bayar")->fetch_assoc()['c'];
-$total_nominal  = $koneksi->query("SELECT COALESCE(SUM(total_jumlah),0) as s FROM bayar")->fetch_assoc()['s'];
-$bayar_bulan_ini = $koneksi->query(
-    "SELECT COUNT(*) as c FROM bayar WHERE MONTH(TGL_BYR)=MONTH(NOW()) AND YEAR(TGL_BYR)=YEAR(NOW())"
-)->fetch_assoc()['c'];
+// Data Rekap Penerimaan Hari Ini
+$todayDate = date('Y-m-d');
+$setoranFilters = [
+    'tanggal_awal' => $todayDate,
+    'tanggal_akhir' => $todayDate,
+    'kategori' => 'semua',
+    'kelas' => 0,
+    'operator' => '',
+    'metode' => '',
+    'q' => '',
+    'mode' => 'harian',
+    'tahun' => (int)date('Y'),
+    'bulan_awal' => date('m'),
+    'bulan_akhir' => date('m'),
+    'status' => '',
+    'siswa_status' => 'active',
+    'tahun_ajaran' => du_current_academic_year()
+];
 
-// Transaksi terbaru
-$recent = $koneksi->query("
-    SELECT p.id, p.payment_link_version, s.NO_INDUK, s.NAMA, s.KELAS, p.BULAN, p.TAHUN, p.total_jumlah, p.TGL_BYR
-    FROM bayar p
-    JOIN siswa s ON s.NO_INDUK = p.NO_INDUK
-    ORDER BY p.created_at DESC
-    LIMIT 5
-");
+$paymentComponents = report_payment_components($koneksi, $setoranFilters);
+$paymentComponents = array_values(array_filter($paymentComponents, static fn($row) => ($row['kategori_key'] ?? '') !== 'potongan'));
+$totalPembayaran = array_sum(array_map(static fn($row) => (float)($row['nominal'] ?? 0), $paymentComponents));
+$jumlahTransaksi = count(array_unique(array_column($paymentComponents, 'id')));
+
+$startToday = $todayDate . ' 00:00:00';
+$endToday = date('Y-m-d H:i:s', strtotime($todayDate . ' +1 day'));
+$savingTransactions = report_savings_transactions($koneksi, $startToday, $endToday, $setoranFilters);
+$tabunganMasuk = array_sum(array_map(static fn($row) => (float)($row['masuk'] ?? 0), $savingTransactions));
+$tabunganKeluar = array_sum(array_map(static fn($row) => (float)($row['keluar'] ?? 0), $savingTransactions));
+$totalPenerimaan = $totalPembayaran + $tabunganMasuk - $tabunganKeluar;
+
+$rekapHarianRows = [
+    ['label' => 'Transaksi Pembayaran', 'desc' => 'Semua pembayaran siswa hari ini', 'nominal' => $totalPembayaran, 'kind' => 'payment', 'icon' => 'card'],
+    ['label' => 'Tabungan Masuk', 'desc' => 'Setoran tabungan yang diterima', 'nominal' => $tabunganMasuk, 'kind' => 'saving-in', 'icon' => 'up'],
+    ['label' => 'Tabungan Keluar', 'desc' => 'Penarikan tabungan siswa', 'nominal' => $tabunganKeluar, 'kind' => 'saving-out', 'icon' => 'down'],
+    ['label' => 'Total Penerimaan', 'desc' => 'Pembayaran + masuk - keluar', 'nominal' => $totalPenerimaan, 'kind' => 'total', 'icon' => 'total'],
+];
+$bulanIndo = [
+    '01' => 'Januari',
+    '02' => 'Februari',
+    '03' => 'Maret',
+    '04' => 'April',
+    '05' => 'Mei',
+    '06' => 'Juni',
+    '07' => 'Juli',
+    '08' => 'Agustus',
+    '09' => 'September',
+    '10' => 'Oktober',
+    '11' => 'November',
+    '12' => 'Desember',
+];
+$todayLabel = date('d') . ' ' . ($bulanIndo[date('m')] ?? date('F')) . ' ' . date('Y');
+$reportUnitQuery = '&unit=' . ($reportUnitId===0?'all':'active');
+$exportSetoranPdfUrl = 'laporan/export_global.php?template=setoran&format=preview&tanggal_awal=' . $todayDate . '&tanggal_akhir=' . $todayDate . $reportUnitQuery;
+$exportSetoranExcelUrl = 'laporan/export_global.php?template=setoran&format=excel&tanggal_awal=' . $todayDate . '&tanggal_akhir=' . $todayDate . $reportUnitQuery;
+
 ?>
 <!DOCTYPE html>
-<html lang="id">
+<html lang="id" data-palette="<?= unit_palette_for_view(isset($reportUnitId) ? (int)$reportUnitId : null) ?>">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Dashboard | SistemSPP</title>
-  <link rel="icon" type="image/png" href="assets/img/favicon.png" />
-  <meta name="description" content="Dashboard admin sistem pembayaran SPP sekolah." />
+  <title>Dashboard Closing Harian | SistemSPP</title>
+  <link rel="icon" type="image/png" href="assets/img/favicon.png?v=2" />
+  <meta name="description" content="Dashboard admin sistem pembayaran SPP sekolah. Fokus rekap harian." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="assets/css/style.css?v=4.7" />
+  <link rel="stylesheet" href="assets/css/style.css?v=unitpalette4&amp;mtime=<?= filemtime(__DIR__ . '/assets/css/style.css') ?>" />
   <!-- Prevent theme flash -->
-  <script>(function(){var t=localStorage.getItem('spp_theme')||'dark';document.documentElement.setAttribute('data-theme',t);})();</script>
+  <script>(function(){var t=localStorage.getItem('spp_theme')||'light';document.documentElement.setAttribute('data-theme',t);})();</script>
 </head>
 <body>
 
@@ -62,132 +105,138 @@ $recent = $koneksi->query("
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
         </button>
         <div class="topbar-title">
-          <h2>Dashboard</h2>
-          <span class="breadcrumb">SistemSPP / Dashboard</span>
+          <h2>Dashboard Closing</h2>
+          <span class="breadcrumb">SistemSPP / Ringkasan Harian</span>
         </div>
         <div class="clock-badge" id="liveClock">--:--:--</div>
       </div>
 
-      <!-- Stats Cards -->
-      <div class="stats-grid">
-        <div class="stat-card stat-blue">
-          <div class="stat-icon">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+      <section class="dashboard-closing-shell">
+        <?php if (unit_is_super()): ?>
+        <div class="dashboard-scope-card" aria-label="Cakupan rekap dashboard">
+          <div class="dashboard-scope-copy">
+            <span class="dashboard-scope-kicker">Cakupan rekap</span>
+            <strong><?= $reportUnitId === 0 ? 'Seluruh unit sekolah' : 'Unit ' . htmlspecialchars(unit_label(unit_active_id())) ?></strong>
+            <span><?= $reportUnitId === 0 ? 'Ringkasan keuangan SD, SMP, dan SMA hari ini.' : 'Ringkasan keuangan unit operasional hari ini.' ?></span>
           </div>
-          <div class="stat-info">
-            <span class="stat-value"><?= number_format($total_siswa) ?></span>
-            <span class="stat-label">Total Siswa</span>
-          </div>
+          <form action="unit_switch.php" method="post" class="dashboard-scope-options dashboard-unit-switch-form" aria-label="Pilih cakupan rekap">
+            <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_unit_switch'], ENT_QUOTES, 'UTF-8') ?>">
+            <input type="hidden" name="next" value="<?= htmlspecialchars($_SERVER['SCRIPT_NAME'] ?? '/dashboard.php', ENT_QUOTES, 'UTF-8') ?>">
+            <?php foreach ([1 => 'SD', 2 => 'SMP', 3 => 'SMA', 0 => 'Semua Unit'] as $scopeId => $scopeLabel): ?>
+            <button type="submit" name="unit_id" value="<?= $scopeId ?>" class="dashboard-scope-option<?= $reportUnitId === $scopeId ? ' is-selected' : '' ?>" aria-pressed="<?= $reportUnitId === $scopeId ? 'true' : 'false' ?>"><?= $scopeLabel ?></button>
+            <?php endforeach; ?>
+          </form>
         </div>
-        <div class="stat-card stat-green">
-          <div class="stat-icon">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
+        <?php endif; ?>
+        <div class="dashboard-closing-hero">
+          <div class="dashboard-total-card">
+            <span class="dashboard-eyebrow">Dashboard Closing</span>
+            <h1>Ringkasan Hari Ini</h1>
+            <p><?= $todayLabel ?></p>
+            <div class="dashboard-total-value"><?= report_money($totalPenerimaan) ?></div>
+            <div class="dashboard-total-meta">
+              <span><?= number_format($jumlahTransaksi) ?> transaksi</span>
+              <span>Total bersih</span>
+            </div>
           </div>
-          <div class="stat-info">
-            <span class="stat-value"><?= number_format($total_bayar) ?></span>
-            <span class="stat-label">Total Transaksi</span>
-          </div>
-        </div>
-        <div class="stat-card stat-purple">
-          <div class="stat-icon">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
-          </div>
-          <div class="stat-info">
-            <span class="stat-value">Rp <?= number_format($total_nominal, 0, ',', '.') ?></span>
-            <span class="stat-label">Total Nominal</span>
-          </div>
-        </div>
-        <div class="stat-card stat-orange">
-          <div class="stat-icon">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-          </div>
-          <div class="stat-info">
-            <span class="stat-value"><?= number_format($bayar_bulan_ini) ?></span>
-            <span class="stat-label">Bayar Bulan Ini</span>
-          </div>
-        </div>
-      </div>
 
-      <!-- Quick Actions -->
-      <div class="quick-actions">
-        <a href="pembayaran/form.php" class="quick-btn">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
-          Input Pembayaran Baru
-        </a>
-        <a href="pembayaran/lihat.php" class="quick-btn quick-btn-ghost">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-          Lihat Semua Pembayaran
-        </a>
-        <a href="siswa/daftar.php" class="quick-btn quick-btn-ghost">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
-          Manajemen Siswa
-        </a>
-      </div>
-
-      <!-- Recent Transactions -->
-      <div class="main-card" style="margin-top:0">
-        <div class="card-title-row">
-          <div class="card-title">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-            Transaksi Terbaru
+          <div class="dashboard-closing-side">
+            <div class="dashboard-mini-stat is-payment">
+              <span class="dashboard-mini-icon">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
+              </span>
+              <div>
+                <strong><?= report_money($totalPembayaran) ?></strong>
+                <small>Transaksi Pembayaran</small>
+              </div>
+            </div>
+            <div class="dashboard-mini-stat is-in">
+              <span class="dashboard-mini-icon">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
+              </span>
+              <div>
+                <strong><?= report_money($tabunganMasuk) ?></strong>
+                <small>Tabungan Masuk</small>
+              </div>
+            </div>
+            <div class="dashboard-mini-stat is-out">
+              <span class="dashboard-mini-icon">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg>
+              </span>
+              <div>
+                <strong><?= report_money($tabunganKeluar) ?></strong>
+                <small>Tabungan Keluar</small>
+              </div>
+            </div>
           </div>
-          <a href="pembayaran/lihat.php" class="btn btn-ghost" style="padding:6px 14px;font-size:13px">Lihat Semua</a>
         </div>
-        <div class="table-container">
-          <table class="payment-table responsive-table">
-            <thead>
-              <tr>
-                <th>NIS</th>
-                <th>Nama Siswa</th>
-                <th>Kelas</th>
-                <th>Bulan / Tahun</th>
-                <th>Total Bayar</th>
-                <th>Tanggal</th>
-                <th>Aksi</th>
-              </tr>
-            </thead>
-            <tbody>
-              <?php if ($recent->num_rows > 0): ?>
-                <?php while ($row = $recent->fetch_assoc()):
-                  $canEdit = (int)($row['payment_link_version'] ?? 0) === 1;
-                  $editUrl = 'pembayaran/edit.php?id=' . (int)$row['id'];
-                  $rowAttrs = $canEdit
-                    ? ' class="clickable-payment-row" data-edit-url="' . htmlspecialchars($editUrl, ENT_QUOTES, 'UTF-8') . '" tabindex="0" role="link" aria-label="Edit pembayaran ' . htmlspecialchars($row['NAMA'], ENT_QUOTES, 'UTF-8') . '"'
-                    : '';
-                ?>
-                 <tr<?= $rowAttrs ?>>
-                   <td data-label="NIS"><span class="badge-nis"><?= htmlspecialchars($row['NO_INDUK']) ?></span></td>
-                   <td data-label="Nama Siswa"><?= htmlspecialchars($row['NAMA']) ?></td>
-                   <td data-label="Kelas"><?= htmlspecialchars($row['KELAS']) ?></td>
-                   <td data-label="Bulan / Tahun"><?= htmlspecialchars($row['BULAN']) ?> <?= $row['TAHUN'] ?></td>
-                   <td data-label="Total Bayar" class="nominal">Rp <?= number_format($row['total_jumlah'], 0, ',', '.') ?></td>
-                   <td data-label="Tanggal"><?= date('d/m/Y', strtotime($row['TGL_BYR'])) ?></td>
-                   <td data-label="Aksi">
-                     <?php if ($canEdit): ?>
-                     <a href="<?= htmlspecialchars($editUrl) ?>" class="btn-tbl btn-tbl-edit" title="Edit">
-                       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                     </a>
-                     <a href="pembayaran/proses.php?aksi=hapus&id=<?= $row['id'] ?>" class="btn-tbl btn-tbl-del"
-                        title="Hapus" onclick="return confirm('Yakin hapus data ini?')">
-                       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
-                     </a>
-                     <?php else: ?>
-                     <span class="master-status is-inactive" title="Transaksi lama tanpa relasi eksplisit">Legacy</span>
-                     <?php endif; ?>
-                   </td>
-                 </tr>
-                <?php endwhile; ?>
-              <?php else: ?>
-              <tr><td colspan="7" class="text-center" style="padding:40px;color:var(--text-muted)">Belum ada transaksi</td></tr>
-              <?php endif; ?>
-            </tbody>
-          </table>
+
+        <div class="dashboard-action-strip">
+          <a href="pembayaran/form.php" class="quick-btn">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+            Pembayaran
+          </a>
+          <a href="tabungan/riwayat.php" class="quick-btn quick-btn-ghost">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+            Tabungan
+          </a>
+          <a href="laporan/template.php?template=setoran<?= htmlspecialchars($reportUnitQuery) ?>" class="quick-btn quick-btn-ghost">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+            Laporan
+          </a>
+          <a href="<?= htmlspecialchars($exportSetoranPdfUrl) ?>" class="quick-btn quick-btn-soft" target="_blank" rel="noopener">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Export PDF
+          </a>
+          <a href="<?= htmlspecialchars($exportSetoranExcelUrl) ?>" class="quick-btn quick-btn-soft" target="_blank" rel="noopener">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Export Excel
+          </a>
         </div>
-      </div>
+
+        <div class="dashboard-breakdown-card">
+          <div class="dashboard-breakdown-head">
+            <div>
+              <span class="dashboard-eyebrow">Rekap Penerimaan</span>
+              <h2>Rincian Hari Ini</h2>
+              <p>Pembayaran + tabungan masuk - tabungan keluar.</p>
+            </div>
+            <span class="dashboard-date-pill"><?= $todayLabel ?></span>
+          </div>
+
+          <div class="dashboard-breakdown-list">
+            <?php foreach ($rekapHarianRows as $row): ?>
+              <?php
+                $nominal = (float)($row['nominal'] ?? 0);
+                $isDeduct = $row['kind'] === 'saving-out';
+                $displayNominal = ($isDeduct && $nominal > 0 ? '- ' : '') . report_money($nominal);
+              ?>
+              <div class="dashboard-breakdown-row is-<?= htmlspecialchars($row['kind']) ?>">
+                <span class="dashboard-breakdown-icon">
+                  <?php if ($row['icon'] === 'up'): ?>
+                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
+                  <?php elseif ($row['icon'] === 'down'): ?>
+                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><polyline points="19 12 12 19 5 12"/></svg>
+                  <?php elseif ($row['icon'] === 'total'): ?>
+                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19h16"/><path d="M7 15l3-3 3 2 4-6"/><path d="M17 8h-4V4"/></svg>
+                  <?php else: ?>
+                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
+                  <?php endif; ?>
+                </span>
+                <div class="dashboard-breakdown-copy">
+                  <strong><?= htmlspecialchars($row['label']) ?></strong>
+                  <small><?= htmlspecialchars($row['desc']) ?></small>
+                </div>
+                <div class="dashboard-breakdown-amount"><?= $displayNominal ?></div>
+              </div>
+            <?php endforeach; ?>
+          </div>
+        </div>
+      </section>
 
     </main>
   </div><!-- /layout -->
 
-  <script src="assets/js/app.js?v=3.8"></script>
+  <script src="assets/js/app.js?v=<?= filemtime(__DIR__ . '/assets/js/app.js') ?>"></script>
 </body>
 </html>

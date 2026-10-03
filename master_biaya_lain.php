@@ -4,7 +4,7 @@ if (!isset($_SESSION['admin_id'])) { header('Location: login.php'); exit; }
 require_once 'koneksi.php';
 require_once 'includes/auth.php';
 require_once 'includes/biaya_lain.php';
-requireRole(['admin']);
+requireRole(['admin', 'kasir']);
 
 if (empty($_SESSION['csrf_master_biaya_lain'])) $_SESSION['csrf_master_biaya_lain'] = bin2hex(random_bytes(32));
 
@@ -30,6 +30,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($aksi === 'terbitkan_tagihan') {
         try {
+            $publishKey = (string)($_POST['publish_request_key'] ?? '');
+            if (!preg_match('/^[a-f0-9]{32}$/D', $publishKey)
+                || !isset($_SESSION['fee_publish_request_keys'][$publishKey])) {
+                throw new RuntimeException('Formulir penerbitan sudah diproses atau kedaluwarsa. Muat ulang halaman sebelum mencoba lagi.');
+            }
+            unset($_SESSION['fee_publish_request_keys'][$publishKey]);
             $masterId = (int)($_POST['master_id'] ?? 0);
             $target = (string)($_POST['target'] ?? 'all');
             if (!in_array($target, ['all', 'tingkat', 'rombel', 'siswa'], true)) throw new RuntimeException('Target penerbitan tidak valid.');
@@ -43,7 +49,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $where = ['s.is_active=1']; $types = ''; $params = []; $targetValue = null;
             if ($target === 'tingkat') {
                 $level = (int)($_POST['tingkat'] ?? 0);
-                if ($level < 1 || $level > 6) throw new RuntimeException('Pilih tingkat kelas 1 sampai 6.');
+                [$firstLevel, $lastLevel] = unit_level_bounds();
+                if ($level < $firstLevel || $level > $lastLevel) throw new RuntimeException("Pilih tingkat kelas {$firstLevel} sampai {$lastLevel}.");
                 $where[] = 's.KELAS=?'; $types .= 'i'; $params[] = $level; $targetValue = (string)$level;
             } elseif ($target === 'rombel') {
                 $classId = (int)($_POST['master_kelas_id'] ?? 0);
@@ -57,7 +64,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $targetValue = implode(',', $students);
             }
 
-            $sql = "SELECT s.NO_INDUK,s.master_kelas_id,s.KELAS,mk.tingkat,mk.kode_rombel,mk.is_placeholder
+            $sql = "SELECT s.NO_INDUK,s.NAMA,s.master_kelas_id,s.KELAS,mk.tingkat,mk.kode_rombel,mk.is_placeholder
                 FROM siswa s LEFT JOIN master_kelas mk ON mk.id=s.master_kelas_id WHERE " . implode(' AND ', $where) . ' ORDER BY s.NAMA';
             $stmt = $koneksi->prepare($sql);
             if ($types !== '') $stmt->bind_param($types, ...$params);
@@ -65,10 +72,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (!$students) throw new RuntimeException('Tidak ada siswa aktif pada target yang dipilih.');
 
             $inserted = 0;
+            $updated = 0;
+            $republished = 0;
+            $skipped = 0;
+            $conflicts = 0;
             $adminId = (int)($_SESSION['admin_id'] ?? 0);
-            $insert = $koneksi->prepare("INSERT IGNORE INTO tagihan_biaya_lain
+            $findBill = $koneksi->prepare("SELECT t.id,t.status,t.nominal_tagihan,
+                    COALESCE(SUM(d.nominal_snapshot),0) AS paid
+                FROM tagihan_biaya_lain t
+                LEFT JOIN bayar_biaya_lain d ON d.tagihan_biaya_lain_id=t.id
+                WHERE t.master_biaya_lain_id=? AND t.no_induk=?
+                GROUP BY t.id,t.status,t.nominal_tagihan
+                LIMIT 1 FOR UPDATE");
+            $insert = $koneksi->prepare("INSERT INTO tagihan_biaya_lain
                 (master_biaya_lain_id,no_induk,master_kelas_id,nama_snapshot,nominal_tagihan,kelas_rombel_snapshot,status,created_by)
                 VALUES (?,?,NULLIF(?,0),?,?,?,'open',NULLIF(?,0))");
+            $update = $koneksi->prepare("UPDATE tagihan_biaya_lain
+                SET master_kelas_id=NULLIF(?,0), nama_snapshot=?, nominal_tagihan=?,
+                    kelas_rombel_snapshot=?, status='open', cancel_reason=NULL, created_by=NULLIF(?,0)
+                WHERE id=?");
             foreach ($students as $student) {
                 $noInduk = (string)$student['NO_INDUK'];
                 $classId = (int)($student['master_kelas_id'] ?? 0);
@@ -78,15 +100,71 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     'is_placeholder' => $student['is_placeholder'] ?? 1,
                 ]);
                 $name = (string)$master['nama']; $amount = (float)$master['nominal'];
-                $insert->bind_param('isisdsi', $masterId, $noInduk, $classId, $name, $amount, $classSnapshot, $adminId);
-                $insert->execute(); $inserted += $insert->affected_rows > 0 ? 1 : 0;
+                $findBill->bind_param('is', $masterId, $noInduk);
+                $findBill->execute();
+                $existingBill = $findBill->get_result()->fetch_assoc();
+                if (!$existingBill) {
+                    $insert->bind_param('isisdsi', $masterId, $noInduk, $classId, $name, $amount, $classSnapshot, $adminId);
+                    $insert->execute();
+                    $inserted += $insert->affected_rows > 0 ? 1 : 0;
+                    continue;
+                }
+
+                $paid = (float)($existingBill['paid'] ?? 0);
+                $currentTotal = (float)($existingBill['nominal_tagihan'] ?? 0);
+                $remaining = max(0, $currentTotal - $paid);
+                $billId = (int)$existingBill['id'];
+
+                if ($existingBill['status'] !== 'open') {
+                    $newTotal = $paid >= $currentTotal - 0.001
+                        ? $paid + $amount
+                        : max($amount, $paid);
+                    $update->bind_param('isdsii', $classId, $name, $newTotal, $classSnapshot, $adminId, $billId);
+                    $update->execute();
+                    $updated += $update->affected_rows >= 0 ? 1 : 0;
+                    continue;
+                }
+
+                if ($remaining <= 0.001) {
+                    $newTotal = $paid + $amount;
+                    $update->bind_param('isdsii', $classId, $name, $newTotal, $classSnapshot, $adminId, $billId);
+                    $update->execute();
+                    $republished += $update->affected_rows >= 0 ? 1 : 0;
+                    continue;
+                }
+
+                // Saldo sebesar satu tarif master setelah pembayaran lama berarti
+                // ada penerbitan ulang yang masih terbuka; jangan tulis ulang totalnya.
+                if ($paid > 0.001 && abs($remaining - $amount) <= 0.001) {
+                    $skipped++;
+                    continue;
+                }
+
+                if (abs($currentTotal - $amount) > 0.001) {
+                    if ($amount + 0.001 < $paid) {
+                        $conflicts++;
+                        continue;
+                    }
+                    $update->bind_param('isdsii', $classId, $name, $amount, $classSnapshot, $adminId, $billId);
+                    $update->execute();
+                    $updated += $update->affected_rows >= 0 ? 1 : 0;
+                } else {
+                    $skipped++;
+                }
             }
-            $insert->close();
-            other_fee_write_audit($koneksi, $masterId, $target, $targetValue, $inserted, $inserted * (float)$master['nominal']);
+            $findBill->close(); $insert->close(); $update->close();
+            $affected = $inserted + $updated + $republished;
+            other_fee_write_audit($koneksi, $masterId, $target, $targetValue, $affected, $affected * (float)$master['nominal']);
             $koneksi->commit();
-            $_SESSION['flash'] = ['type' => 'success', 'msg' => $inserted > 0
-                ? $inserted . ' tagihan ' . $master['nama'] . ' berhasil diterbitkan.'
-                : 'Semua siswa pada target tersebut sudah memiliki tagihan. Tidak ada duplikasi dibuat.'];
+            $parts = [
+                $inserted . ' dibuat',
+                $updated . ' diperbarui/dibuka lagi',
+                $republished . ' diterbitkan ulang setelah lunas',
+                $skipped . ' masih memiliki tagihan aktif',
+            ];
+            if ($conflicts > 0) $parts[] = $conflicts . ' dilewati karena pembayaran sudah lebih besar dari nominal master';
+            $flashType = $conflicts > 0 || ($affected === 0 && $skipped > 0) ? 'warning' : 'success';
+            $_SESSION['flash'] = ['type' => $flashType, 'msg' => 'Penerbitan ' . $master['nama'] . ': ' . implode(', ', $parts) . '.'];
         } catch (Throwable $error) {
             if ($koneksi->errno || $koneksi->thread_id) { try { $koneksi->rollback(); } catch (Throwable $ignored) {} }
             $_SESSION['flash'] = ['type' => 'error', 'msg' => $error->getMessage()];
@@ -143,30 +221,65 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($aksi === 'toggle') {
         $id = (int)($_POST['id'] ?? 0);
-        $stmt = $koneksi->prepare('UPDATE master_biaya_lain SET is_active = IF(is_active = 1, 0, 1) WHERE id = ?');
-        $stmt->bind_param('i', $id);
-        $stmt->execute();
-        $stmt->close();
-        $_SESSION['flash'] = ['type' => 'success', 'msg' => 'Status master biaya berhasil diubah.'];
+        $targetStatus = (string)($_POST['target_active'] ?? '');
+        if (!in_array($targetStatus, ['0', '1'], true)) {
+            $_SESSION['flash'] = ['type' => 'error', 'msg' => 'Status tujuan master biaya tidak valid. Muat ulang halaman.'];
+            master_redirect();
+        }
+        try {
+            $koneksi->begin_transaction();
+            $stmt = $koneksi->prepare('SELECT is_active FROM master_biaya_lain WHERE id=? FOR UPDATE');
+            $stmt->bind_param('i', $id); $stmt->execute();
+            $current = $stmt->get_result()->fetch_assoc(); $stmt->close();
+            if (!$current) throw new RuntimeException('Master biaya tidak ditemukan.');
+            if ((int)$current['is_active'] === (int)$targetStatus) {
+                $koneksi->commit();
+                $_SESSION['flash'] = ['type' => 'warning', 'msg' => 'Status master biaya sudah sesuai. Tidak ada perubahan.'];
+            } else {
+                $newStatus = (int)$targetStatus;
+                $stmt = $koneksi->prepare('UPDATE master_biaya_lain SET is_active=? WHERE id=?');
+                $stmt->bind_param('ii', $newStatus, $id); $stmt->execute(); $stmt->close();
+                $koneksi->commit();
+                $_SESSION['flash'] = ['type' => 'success', 'msg' => 'Status master biaya berhasil diubah.'];
+            }
+        } catch (Throwable $error) {
+            try { $koneksi->rollback(); } catch (Throwable $ignored) {}
+            $_SESSION['flash'] = ['type' => 'error', 'msg' => $error->getMessage()];
+        }
         master_redirect();
     }
 
     if ($aksi === 'hapus') {
         $id = (int)($_POST['id'] ?? 0);
-        $stmtCount = $koneksi->prepare('SELECT (SELECT COUNT(*) FROM bayar_biaya_lain WHERE master_biaya_lain_id=?) + (SELECT COUNT(*) FROM tagihan_biaya_lain WHERE master_biaya_lain_id=?) AS jumlah');
-        $stmtCount->bind_param('ii', $id, $id);
-        $stmtCount->execute();
-        $jumlahPemakaian = (int)$stmtCount->get_result()->fetch_assoc()['jumlah'];
-        $stmtCount->close();
+        try {
+            $koneksi->begin_transaction();
+            // Penerbitan mengambil kunci master sebelum membuat tagihan. Hapus harus
+            // mengambil kunci yang sama sebelum menghitung relasi dan menghapus.
+            $stmt = $koneksi->prepare('SELECT id FROM master_biaya_lain WHERE id=? FOR UPDATE');
+            $stmt->bind_param('i', $id); $stmt->execute();
+            $master = $stmt->get_result()->fetch_assoc(); $stmt->close();
+            if (!$master) {
+                $koneksi->commit();
+                $_SESSION['flash'] = ['type' => 'warning', 'msg' => 'Master biaya sudah tidak tersedia.'];
+                master_redirect();
+            }
 
-        if ($jumlahPemakaian > 0) {
-            $_SESSION['flash'] = ['type' => 'error', 'msg' => 'Master sudah dipakai pada transaksi dan tidak dapat dihapus. Nonaktifkan agar tidak muncul di pembayaran baru.'];
-        } else {
-            $stmt = $koneksi->prepare('DELETE FROM master_biaya_lain WHERE id = ?');
-            $stmt->bind_param('i', $id);
-            $stmt->execute();
-            $stmt->close();
-            $_SESSION['flash'] = ['type' => 'success', 'msg' => 'Master biaya berhasil dihapus.'];
+            $stmtCount = $koneksi->prepare('SELECT (SELECT COUNT(*) FROM bayar_biaya_lain WHERE master_biaya_lain_id=?) + (SELECT COUNT(*) FROM tagihan_biaya_lain WHERE master_biaya_lain_id=?) AS jumlah');
+            $stmtCount->bind_param('ii', $id, $id); $stmtCount->execute();
+            $jumlahPemakaian = (int)$stmtCount->get_result()->fetch_assoc()['jumlah'];
+            $stmtCount->close();
+            if ($jumlahPemakaian > 0) {
+                $koneksi->commit();
+                $_SESSION['flash'] = ['type' => 'error', 'msg' => 'Master sudah dipakai pada transaksi dan tidak dapat dihapus. Nonaktifkan agar tidak muncul di pembayaran baru.'];
+            } else {
+                $stmt = $koneksi->prepare('DELETE FROM master_biaya_lain WHERE id=?');
+                $stmt->bind_param('i', $id); $stmt->execute(); $stmt->close();
+                $koneksi->commit();
+                $_SESSION['flash'] = ['type' => 'success', 'msg' => 'Master biaya berhasil dihapus.'];
+            }
+        } catch (Throwable $error) {
+            try { $koneksi->rollback(); } catch (Throwable $ignored) {}
+            $_SESSION['flash'] = ['type' => 'error', 'msg' => 'Master biaya gagal dihapus karena masih dipakai atau data berubah.'];
         }
         master_redirect();
     }
@@ -183,29 +296,42 @@ if ($editId > 0) {
 }
 
 $masterList = $koneksi->query("
-    SELECT m.*, COUNT(DISTINCT d.id) AS jumlah_pemakaian, COUNT(DISTINCT t.id) AS jumlah_tagihan,
-           COALESCE(SUM(DISTINCT CASE WHEN t.id IS NOT NULL THEN t.nominal_tagihan ELSE 0 END),0) AS nominal_tagihan
+    SELECT m.*, COALESCE(d.jumlah_pemakaian,0) AS jumlah_pemakaian,
+           COALESCE(t.jumlah_tagihan,0) AS jumlah_tagihan,
+           COALESCE(t.nominal_tagihan,0) AS nominal_tagihan
     FROM master_biaya_lain m
-    LEFT JOIN bayar_biaya_lain d ON d.master_biaya_lain_id = m.id
-    LEFT JOIN tagihan_biaya_lain t ON t.master_biaya_lain_id = m.id
-    GROUP BY m.id
+    LEFT JOIN (
+        SELECT master_biaya_lain_id, COUNT(*) AS jumlah_pemakaian
+        FROM bayar_biaya_lain GROUP BY master_biaya_lain_id
+    ) d ON d.master_biaya_lain_id = m.id
+    LEFT JOIN (
+        SELECT master_biaya_lain_id, COUNT(*) AS jumlah_tagihan,
+               SUM(nominal_tagihan) AS nominal_tagihan
+        FROM tagihan_biaya_lain GROUP BY master_biaya_lain_id
+    ) t ON t.master_biaya_lain_id = m.id
     ORDER BY m.is_active DESC, m.nama ASC
 ");
 $activeMasters = $koneksi->query("SELECT id,nama,nominal FROM master_biaya_lain WHERE is_active=1 ORDER BY nama")->fetch_all(MYSQLI_ASSOC);
 $activeClasses = class_all($koneksi, true);
-$activeStudents = $koneksi->query("SELECT s.NO_INDUK,s.NAMA,s.KELAS,s.master_kelas_id,mk.tingkat,mk.kode_rombel,mk.is_placeholder FROM siswa s LEFT JOIN master_kelas mk ON mk.id=s.master_kelas_id WHERE s.is_active=1 ORDER BY s.NAMA")->fetch_all(MYSQLI_ASSOC);
+$activeStudents = $koneksi->query("SELECT s.NO_INDUK,s.NO_induk_diknas,s.NAMA,s.KELAS,s.master_kelas_id,mk.tingkat,mk.kode_rombel,mk.is_placeholder FROM siswa s LEFT JOIN master_kelas mk ON mk.id=s.master_kelas_id WHERE s.is_active=1 ORDER BY s.NAMA")->fetch_all(MYSQLI_ASSOC);
+$publishRequestKey = bin2hex(random_bytes(16));
+if (!isset($_SESSION['fee_publish_request_keys']) || !is_array($_SESSION['fee_publish_request_keys'])) {
+    $_SESSION['fee_publish_request_keys'] = [];
+}
+$_SESSION['fee_publish_request_keys'][$publishRequestKey] = true;
+$_SESSION['fee_publish_request_keys'] = array_slice($_SESSION['fee_publish_request_keys'], -20, null, true);
 ?>
 <!DOCTYPE html>
-<html lang="id">
+<html lang="id" data-palette="<?= unit_palette_for_view(isset($reportUnitId) ? (int)$reportUnitId : null) ?>">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Master Biaya Lain | SistemSPP</title>
-  <link rel="icon" type="image/png" href="assets/img/favicon.png" />
+  <link rel="icon" type="image/png" href="assets/img/favicon.png?v=2" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="assets/css/style.css?v=7.4" />
-  <script>(function(){var t=localStorage.getItem('spp_theme')||'dark';document.documentElement.setAttribute('data-theme',t);})();</script>
+  <link rel="stylesheet" href="assets/css/style.css?v=unitpalette4&amp;mtime=<?= filemtime(__DIR__ . '/assets/css/style.css') ?>" />
+  <script>(function(){var t=localStorage.getItem('spp_theme')||'light';document.documentElement.setAttribute('data-theme',t);})();</script>
 </head>
 <body>
   <div class="bg-orbs"><div class="orb orb-1"></div><div class="orb orb-2"></div><div class="orb orb-3"></div></div>
@@ -224,7 +350,21 @@ $activeStudents = $koneksi->query("SELECT s.NO_INDUK,s.NAMA,s.KELAS,s.master_kel
       <div class="alert alert-<?= htmlspecialchars($flash['type']) ?>" id="flash-msg"><?= htmlspecialchars($flash['msg']) ?></div>
       <?php endif; ?>
 
-      <div class="main-card">
+      <section class="main-card master-modern-shell">
+        <div class="master-modern-hero">
+          <div>
+            <span class="recap-class-overline">Data Master</span>
+            <h1>Master Biaya Lain</h1>
+          </div>
+          <div class="master-modern-stats">
+            <div><span>Biaya Aktif</span><strong><?= number_format(count($activeMasters)) ?></strong></div>
+            <div><span>Rombel Aktif</span><strong><?= number_format(count($activeClasses)) ?></strong></div>
+            <div><span>Siswa Aktif</span><strong><?= number_format(count($activeStudents)) ?></strong></div>
+          </div>
+        </div>
+      </section>
+
+      <div class="main-card master-modern-card master-modern-form">
         <div class="card-title-row">
           <div class="card-title"><?= $editData ? 'Edit Master Biaya' : 'Tambah Master Biaya' ?></div>
         </div>
@@ -255,20 +395,50 @@ $activeStudents = $koneksi->query("SELECT s.NO_INDUK,s.NAMA,s.KELAS,s.master_kel
         </form>
       </div>
 
-      <div class="main-card" style="margin-top:0">
-        <div class="card-title-row"><div><div class="card-title">Terbitkan Tagihan Biaya Lain</div><p class="payment-auto-note">Tagihan memakai snapshot nama dan nominal saat diterbitkan. Penerbitan ulang tidak membuat duplikasi.</p></div></div>
+      <div class="main-card master-modern-card" style="margin-top:0">
+        <div class="card-title-row"><div><div class="card-title">Terbitkan Tagihan Biaya Lain</div></div></div>
         <?php if (!$activeMasters): ?>
           <div class="empty-state"><p>Belum ada master biaya aktif</p><span>Aktifkan atau tambahkan master biaya terlebih dahulu.</span></div>
         <?php else: ?>
         <form method="post" id="form-terbit-biaya" onsubmit="return confirm('Terbitkan tagihan ke target yang dipilih?')">
           <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_master_biaya_lain']) ?>">
+          <input type="hidden" name="publish_request_key" value="<?= htmlspecialchars($publishRequestKey, ENT_QUOTES, 'UTF-8') ?>">
           <input type="hidden" name="aksi" value="terbitkan_tagihan">
           <div class="report-filter-grid">
-            <div class="field-row"><label class="field-label">Item Biaya</label><select class="field-input field-select" name="master_id" id="publish-fee" required><?php foreach($activeMasters as $master): ?><option value="<?= (int)$master['id'] ?>" data-nominal="<?= (float)$master['nominal'] ?>"><?= htmlspecialchars($master['nama']) ?> — Rp <?= number_format((float)$master['nominal'],0,',','.') ?></option><?php endforeach; ?></select></div>
+            <div class="field-row"><label class="field-label">Item Biaya</label><select class="field-input field-select" name="master_id" id="publish-fee" required><?php foreach($activeMasters as $master): ?><option value="<?= (int)$master['id'] ?>" data-nominal="<?= (float)$master['nominal'] ?>"><?= htmlspecialchars($master['nama']) ?> (Rp <?= number_format((float)$master['nominal'],0,',','.') ?>)</option><?php endforeach; ?></select></div>
             <div class="field-row"><label class="field-label">Target</label><select class="field-input field-select" name="target" id="publish-target"><option value="all">Semua siswa aktif</option><option value="tingkat">Tingkat kelas</option><option value="rombel">Rombel tertentu</option><option value="siswa">Pilih siswa</option></select></div>
-            <div class="field-row publish-target-field" data-target="tingkat" hidden><label class="field-label">Tingkat</label><select class="field-input field-select" name="tingkat" id="publish-level"><?php for($i=1;$i<=6;$i++): ?><option value="<?= $i ?>">Kelas <?= $i ?></option><?php endfor; ?></select></div>
-            <div class="field-row publish-target-field" data-target="rombel" hidden><label class="field-label">Rombel</label><select class="field-input field-select" name="master_kelas_id" id="publish-class" data-class-combobox data-placeholder="Ketik rombel tujuan..."><?php foreach($activeClasses as $class): ?><option value="<?= (int)$class['id'] ?>"><?= htmlspecialchars(class_label($class)) ?></option><?php endforeach; ?></select></div>
-            <div class="field-row publish-target-field" data-target="siswa" hidden><label class="field-label">Siswa (bisa lebih dari satu)</label><select class="field-input field-select" name="no_induk[]" id="publish-students" multiple size="6"><?php foreach($activeStudents as $student): ?><option value="<?= htmlspecialchars($student['NO_INDUK']) ?>"><?= htmlspecialchars($student['NO_INDUK'].' — '.$student['NAMA'].' — '.class_label($student)) ?></option><?php endforeach; ?></select></div>
+            <div class="field-row publish-target-field" data-target="tingkat" hidden><label class="field-label">Tingkat</label><select class="field-input field-select" name="tingkat" id="publish-level"><?php for($i=unit_level_bounds()[0];$i<=unit_level_bounds()[1];$i++): ?><option value="<?= $i ?>">Kelas <?= $i ?></option><?php endfor; ?></select></div>
+            <div class="field-row publish-target-field" data-target="rombel" hidden><label class="field-label">Rombel</label><select class="field-input field-select" name="master_kelas_id" id="publish-class"><?php foreach($activeClasses as $class): ?><option value="<?= (int)$class['id'] ?>"><?= htmlspecialchars(class_label($class)) ?></option><?php endforeach; ?></select></div>
+            <div class="field-row publish-target-field publish-students-field" data-target="siswa" hidden>
+              <label class="field-label">Siswa (bisa lebih dari satu)</label>
+              <select class="publish-native-select" id="publish-students" multiple aria-hidden="true" tabindex="-1">
+                <?php foreach($activeStudents as $student): ?><option value="<?= htmlspecialchars($student['NO_INDUK']) ?>"><?= htmlspecialchars($student['NAMA']) ?></option><?php endforeach; ?>
+              </select>
+              <div class="publish-student-toolbar">
+                <div class="search-box publish-student-search">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                  <input type="text" id="publish-student-search" placeholder="Cari nama, NIS, atau NIS Diknas..." autocomplete="off">
+                </div>
+                <div class="publish-student-actions">
+                  <button class="btn btn-ghost btn-sm" type="button" id="publish-select-visible">Pilih yang tampil</button>
+                  <button class="btn btn-ghost btn-sm" type="button" id="publish-clear-students">Bersihkan</button>
+                </div>
+              </div>
+              <div class="publish-student-list" id="publish-student-list">
+                <?php foreach($activeStudents as $student): $studentClassLabel = class_label($student); $studentBadgeLabel = trim(preg_replace('/\s*\(Belum Ditentukan\)$/', '', $studentClassLabel)); $studentDiknas = (string)($student['NO_induk_diknas'] ?? ''); $studentSearch = strtolower(trim($student['NAMA'].' '.$student['NO_INDUK'].' '.$studentDiknas.' '.$studentClassLabel)); ?>
+                <label class="publish-student-card" data-search="<?= htmlspecialchars($studentSearch) ?>" data-nis="<?= htmlspecialchars($student['NO_INDUK']) ?>">
+                  <input type="checkbox" class="publish-student-check" name="no_induk[]" value="<?= htmlspecialchars($student['NO_INDUK']) ?>">
+                  <span class="publish-student-main">
+                    <strong><?= htmlspecialchars($student['NAMA']) ?></strong>
+                    <small>NIS <?= htmlspecialchars($student['NO_INDUK']) ?><?= $studentDiknas !== '' ? ' &middot; NIS Diknas ' . htmlspecialchars($studentDiknas) : '' ?></small>
+                  </span>
+                  <span class="kelas-badge"><?= htmlspecialchars($studentBadgeLabel !== '' ? $studentBadgeLabel : $studentClassLabel) ?></span>
+                </label>
+                <?php endforeach; ?>
+              </div>
+              <div class="publish-student-empty" id="publish-student-empty" hidden>Tidak ada siswa yang cocok dengan pencarian.</div>
+              <small class="publish-student-hint"><span id="publish-visible-count"><?= number_format(count($activeStudents)) ?></span> siswa tampil. Centang siswa yang ingin diterbitkan tagihannya.</small>
+            </div>
           </div>
           <div class="report-summary-grid" style="margin-top:16px"><div class="report-summary-card"><span>Pratinjau Siswa</span><strong id="publish-preview-count">0</strong></div><div class="report-summary-card"><span>Total Nominal</span><strong id="publish-preview-total">Rp 0</strong></div></div>
           <div class="action-bar" style="margin-top:16px"><button class="btn btn-primary" type="submit">Terbitkan Tagihan</button></div>
@@ -276,7 +446,7 @@ $activeStudents = $koneksi->query("SELECT s.NO_INDUK,s.NAMA,s.KELAS,s.master_kel
         <?php endif; ?>
       </div>
 
-      <div class="main-card" style="margin-top:0">
+      <div class="main-card master-modern-card master-modern-list" style="margin-top:0">
         <div class="card-title-row"><div class="card-title">Daftar Master Biaya (<?= $masterList->num_rows ?>)</div></div>
         <div class="table-container">
           <table class="payment-table responsive-table">
@@ -287,7 +457,7 @@ $activeStudents = $koneksi->query("SELECT s.NO_INDUK,s.NAMA,s.KELAS,s.master_kel
               <?php else: $no = 1; while ($item = $masterList->fetch_assoc()): ?>
               <tr>
                 <td data-label="No"><?= $no++ ?></td>
-                <td data-label="Nama Biaya"><strong><?= htmlspecialchars($item['nama']) ?></strong></td>
+                <td data-label="Nama Biaya"><strong><?= unit_record_badge($item) ?><?= htmlspecialchars($item['nama']) ?></strong></td>
                 <td data-label="Nominal" class="nominal">Rp <?= number_format((float)$item['nominal'], 0, ',', '.') ?></td>
                 <td data-label="Status"><span class="master-status <?= $item['is_active'] ? 'is-active' : 'is-inactive' ?>"><?= $item['is_active'] ? 'Aktif' : 'Nonaktif' ?></span></td>
                 <td data-label="Tagihan"><span class="badge-count"><?= (int)$item['jumlah_tagihan'] ?></span></td>
@@ -296,7 +466,7 @@ $activeStudents = $koneksi->query("SELECT s.NO_INDUK,s.NAMA,s.KELAS,s.master_kel
                   <a class="btn-tbl btn-tbl-edit" href="master_biaya_lain.php?edit=<?= (int)$item['id'] ?>">Edit</a>
                   <form method="POST" action="master_biaya_lain.php" style="display:inline">
                     <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_master_biaya_lain']) ?>" />
-                    <input type="hidden" name="aksi" value="toggle" /><input type="hidden" name="id" value="<?= (int)$item['id'] ?>" />
+                    <input type="hidden" name="aksi" value="toggle" /><input type="hidden" name="id" value="<?= (int)$item['id'] ?>" /><input type="hidden" name="target_active" value="<?= $item['is_active'] ? '0' : '1' ?>" />
                     <button class="btn-tbl btn-tbl-toggle" type="submit"><?= $item['is_active'] ? 'Nonaktifkan' : 'Aktifkan' ?></button>
                   </form>
                   <form method="POST" action="master_biaya_lain.php" style="display:inline" onsubmit="return confirm('Hapus master biaya <?= htmlspecialchars(addslashes($item['nama'])) ?>?')">
@@ -313,7 +483,7 @@ $activeStudents = $koneksi->query("SELECT s.NO_INDUK,s.NAMA,s.KELAS,s.master_kel
       </div>
     </main>
   </div>
-  <script src="assets/js/app.js?v=7.4"></script>
+  <script src="assets/js/app.js?v=<?= filemtime(__DIR__ . '/assets/js/app.js') ?>"></script>
   <script>
     document.addEventListener('DOMContentLoaded', function () {
       var nominal = document.getElementById('nominal-biaya');
@@ -330,18 +500,92 @@ $activeStudents = $koneksi->query("SELECT s.NO_INDUK,s.NAMA,s.KELAS,s.master_kel
       var level = document.getElementById('publish-level');
       var classSelect = document.getElementById('publish-class');
       var studentSelect = document.getElementById('publish-students');
+      var studentList = document.getElementById('publish-student-list');
+      var studentSearch = document.getElementById('publish-student-search');
+      var visibleCount = document.getElementById('publish-visible-count');
+      var studentEmpty = document.getElementById('publish-student-empty');
+      var selectVisible = document.getElementById('publish-select-visible');
+      var clearStudents = document.getElementById('publish-clear-students');
+      function publishStudentCards() {
+        return Array.from(studentList?.querySelectorAll('.publish-student-card') || []);
+      }
+      function normalizePublishStudentText(value) {
+        return String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+      }
+      function matchPublishStudent(card, term) {
+        if (term === '') return { match: true, score: 0 };
+        var search = normalizePublishStudentText(card.dataset.search || '');
+        var words = search.split(/\s+/).filter(Boolean);
+        var parts = term.split(/\s+/).filter(Boolean);
+        var matched = parts.every(function(part) {
+          return search.includes(part) || words.some(function(word){ return word.startsWith(part); });
+        });
+        if (!matched) return { match: false, score: 99 };
+        if (search.startsWith(term)) return { match: true, score: 0 };
+        if (words.some(function(word){ return word.startsWith(term); })) return { match: true, score: 1 };
+        return { match: true, score: 2 };
+      }
+      function syncPublishStudents() {
+        if (!studentSelect) return;
+        var selected = new Set(Array.from(studentList?.querySelectorAll('.publish-student-check:checked') || []).map(function(input){ return input.value; }));
+        Array.from(studentSelect.options).forEach(function(option){ option.selected = selected.has(option.value); });
+      }
+      function filterPublishStudents() {
+        var term = normalizePublishStudentText((studentSearch?.value || '').trim());
+        var shown = 0;
+        publishStudentCards().forEach(function(card) {
+          var result = matchPublishStudent(card, term);
+          card.hidden = !result.match;
+          card.style.order = String(result.score);
+          if (result.match) shown++;
+        });
+        if (studentList) studentList.scrollTop = 0;
+        if (visibleCount) visibleCount.textContent = shown.toLocaleString('id-ID');
+        if (studentEmpty) studentEmpty.hidden = shown > 0;
+      }
       function updatePublishPreview() {
         if (!target || !fee) return;
         document.querySelectorAll('.publish-target-field').forEach(function(field){ field.hidden = field.dataset.target !== target.value; });
         var count = students.length;
         if (target.value === 'tingkat') count = students.filter(function(s){ return s.tingkat === Number(level.value); }).length;
         if (target.value === 'rombel') count = students.filter(function(s){ return s.kelas_id === Number(classSelect.value); }).length;
-        if (target.value === 'siswa') count = Array.from(studentSelect.selectedOptions).length;
+        if (target.value === 'siswa') count = Array.from(studentSelect?.selectedOptions || []).length;
         var amount = Number(fee.options[fee.selectedIndex]?.dataset.nominal || 0);
         document.getElementById('publish-preview-count').textContent = count.toLocaleString('id-ID') + ' siswa';
         document.getElementById('publish-preview-total').textContent = 'Rp ' + (count * amount).toLocaleString('id-ID');
       }
       [target,fee,level,classSelect,studentSelect].forEach(function(el){ el?.addEventListener('change',updatePublishPreview); });
+      studentList?.addEventListener('change', function(event) {
+        if (!event.target.classList.contains('publish-student-check')) return;
+        event.target.closest('.publish-student-card')?.classList.toggle('is-selected', event.target.checked);
+        syncPublishStudents();
+        updatePublishPreview();
+      });
+      studentSearch?.addEventListener('input', filterPublishStudents);
+      selectVisible?.addEventListener('click', function() {
+        publishStudentCards().forEach(function(card) {
+          if (card.hidden) return;
+          var input = card.querySelector('.publish-student-check');
+          if (input) input.checked = true;
+          card.classList.add('is-selected');
+        });
+        syncPublishStudents();
+        updatePublishPreview();
+      });
+      clearStudents?.addEventListener('click', function() {
+        publishStudentCards().forEach(function(card) {
+          var input = card.querySelector('.publish-student-check');
+          if (input) input.checked = false;
+          card.classList.remove('is-selected');
+        });
+        syncPublishStudents();
+        updatePublishPreview();
+      });
+      document.getElementById('form-terbit-biaya')?.addEventListener('submit', function() {
+        // Checkbox membawa nilai POST; select tersembunyi hanya menjaga state pratinjau tetap konsisten.
+        syncPublishStudents();
+      });
+      filterPublishStudents();
       updatePublishPreview();
       autoHideFlash();
     });

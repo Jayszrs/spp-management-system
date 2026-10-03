@@ -1,13 +1,2 @@
--- =========================================================
--- Migrasi Sistem Pembayaran
--- Database: db_spp
--- =========================================================
-
-USE `db_spp`;
-
-ALTER TABLE `bayar`
-  ADD COLUMN IF NOT EXISTS `sistem_pembayaran` ENUM('Tunai','VA','Qris') NOT NULL DEFAULT 'VA' AFTER `user_id`;
-
-UPDATE `bayar`
-SET `sistem_pembayaran` = 'VA'
-WHERE `sistem_pembayaran` IS NULL OR `sistem_pembayaran` = '';
+-- Direct import disabled. Use the reviewed CLI runner and an explicit target.
+SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Direct import disabled; use php sql/run_legacy_sql.php --script=add_payment_method.sql';

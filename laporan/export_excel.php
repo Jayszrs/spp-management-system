@@ -6,9 +6,11 @@ session_start();
 require_once '../koneksi.php';
 require_once '../includes/auth.php';
 requireRole(['admin', 'bendahara']);
+$reportUnitId=unit_report_scope($koneksi,(string)($_GET['unit']??''));
 
 $filter_bulan = (int)($_GET['bulan'] ?? date('m'));
 $filter_tahun = (int)($_GET['tahun'] ?? date('Y'));
+$filter_q = mb_substr(trim((string)($_GET['q'] ?? '')), 0, 100);
 $dateParam = static function (string $key): string {
     $value = trim((string)($_GET[$key] ?? ''));
     return preg_match('/^\d{4}-\d{2}-\d{2}$/', $value) ? $value : '';
@@ -22,6 +24,11 @@ if ($filter_tanggal_awal !== '' && $filter_tanggal_akhir !== '' && strtotime($fi
     [$filter_tanggal_awal, $filter_tanggal_akhir] = [$filter_tanggal_akhir, $filter_tanggal_awal];
 }
 $download = isset($_GET['download']) && $_GET['download'] === '1';
+$excelText = static function ($value) use ($download): string {
+    $text = (string)$value;
+    if ($download && preg_match('/^[\p{Z}\x00-\x20]*[=+\-@]/u', $text)) $text = "'" . $text;
+    return htmlspecialchars($text, ENT_QUOTES, 'UTF-8');
+};
 
 $bln_names = ['1'=>'Januari','2'=>'Februari','3'=>'Maret','4'=>'April','5'=>'Mei','6'=>'Juni',
                '7'=>'Juli','8'=>'Agustus','9'=>'September','10'=>'Oktober','11'=>'November','12'=>'Desember'];
@@ -30,6 +37,19 @@ $period_start = $filter_tanggal_awal !== '' ? $filter_tanggal_awal . ' 00:00:00'
 $period_end = $filter_tanggal_akhir !== ''
     ? date('Y-m-d H:i:s', strtotime($filter_tanggal_akhir . ' +1 day'))
     : date('Y-m-d H:i:s', strtotime($period_start . ' +1 month'));
+$studentWhere = '';
+$studentParams = [];
+if ($filter_q !== '') {
+    $studentWhere = ' AND (s.NO_INDUK LIKE ? OR s.NAMA LIKE ? OR s.NO_induk_diknas LIKE ?)';
+    $studentLike = '%' . $filter_q . '%';
+    $studentParams = [$studentLike, $studentLike, $studentLike];
+}
+$studentWhere .= unit_student_selection_where();
+$bind = static function (mysqli_stmt $stmt, string $baseTypes, array $baseParams) use ($studentParams): void {
+    $types = $baseTypes . str_repeat('s', count($studentParams));
+    $params = array_merge($baseParams, $studentParams);
+    $stmt->bind_param($types, ...$params);
+};
 if ($filter_tanggal_awal !== '' && $filter_tanggal_akhir !== '') {
     $startTs = strtotime($filter_tanggal_awal);
     $endTs = strtotime($filter_tanggal_akhir);
@@ -46,38 +66,36 @@ if ($filter_tanggal_awal !== '' && $filter_tanggal_akhir !== '') {
 
 // Ambil data pembayaran
 $stmt = $koneksi->prepare("
-    SELECT s.NO_INDUK, s.NO_induk_diknas, s.NAMA, s.KELAS, b.BULAN, b.TAHUN,
-           b.U_PANGKAL, b.U_BANGUNAN, b.U_SERAGAM, b.U_KEGIATAN,
-           b.U_SPP, b.U_MAKAN, b.U_SORGA, b.U_INFAQ, b.U_KOMITE,
+    SELECT s.id AS student_id,s.NO_INDUK, s.NO_induk_diknas, s.NAMA,
+           COALESCE(NULLIF(b.kelas_rombel_snapshot,''),NULLIF(b.KELAS,''),s.KELAS) AS KELAS,
+           b.BULAN, b.TAHUN,
+           b.U_PANGKAL, b.U_PSB, b.U_SPP, b.U_KOMITE,
            b.sistem_pembayaran, b.total_jumlah, b.TGL_BYR
-    FROM bayar b JOIN siswa s ON s.NO_INDUK = b.NO_INDUK
-    WHERE b.TGL_BYR >= ? AND b.TGL_BYR < ?
+    FROM bayar b JOIN siswa s ON s.NO_INDUK = b.NO_INDUK AND s.unit_id=b.unit_id
+    WHERE b.TGL_BYR >= ? AND b.TGL_BYR < ? $studentWhere
     ORDER BY b.TGL_BYR DESC
 ");
-$stmt->bind_param('ss', $period_start, $period_end);
+$bind($stmt, 'ss', [$period_start, $period_end]);
 $stmt->execute();
 $rows = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
 $stmt->close();
 
 $stmtKomponen = $koneksi->prepare("
-    SELECT SUM(U_PANGKAL) AS pangkal, SUM(U_BANGUNAN) AS bangunan,
-           SUM(U_SERAGAM) AS seragam, SUM(U_KEGIATAN) AS kegiatan,
-           SUM(U_SPP) AS spp, SUM(U_MAKAN) AS makan,
-           SUM(U_SORGA) AS sorga, SUM(U_INFAQ) AS infaq,
-           SUM(U_KOMITE) AS komite
-    FROM bayar WHERE TGL_BYR >= ? AND TGL_BYR < ?
+    SELECT SUM(U_PANGKAL) AS pangkal, SUM(U_PSB) AS psb,
+           SUM(U_SPP) AS spp,
+           SUM(U_KOMITE) AS komite, SUM(potong_spp) AS potongan_spp
+    FROM bayar b JOIN siswa s ON s.NO_INDUK = b.NO_INDUK AND s.unit_id=b.unit_id
+    WHERE b.TGL_BYR >= ? AND b.TGL_BYR < ? $studentWhere
 ");
-$stmtKomponen->bind_param('ss', $period_start, $period_end);
+$bind($stmtKomponen, 'ss', [$period_start, $period_end]);
 $stmtKomponen->execute();
 $komponenTetap = $stmtKomponen->get_result()->fetch_assoc();
 $stmtKomponen->close();
 
 $komponen_rows = [];
 $komponenMap = [
-    'Uang Pangkal' => 'pangkal', 'Uang Bangunan' => 'bangunan',
-    'Uang Seragam' => 'seragam', 'Uang Kegiatan' => 'kegiatan',
-    'Uang SPP' => 'spp', 'Uang Komite' => 'komite', 'Uang Makan' => 'makan',
-    'Uang Sorga' => 'sorga', 'Uang Infaq' => 'infaq'
+    'Uang Pangkal' => 'pangkal', 'Uang PSB' => 'psb',
+    'Uang SPP' => 'spp', 'Uang Komite' => 'komite'
 ];
 foreach ($komponenMap as $nama => $key) {
     if ((float)($komponenTetap[$key] ?? 0) > 0) {
@@ -88,26 +106,43 @@ foreach ($komponenMap as $nama => $key) {
 $stmtBiayaLain = $koneksi->prepare("
     SELECT d.nama_biaya_snapshot AS nama, SUM(d.nominal_snapshot) AS total
     FROM bayar_biaya_lain d JOIN bayar b ON b.id = d.bayar_id
-    WHERE b.TGL_BYR >= ? AND b.TGL_BYR < ?
+    JOIN siswa s ON s.NO_INDUK = b.NO_INDUK AND s.unit_id=b.unit_id
+    WHERE b.TGL_BYR >= ? AND b.TGL_BYR < ? $studentWhere
     GROUP BY d.nama_biaya_snapshot ORDER BY d.nama_biaya_snapshot ASC
 ");
-$stmtBiayaLain->bind_param('ss', $period_start, $period_end);
+$bind($stmtBiayaLain, 'ss', [$period_start, $period_end]);
 $stmtBiayaLain->execute();
 $komponen_rows = array_merge($komponen_rows, $stmtBiayaLain->get_result()->fetch_all(MYSQLI_ASSOC));
 $stmtBiayaLain->close();
 
+$stmtDu = $koneksi->prepare("
+    SELECT COALESCE(SUM(d.jumlah),0) AS total
+    FROM bayar_du d JOIN bayar b ON b.id=d.bayar_id
+    JOIN siswa s ON s.NO_INDUK=b.NO_INDUK AND s.unit_id=b.unit_id
+    WHERE b.TGL_BYR >= ? AND b.TGL_BYR < ? $studentWhere
+");
+$bind($stmtDu, 'ss', [$period_start, $period_end]);
+$stmtDu->execute();
+$totalDu = (float)($stmtDu->get_result()->fetch_assoc()['total'] ?? 0);
+$stmtDu->close();
+if ($totalDu > 0.001) $komponen_rows[] = ['nama'=>'Daftar Ulang','total'=>$totalDu];
+$totalDiscount = (float)($komponenTetap['potongan_spp'] ?? 0);
+if ($totalDiscount > 0.001) $komponen_rows[] = ['nama'=>'Potongan SPP','total'=>-$totalDiscount];
+
 // Ambil data tabungan periode ini
 $stmt2 = $koneksi->prepare("
-    SELECT tm.NO_INDUK, s.NO_induk_diknas, s.NAMA, s.KELAS, tm.TANGGAL, tm.MASUK as nominal, 'masuk' as jenis
-    FROM transaksi_m tm JOIN siswa s ON s.NO_INDUK = tm.NO_INDUK
-    WHERE tm.TANGGAL >= ? AND tm.TANGGAL < ?
+    SELECT tm.NO_INDUK, s.NO_induk_diknas, s.NAMA, s.KELAS, tm.TANGGAL, tm.MASUK as nominal, 'masuk' as jenis, tm.keterangan
+    FROM transaksi_m tm JOIN siswa s ON s.NO_INDUK = tm.NO_INDUK AND s.unit_id=tm.unit_id
+    WHERE tm.TANGGAL >= ? AND tm.TANGGAL < ? $studentWhere
     UNION ALL
-    SELECT tk.NO_INDUK, s.NO_induk_diknas, s.NAMA, s.KELAS, tk.TANGGAL, tk.KELUAR as nominal, 'keluar' as jenis
-    FROM transaksi_k tk JOIN siswa s ON s.NO_INDUK = tk.NO_INDUK
-    WHERE tk.TANGGAL >= ? AND tk.TANGGAL < ?
+    SELECT tk.NO_INDUK, s.NO_induk_diknas, s.NAMA, s.KELAS, tk.TANGGAL, tk.KELUAR as nominal, 'keluar' as jenis, tk.keterangan
+    FROM transaksi_k tk JOIN siswa s ON s.NO_INDUK = tk.NO_INDUK AND s.unit_id=tk.unit_id
+    WHERE tk.TANGGAL >= ? AND tk.TANGGAL < ? $studentWhere
     ORDER BY TANGGAL DESC
 ");
-$stmt2->bind_param('ssss', $period_start, $period_end, $period_start, $period_end);
+$tabTypes = 'ssss' . str_repeat('s', count($studentParams) * 2);
+$tabParams = array_merge([$period_start, $period_end], $studentParams, [$period_start, $period_end], $studentParams);
+$stmt2->bind_param($tabTypes, ...$tabParams);
 $stmt2->execute();
 $tab_rows = $stmt2->get_result()->fetch_all(MYSQLI_ASSOC);
 $stmt2->close();
@@ -133,6 +168,7 @@ if ($download) {
     header('Content-Disposition: attachment; filename="' . $filename . '"');
     header('Cache-Control: max-age=0');
 }
+ob_start();
 ?>
 <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel">
 <head>
@@ -340,16 +376,12 @@ if ($download) {
 <body>
 
 <?php if (!$download): ?>
-<div class="no-print">
-  <a class="primary" href="export_excel.php?bulan=<?= $filter_bulan ?>&tahun=<?= $filter_tahun ?>&tanggal_awal=<?= urlencode($filter_tanggal_awal) ?>&tanggal_akhir=<?= urlencode($filter_tanggal_akhir) ?>&download=1">Download Excel</a>
-  <a href="index.php?bulan=<?= $filter_bulan ?>&tahun=<?= $filter_tahun ?>&tanggal_awal=<?= urlencode($filter_tanggal_awal) ?>&tanggal_akhir=<?= urlencode($filter_tanggal_akhir) ?>">Kembali</a>
-</div>
 <main class="preview-sheet">
 <?php endif; ?>
 
 <div class="report-head">
   <div>
-    <h2 class="report-title">Laporan Keuangan Sistem SPP</h2>
+    <h2 class="report-title">Laporan Keuangan Sistem SPP · <?= htmlspecialchars(unit_label($reportUnitId), ENT_QUOTES, 'UTF-8') ?></h2>
     <p class="report-meta">Dicetak: <?= date('d M Y H:i') ?></p>
   </div>
   <span class="period-pill">Periode <?= htmlspecialchars($period_label) ?></span>
@@ -394,7 +426,7 @@ if ($download) {
   <tr class="header-row"><td colspan="7">REKAP PEMBAYARAN SPP — <?= strtoupper($period_label) ?></td></tr>
   <tr>
     <th>No</th><th>No. Induk</th><th>Nama Siswa</th><th>Kelas</th>
-    <th>Bulan Bayar / Sistem</th><th>Total Bayar (Rp)</th><th>Tanggal Bayar</th>
+    <th>Bulan Tagihan / Sistem</th><th>Total Bayar (Rp)</th><th>Tanggal Bayar</th>
   </tr>
   <?php if (empty($rows)): ?>
   <tr><td colspan="7" class="empty-row">Belum ada transaksi pembayaran pada periode ini.</td></tr>
@@ -406,10 +438,10 @@ if ($download) {
   ?>
   <tr>
     <td><?= $i+1 ?></td>
-    <td><?= htmlspecialchars($r['NO_INDUK']) ?><?= !empty($r['NO_induk_diknas']) ? '<br>Diknas: ' . htmlspecialchars($r['NO_induk_diknas']) : '' ?></td>
-    <td><?= htmlspecialchars($r['NAMA']) ?></td>
-    <td><?= htmlspecialchars($r['KELAS']) ?></td>
-    <td><?= htmlspecialchars($r['BULAN']) ?> <?= htmlspecialchars($r['TAHUN']) ?><br>Sistem: <?= htmlspecialchars($r['sistem_pembayaran'] ?? 'VA') ?></td>
+    <td><?= $excelText($r['NO_INDUK']) ?><?= !empty($r['NO_induk_diknas']) ? '<br>Diknas: ' . $excelText($r['NO_induk_diknas']) : '' ?></td>
+    <td><?= $excelText($r['NAMA']) ?></td>
+    <td><?= $excelText($r['KELAS']) ?></td>
+    <td><?= $excelText($r['BULAN']) ?> <?= $excelText($r['TAHUN']) ?><br>Sistem: <?= $excelText($r['sistem_pembayaran'] ?? 'VA') ?></td>
     <td><?= number_format((float)$r['total_jumlah'],0,',','.') ?></td>
     <td><?= date('d M Y', strtotime($r['TGL_BYR'])) ?></td>
   </tr>
@@ -427,13 +459,13 @@ if ($download) {
 <div class="table-card">
 <div class="table-scroll">
 <table>
-  <tr class="header-row"><td colspan="7">REKAP TABUNGAN — <?= strtoupper($period_label) ?></td></tr>
+  <tr class="header-row"><td colspan="8">REKAP TABUNGAN — <?= strtoupper($period_label) ?></td></tr>
   <tr>
     <th>No</th><th>No. Induk</th><th>Nama Siswa</th><th>Kelas</th>
-    <th>Tanggal</th><th>Jenis</th><th>Nominal (Rp)</th>
+    <th>Tanggal</th><th>Jenis</th><th>Nominal (Rp)</th><th>Keterangan</th>
   </tr>
   <?php if (empty($tab_rows)): ?>
-  <tr><td colspan="7" class="empty-row">Belum ada transaksi tabungan pada periode ini.</td></tr>
+  <tr><td colspan="8" class="empty-row">Belum ada transaksi tabungan pada periode ini.</td></tr>
   <?php endif; ?>
   <?php
   $total_masuk_tab = 0;
@@ -444,16 +476,17 @@ if ($download) {
   ?>
   <tr>
     <td><?= $i+1 ?></td>
-    <td><?= htmlspecialchars($t['NO_INDUK']) ?><?= !empty($t['NO_induk_diknas']) ? '<br>Diknas: ' . htmlspecialchars($t['NO_induk_diknas']) : '' ?></td>
-    <td><?= htmlspecialchars($t['NAMA']) ?></td>
-    <td><?= htmlspecialchars($t['KELAS']) ?></td>
+    <td><?= $excelText($t['NO_INDUK']) ?><?= !empty($t['NO_induk_diknas']) ? '<br>Diknas: ' . $excelText($t['NO_induk_diknas']) : '' ?></td>
+    <td><?= $excelText($t['NAMA']) ?></td>
+    <td><?= $excelText($t['KELAS']) ?></td>
     <td><?= date('d M Y H:i', strtotime($t['TANGGAL'])) ?></td>
     <td><?= $t['jenis'] === 'masuk' ? '↑ Masuk' : '↓ Keluar' ?></td>
     <td><?= number_format((float)$t['nominal'],0,',','.') ?></td>
+    <td><?= $excelText($t['keterangan'] ?? '') ?></td>
   </tr>
   <?php endforeach; ?>
-  <tr class="total-row"><td colspan="6">Total Masuk</td><td><?= number_format($total_masuk_tab,0,',','.') ?></td></tr>
-  <tr class="total-row"><td colspan="6">Total Keluar</td><td><?= number_format($total_keluar_tab,0,',','.') ?></td></tr>
+  <tr class="total-row"><td colspan="6">Total Masuk</td><td><?= number_format($total_masuk_tab,0,',','.') ?></td><td></td></tr>
+  <tr class="total-row"><td colspan="6">Total Keluar</td><td><?= number_format($total_keluar_tab,0,',','.') ?></td><td></td></tr>
 </table>
 </div>
 </div>
@@ -464,3 +497,28 @@ if ($download) {
 
 </body>
 </html>
+<?php
+$excelHtml = ob_get_clean();
+
+if ($download) {
+    echo "\xEF\xBB\xBF" . $excelHtml;
+    exit;
+}
+
+require_once __DIR__ . '/../includes/report_preview.php';
+$downloadQuery = $_GET;
+$downloadQuery['download'] = '1';
+$backQuery = $_GET;
+unset($backQuery['download']);
+render_report_export_preview($excelHtml, [
+    'file_type' => 'EXCEL',
+    'show_print' => false,
+    'title' => 'Rekap Laporan Keuangan',
+    'subtitle' => 'Periode ' . $period_label,
+    'generated' => date('d-m-Y H:i:s'),
+    'row_count' => count($rows) + count($tab_rows),
+    'orientation' => 'landscape',
+    'download_url' => 'export_excel.php?' . http_build_query($downloadQuery),
+    'back_url' => 'index.php?' . http_build_query($backQuery),
+]);
+?>
