@@ -149,6 +149,6 @@ if ($view === 'preview' && $principalRows) {
         <?php endif; ?>
     </div>
 </main></div>
-<script src="../assets/js/app.js?v=10.5"></script>
+<script src="../assets/js/app.js?v=<?= filemtime(__DIR__ . '/../assets/js/app.js') ?>"></script>
 <script src="../assets/js/principal_report.js?v=1" defer></script>
 </body></html>

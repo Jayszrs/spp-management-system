@@ -78,7 +78,7 @@ function one_time_fee_payload_for_options(mysqli $db, int $excludePaymentId = 0)
     $stmt = $db->prepare("SELECT s.NO_INDUK,s.PANGKAL,s.potong_pangkal,s.tot_pangkal,s.PSB,
         COALESCE(SUM(CASE WHEN b.id<>? THEN b.U_PANGKAL ELSE 0 END),0) paid_pangkal,
         COALESCE(SUM(CASE WHEN b.id<>? THEN b.U_PSB ELSE 0 END),0) paid_psb
-        FROM siswa s LEFT JOIN bayar b ON b.NO_INDUK=s.NO_INDUK
+        FROM siswa s LEFT JOIN bayar b ON b.NO_INDUK=s.NO_INDUK AND b.unit_id=s.unit_id
         GROUP BY s.NO_INDUK,s.PANGKAL,s.potong_pangkal,s.tot_pangkal,s.PSB");
     $stmt->bind_param('ii', $excludePaymentId, $excludePaymentId);
     $stmt->execute();

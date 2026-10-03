@@ -1,5 +1,8 @@
 # Konteks Proyek SistemSPP
 
+> **Backend Legacy 3 Oktober 2026:** NIS unik per unit, ID siswa tetap global. Import identitas `.dat` memakai worker privat; siswa Legacy belum aktif/tanpa penempatan, lalu diaktifkan manual oleh admin/kasir unit. Tidak ada histori kelas/alumni atau keuangan legacy yang ditebak. Aktivasi tidak menerbitkan tagihan; penerbitan SPP master menyiapkan pasangan Komite. Lihat [audit backend](LEGACY_IMPORT_BACKEND_20261003.md) dan [runbook](LEGACY_IMPORT_RUNBOOK_20261003.md) untuk status penerapan/baseline terkini.
+
+
 SistemSPP adalah aplikasi administrasi pembayaran sekolah berbasis PHP, JavaScript, dan MySQL (`mysqli`). Dokumen ini merangkum alur aktif. Untuk rincian teknis, kode dan schema adalah sumber kebenaran; [AI_CHANGELOG.md](./AI_CHANGELOG.md) adalah arsip perubahan, bukan panduan operasional.
 
 > **Status 2 Oktober 2026 setelah penghapusan Titipan SPP:** migrasi lokal `db_spp` sudah diterapkan, dengan 18 CHECK, dua trigger tarif dan 61 FK. Utama: 222 siswa, 1.018 pembayaran, Rp577.145.000 penerimaan. Tabungan tetap 12 rekening/Rp1.050.000; fingerprint rekening dan kedua jurnal tidak berubah. [Audit kesiapan](./READINESS_AUDIT_20261001.md) tetap menilai **siap terbatas dengan syarat** untuk Laragon pada cakupan yang diuji. Seluruh commit audit sampai `6a95cc0` sudah digabung ke `main` tanpa konflik; health dan integritas diperiksa ulang setelah penggabungan. Deployment target dinilai terpisah. Prosedur backup/pemulihan ada di [runbook](./READINESS_MIGRATION_RUNBOOK_20261001.md).

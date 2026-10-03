@@ -55,23 +55,19 @@ $yearResult = $koneksi->query("SELECT label FROM tahun_ajaran WHERE status IN ('
 while ($year = $yearResult->fetch_row()) $academicYears[] = $year[0];
 
 $studentOptions = $koneksi->query("
-    SELECT DISTINCT s.NO_INDUK, s.unit_id, s.NO_induk_diknas, s.NAMA, s.KELAS,
+    SELECT DISTINCT s.id AS student_id,s.NO_INDUK, s.unit_id, s.NO_induk_diknas, s.NAMA, s.KELAS,
            s.master_kelas_id, mk.tingkat AS master_tingkat, mk.kode_rombel, mk.is_placeholder
     FROM tagihan_daftar_ulang tdu
-    JOIN siswa s ON s.NO_INDUK = tdu.no_induk
+    JOIN siswa s ON s.NO_INDUK = tdu.no_induk AND s.unit_id=tdu.unit_id
     LEFT JOIN master_kelas mk ON mk.id = s.master_kelas_id
     WHERE tdu.status = 'open'
     ORDER BY s.NAMA
 ")->fetch_all(MYSQLI_ASSOC);
 $studentSearchDisplay = $search;
-foreach ($studentOptions as $studentOption) {
-    if ($search !== '' && ($search === $studentOption['NO_INDUK'] || $search === (string)($studentOption['NO_induk_diknas'] ?? ''))) {
-        $studentSearchDisplay = $studentOption['NAMA'];
-        break;
-    }
-}
+$displayMatches=array_values(array_filter($studentOptions,static fn($o)=>(int)($_GET['student_id']??0)>0 ? (int)$o['student_id']===(int)$_GET['student_id'] : ($search!==''&&($search===$o['NO_INDUK']||$search===(string)($o['NO_induk_diknas']??'')))));
+if(count($displayMatches)===1)$studentSearchDisplay=$displayMatches[0]['NAMA'];
 
-$where = ["tdu.status = 'open'"];
+$where = ["tdu.status = 'open'", "1=1".unit_student_selection_where()];
 $params = [];
 $types = '';
 if ($search !== '') {
@@ -92,7 +88,7 @@ if ($filterYear !== '') {
 }
 
 $aggregateSql = "
-    SELECT tdu.id AS tagihan_id, tdu.no_induk, tdu.kelas_snapshot AS kelas,
+    SELECT tdu.unit_id,tdu.id AS tagihan_id, tdu.no_induk, tdu.kelas_snapshot AS kelas,
            ta.label AS th_ajaran, s.NAMA AS nama, s.NO_induk_diknas, s.KELAS AS kelas_siswa,
            tdu.nominal_tagihan AS master_total,
            COALESCE(SUM(bd.jumlah), 0) AS paid,
@@ -101,11 +97,11 @@ $aggregateSql = "
                 THEN 'lunas' ELSE 'cicilan' END AS payment_status
     FROM tagihan_daftar_ulang tdu
     JOIN tahun_ajaran ta ON ta.id = tdu.tahun_ajaran_id
-    JOIN siswa s ON s.NO_INDUK = tdu.no_induk
+    JOIN siswa s ON s.NO_INDUK = tdu.no_induk AND s.unit_id=tdu.unit_id
     LEFT JOIN master_kelas mk ON mk.id = s.master_kelas_id
     LEFT JOIN bayar_du bd ON bd.tagihan_daftar_ulang_id = tdu.id
     WHERE " . implode(' AND ', $where) . "
-    GROUP BY tdu.id, tdu.no_induk, tdu.kelas_snapshot, ta.label, s.NAMA, s.NO_induk_diknas,
+    GROUP BY tdu.unit_id,tdu.id, tdu.no_induk, tdu.kelas_snapshot, ta.label, s.NAMA, s.NO_induk_diknas,
              s.KELAS, tdu.nominal_tagihan
 ";
 $havingSql = '';
@@ -234,7 +230,7 @@ unset($_SESSION['flash']);
             <p><?= number_format($summary['students']) ?> siswa/periode cocok dengan filter saat ini.</p>
           </div>
 
-        <form method="GET" class="recap-header-controls history-recap-filter filter-bar du-history-filter">
+        <form method="GET" class="recap-header-controls history-recap-filter filter-bar du-history-filter"><input type="hidden" name="student_id" data-student-identity="1" value="<?= max(0,(int)($_GET['student_id']??0)) ?>">
           <span class="recap-filter-label">Filter Riwayat</span>
           <div class="field-row full-span">
             <label class="field-label" for="du-history-student">Cari Siswa (Nama / NIS / NIS Diknas)</label>
@@ -247,7 +243,7 @@ unset($_SESSION['flash']);
               <?php foreach ($studentOptions as $studentOption): ?>
               <?php $studentClassLabel = class_label(['tingkat' => $studentOption['master_tingkat'] ?: $studentOption['KELAS'], 'kode_rombel' => $studentOption['kode_rombel'] ?? 'BELUM', 'is_placeholder' => $studentOption['is_placeholder'] ?? 1]); ?>
               <option value="<?= du_e($studentOption['NAMA']) ?>"
-                data-nis="<?= du_e($studentOption['NO_INDUK']) ?>"
+                data-student-id="<?= (int)($studentOption['student_id']??0) ?>" data-unit-id="<?= (int)($studentOption['unit_id']??0) ?>" data-nis="<?= du_e($studentOption['NO_INDUK']) ?>"
                 data-diknas="<?= du_e((string)($studentOption['NO_induk_diknas'] ?? '')) ?>"
                 data-nama="<?= du_e($studentOption['NAMA']) ?>"
                 data-kelas="<?= du_e($studentClassLabel) ?>">
@@ -348,6 +344,6 @@ unset($_SESSION['flash']);
       </section>
     </main>
   </div>
-  <script src="../assets/js/app.js?v=10.4"></script>
+  <script src="../assets/js/app.js?v=<?= filemtime(__DIR__ . '/../assets/js/app.js') ?>"></script>
 </body>
 </html>

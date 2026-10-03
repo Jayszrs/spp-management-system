@@ -40,7 +40,7 @@ function transaction_authorization_column_exists(mysqli $db, string $table, stri
 
 function transaction_authorization_snapshot(mysqli $db, int $paymentId): array
 {
-    $stmt = $db->prepare('SELECT b.*,s.NAMA,s.NO_induk_diknas FROM bayar b LEFT JOIN siswa s ON s.NO_INDUK=b.NO_INDUK WHERE b.id=? LIMIT 1');
+    $stmt = $db->prepare('SELECT b.*,s.NAMA,s.NO_induk_diknas FROM bayar b LEFT JOIN siswa s ON s.NO_INDUK=b.NO_INDUK AND s.unit_id=b.unit_id WHERE b.id=? LIMIT 1');
     $stmt->bind_param('i', $paymentId);
     $stmt->execute();
     $payment = $stmt->get_result()->fetch_assoc();

@@ -1,5 +1,8 @@
 # Audit kelayakan impor legacy SD, SMP, dan SMA
 
+> **Pembaruan implementasi identitas:** keputusan pemilik berikutnya menetapkan NIS unik per unit, status Legacy pending dan aktivasi manual. Hasil audit awal/angka 411 di bawah tetap bukti historis dengan aturan lama; bukan hitungan penerimaan importer baru. Lihat [audit backend](LEGACY_IMPORT_BACKEND_20261003.md) untuk 1.137 kandidat identitas yang diterima tanpa kelas/status/keuangan operasional. Histori keuangan tetap ditunda.
+
+
 ## Status akhir, 3 Oktober 2026
 
 **Audit isi backup dan simulasi yang memungkinkan selesai. Impor penuh ke database utama belum layak.** Ketiga backup berhasil dipulihkan dan diperiksa integritasnya. Rekomendasi: **impor identitas siswa secara bertahap setelah penyelesaian benturan identitas dan status**, serta **tunda histori tagihan/pembayaran/penempatan**. Sampel Tabungan terbukti dapat dikonversi, tetapi keseluruhan rekening belum layak dipindahkan sekaligus.

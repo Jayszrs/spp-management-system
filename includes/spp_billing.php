@@ -125,10 +125,10 @@ function spp_sync_active_placement_rates(mysqli $db, int $yearId, array $rates, 
           sta.spp_perbulan_snapshot,s.potongan_spp_persen,s.SPP_PERBULAN,s.KELAS AS active_class,
           NOT EXISTS(SELECT 1 FROM siswa_tahun_ajaran newer JOIN tahun_ajaran newer_year
             ON newer_year.id=newer.tahun_ajaran_id
-            WHERE newer.no_induk=sta.no_induk AND newer_year.label>ta.label) AS latest
+            WHERE newer.no_induk=sta.no_induk AND newer.unit_id=sta.unit_id AND newer_year.label>ta.label) AS latest
         FROM siswa_tahun_ajaran sta
         JOIN tahun_ajaran ta ON ta.id=sta.tahun_ajaran_id
-        JOIN siswa s ON s.NO_INDUK=sta.no_induk
+        JOIN siswa s ON s.NO_INDUK=sta.no_induk AND s.unit_id=sta.unit_id
         WHERE sta.tahun_ajaran_id=? AND sta.status='aktif' AND s.is_active=1
           AND CAST(sta.kelas AS UNSIGNED) " . unit_level_between_sql() . $studentFilter . "
         ORDER BY sta.no_induk FOR UPDATE");
@@ -258,13 +258,17 @@ function spp_publish_students(mysqli $db, int $masterYearId, array $students, ar
     $periods=spp_academic_periods((string)$master['label']);
     $created=0;$skipped=0;$ineligible=[];
     $find=$db->prepare("SELECT sta.id,sta.no_induk,sta.kelas,sta.master_kelas_id,sta.kelas_rombel_snapshot,sta.spp_covered_by_psb,sta.komite_mulai_bulan,s.potongan_spp_persen,s.is_active
-      FROM siswa_tahun_ajaran sta JOIN siswa s ON s.NO_INDUK=sta.no_induk
+      FROM siswa_tahun_ajaran sta JOIN siswa s ON s.NO_INDUK=sta.no_induk AND s.unit_id=sta.unit_id
       WHERE sta.tahun_ajaran_id=? AND sta.no_induk=? AND CAST(sta.kelas AS UNSIGNED) " . unit_level_between_sql() . " LIMIT 1 FOR UPDATE");
     $insert=$db->prepare("INSERT IGNORE INTO tagihan_spp(master_spp_tahun_id,tahun_ajaran_id,penempatan_id,no_induk,tingkat_snapshot,master_kelas_id,kelas_rombel_snapshot,bulan,tahun,tarif_dasar_snapshot,potongan_persen_snapshot,potongan_nominal_snapshot,nominal_tagihan,status)
       VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)");
     foreach(array_keys($selected) as $nis){
         $yearId=(int)$master['tahun_ajaran_id'];$find->bind_param('is',$yearId,$nis);$find->execute();$placement=$find->get_result()->fetch_assoc();
         if(!$placement || (int)$placement['is_active']!==1){$ineligible[]=$nis;continue;}
+        // Manual Legacy activation creates only a placement. Explicit publication prepares
+        // its Komite pair too; INSERT IGNORE preserves existing bills and paid snapshots.
+        require_once __DIR__.'/komite_billing.php';
+        komite_sync_placement($db,(int)$placement['id']);
         $level=(int)$placement['kelas'];$base=(float)$rates[$level];$discount=(float)$placement['potongan_spp_persen'];
         $net=spp_net_tariff($base,$discount);$covered=(int)$placement['spp_covered_by_psb']===1;
         $start=(string)($startMonths[$nis]??$placement['komite_mulai_bulan']??'07');$startIndex=0;

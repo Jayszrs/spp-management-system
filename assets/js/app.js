@@ -415,6 +415,7 @@ function renderStudentSearchPanel(input, forceAll) {
     main.appendChild(nis);
     button.appendChild(main);
     button.appendChild(classBadge);
+    button.addEventListener('click', () => selectStudentSearchOption(input,opt));
     button.addEventListener('mousedown', function (event) {
       event.preventDefault();
       selectStudentSearchOption(input, opt);
@@ -488,7 +489,9 @@ function initStudentSearchInput(input) {
       return;
     }
     if (event.key !== 'Enter') return;
-    const first = panel.querySelector('.student-search-option');
+    const choices=panel.querySelectorAll('.student-search-option');
+    if(choices.length>1){event.preventDefault();return;}
+    const first = choices[0];
     if (!first || panel.hidden) return;
     event.preventDefault();
     first.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
@@ -506,9 +509,9 @@ function syncStudentSearchQueryTarget(input, value) {
   const listId = input.dataset.studentList || input.getAttribute('list') || '';
   const list = listId ? document.getElementById(listId) : null;
   const typed = value || '';
-  const exact = list
-    ? Array.from(list.options).find(opt => typed === opt.value || typed === studentSearchOptionLabel(opt))
-    : null;
+  const exactMatches = list ? Array.from(list.options).filter(opt => typed === opt.value || typed === studentSearchOptionLabel(opt)) : [];
+  const exact=exactMatches.length===1?exactMatches[0]:null;
+  input.closest('form')?.querySelectorAll('[data-student-identity]').forEach(field=>field.value='');
   target.value = exact
     ? (exact.dataset.nis || exact.dataset.diknas || typed)
     : (input.dataset.studentQueryExact === '1' ? '' : typed);
@@ -517,6 +520,10 @@ function syncStudentSearchQueryTarget(input, value) {
 function selectReportStudentSearchOption(input, opt) {
   input.value = studentSearchOptionLabel(opt);
   syncStudentSearchQueryTarget(input, opt.dataset.nis || opt.dataset.diknas || input.value);
+  const form=input.closest('form');if(!form)return;
+  for(const [name,value] of [['student_id',opt.dataset.studentId||''],['student_unit',opt.dataset.unitId||'']]){
+    let field=form.querySelector('[name="'+name+'"]');if(!field){field=document.createElement('input');field.type='hidden';field.name=name;field.dataset.studentIdentity='1';form.append(field);}field.value=value;
+  }
 }
 
 function applyDefaultDaftarUlangClass(opt) {

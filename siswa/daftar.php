@@ -37,6 +37,7 @@ function find_student(mysqli $db, int $id, bool $forUpdate = false): ?array {
     $stmt->execute();
     $student = $stmt->get_result()->fetch_assoc() ?: null;
     $stmt->close();
+    if ($student && !empty($student['legacy_pending']) && $forUpdate) throw new RuntimeException('Gunakan Aktivasi Legacy; Pulihkan/Edit biasa tidak diizinkan.');
     if ($student) $student['history_count'] = student_history_count($db, $student['NO_INDUK']);
     return $student;
 }
@@ -418,7 +419,7 @@ $filterClass = (int)($_GET['kelas'] ?? 0);
 $classOptions = class_all($koneksi, true, true);
 if ($filterClass > 0 && !array_filter($classOptions, fn($row) => (int)$row['id'] === $filterClass)) $filterClass = 0;
 $filterStatus = (string)($_GET['status'] ?? 'active');
-if (!in_array($filterStatus, ['active', 'archived', 'all'], true)) $filterStatus = 'active';
+if (!in_array($filterStatus, ['active', 'archived', 'legacy', 'all'], true)) $filterStatus = 'active';
 $allowedPageSizes = [10, 25, 50];
 $perPage = page_size_param('per_page', $allowedPageSizes, 10);
 $page = page_int_param('page');
@@ -427,7 +428,7 @@ $listWhereSql = "
     FROM siswa s
     WHERE (? = '' OR s.NO_INDUK LIKE CONCAT('%', ?, '%') OR s.NAMA LIKE CONCAT('%', ?, '%') OR s.NO_induk_diknas LIKE CONCAT('%', ?, '%'))
       AND (? = 0 OR s.master_kelas_id = ?)
-      AND (? = 'all' OR s.is_active = IF(? = 'archived', 0, 1))
+      AND (? = 'all' OR CASE ? WHEN 'legacy' THEN s.legacy_pending=1 WHEN 'archived' THEN s.legacy_pending=0 AND s.is_active=0 ELSE s.legacy_pending=0 AND s.is_active=1 END)
 ";
 $listTypes = 'ssssiiss';
 $listParams = [$query, $query, $query, $query, $filterClass, $filterClass, $filterStatus, $filterStatus];
@@ -444,16 +445,16 @@ $offset = ($page - 1) * $perPage;
 
 $stmtList = $koneksi->prepare("
     SELECT s.*, mk.tingkat AS master_tingkat, mk.kode_rombel, mk.is_placeholder,
-      (SELECT COUNT(*) FROM bayar p WHERE p.NO_INDUK = s.NO_INDUK) AS jml_bayar,
-      ((SELECT COUNT(*) FROM bayar p WHERE p.NO_INDUK = s.NO_INDUK) +
-       (SELECT COUNT(*) FROM bayar_du du WHERE du.no_induk = s.NO_INDUK) +
-       (SELECT COUNT(*) FROM transaksi_m tm WHERE tm.NO_INDUK = s.NO_INDUK) +
-       (SELECT COUNT(*) FROM transaksi_k tk WHERE tk.NO_INDUK = s.NO_INDUK)) AS history_count
+      (SELECT COUNT(*) FROM bayar p WHERE p.NO_INDUK = s.NO_INDUK AND p.unit_id=s.unit_id) AS jml_bayar,
+      ((SELECT COUNT(*) FROM bayar p WHERE p.NO_INDUK = s.NO_INDUK AND p.unit_id=s.unit_id) +
+       (SELECT COUNT(*) FROM bayar_du du WHERE du.no_induk = s.NO_INDUK AND du.unit_id=s.unit_id) +
+       (SELECT COUNT(*) FROM transaksi_m tm WHERE tm.NO_INDUK = s.NO_INDUK AND tm.unit_id=s.unit_id) +
+       (SELECT COUNT(*) FROM transaksi_k tk WHERE tk.NO_INDUK = s.NO_INDUK AND tk.unit_id=s.unit_id)) AS history_count
     FROM siswa s
     LEFT JOIN master_kelas mk ON mk.id = s.master_kelas_id
     WHERE (? = '' OR s.NO_INDUK LIKE CONCAT('%', ?, '%') OR s.NAMA LIKE CONCAT('%', ?, '%') OR s.NO_induk_diknas LIKE CONCAT('%', ?, '%'))
       AND (? = 0 OR s.master_kelas_id = ?)
-      AND (? = 'all' OR s.is_active = IF(? = 'archived', 0, 1))
+      AND (? = 'all' OR CASE ? WHEN 'legacy' THEN s.legacy_pending=1 WHEN 'archived' THEN s.legacy_pending=0 AND s.is_active=0 ELSE s.legacy_pending=0 AND s.is_active=1 END)
     ORDER BY s.is_active DESC,
       CASE WHEN s.KELAS REGEXP '^([1-9]|1[0-2])$' THEN 0 ELSE 1 END,
       CAST(s.KELAS AS UNSIGNED), s.KELAS, s.NAMA ASC
@@ -470,7 +471,7 @@ $graduationYears = [];
 if ($studentRows) {
     $historyStudentIds = array_values(array_map(fn($row) => (string)$row['NO_INDUK'], $studentRows));
     $placeholders = implode(',', array_fill(0, count($historyStudentIds), '?'));
-    $stmtHistory = $koneksi->prepare("SELECT sta.no_induk,ta.label AS tahun_ajaran,
+    $stmtHistory = $koneksi->prepare("SELECT sta.unit_id,sta.no_induk,ta.label AS tahun_ajaran,
             sta.kelas,sta.kelas_rombel_snapshot,sta.status
         FROM siswa_tahun_ajaran sta
         JOIN tahun_ajaran ta ON ta.id=sta.tahun_ajaran_id
@@ -480,7 +481,7 @@ if ($studentRows) {
     $stmtHistory->bind_param($historyTypes, ...$historyStudentIds);
     $stmtHistory->execute();
     foreach ($stmtHistory->get_result()->fetch_all(MYSQLI_ASSOC) as $history) {
-        $nis = (string)$history['no_induk'];
+        $nis = unit_student_key($history);
         $classHistories[$nis][] = $history;
         if ($history['status'] === 'lulus' && !isset($graduationYears[$nis])) {
             $graduationYears[$nis] = (string)$history['tahun_ajaran'];
@@ -495,6 +496,7 @@ $komiteStartMonth = '07';
 $editStudentYear = $editStudent
     ? spp_student_effective_year($koneksi, (string)$editStudent['NO_INDUK'])
     : du_current_academic_year();
+if ($editStudent && !empty($editStudent['legacy_pending'])) { header('Location: aktivasi_legacy.php?id='.(int)$editStudent['id']); exit; }
 if ($editStudent) {
     $stmtKomiteStart=$koneksi->prepare('SELECT sta.komite_mulai_bulan FROM siswa_tahun_ajaran sta JOIN tahun_ajaran ta ON ta.id=sta.tahun_ajaran_id WHERE sta.no_induk=? AND ta.label=? LIMIT 1');
     $stmtKomiteStart->bind_param('ss',$editStudent['NO_INDUK'],$editStudentYear);$stmtKomiteStart->execute();
@@ -720,7 +722,7 @@ $sppRatePreview = spp_current_effective_rate($koneksi, $previewLevel, $previewDi
           <select class="field-input field-select filter-sel" name="status">
             <option value="active" <?= $filterStatus === 'active' ? 'selected' : '' ?>>Aktif</option>
             <option value="archived" <?= $filterStatus === 'archived' ? 'selected' : '' ?>>Diarsipkan</option>
-            <option value="all" <?= $filterStatus === 'all' ? 'selected' : '' ?>>Semua Status</option>
+            <option value="legacy" <?= $filterStatus === 'legacy' ? 'selected' : '' ?>>Legacy</option><option value="all" <?= $filterStatus === 'all' ? 'selected' : '' ?>>Semua Status</option>
           </select>
           <select class="field-input field-select filter-sel" name="per_page" aria-label="Jumlah siswa per halaman">
             <?php foreach ($allowedPageSizes as $pageSize): ?>
@@ -737,9 +739,9 @@ $sppRatePreview = spp_current_effective_rate($koneksi, $previewLevel, $previewDi
               <?php if (!$studentRows): ?>
               <tr><td colspan="8"><div class="empty-state"><p>Data siswa tidak ditemukan</p></div></td></tr>
               <?php else: foreach ($studentRows as $index => $student):
-                $editUrl = 'daftar.php?edit=' . (int)$student['id'];
-                $historyRows = $classHistories[(string)$student['NO_INDUK']] ?? [];
-                $graduateYear = $graduationYears[(string)$student['NO_INDUK']] ?? '';
+                $editUrl = !empty($student['legacy_pending']) ? 'aktivasi_legacy.php?id='.(int)$student['id'] : 'daftar.php?edit=' . (int)$student['id'];
+                $historyRows = $classHistories[unit_student_key($student)] ?? [];
+                $graduateYear = $graduationYears[unit_student_key($student)] ?? '';
                 $isGraduate = $graduateYear !== '';
                 $historyId = 'class-history-' . (int)$student['id'];
               ?>
@@ -753,11 +755,11 @@ $sppRatePreview = spp_current_effective_rate($koneksi, $previewLevel, $previewDi
                   'is_placeholder' => $student['is_placeholder'] ?? 1,
                 ])) ?></span><?php if($historyRows): ?><button type="button" class="student-class-history-toggle" aria-expanded="false" aria-controls="<?= $historyId ?>" aria-label="Buka Riwayat Kelas <?= htmlspecialchars($student['NAMA'], ENT_QUOTES, 'UTF-8') ?>" data-student-name="<?= htmlspecialchars($student['NAMA'], ENT_QUOTES, 'UTF-8') ?>"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 7v5l3 2"/></svg><span>Riwayat</span><span class="student-class-history-chevron" aria-hidden="true">⌄</span></button><?php endif; ?></div></td>
                 <td data-label="SPP/Bulan" class="nominal">Rp <?= number_format((float)$student['SPP_PERBULAN'], 0, ',', '.') ?></td>
-                <td data-label="Status"><span class="master-status <?= $student['is_active'] ? 'is-active' : 'is-inactive' ?>"><?= $isGraduate ? 'Lulus · TA ' . htmlspecialchars($graduateYear) : ($student['is_active'] ? 'Aktif' : 'Diarsipkan') ?></span></td>
+                <td data-label="Status"><span class="master-status <?= $student['is_active'] ? 'is-active' : 'is-inactive' ?>"><?= !empty($student['legacy_pending']) ? 'Legacy — belum aktif' : ($isGraduate ? 'Lulus · TA ' . htmlspecialchars($graduateYear) : ($student['is_active'] ? 'Aktif' : 'Diarsipkan')) ?></span></td>
                 <td data-label="Riwayat Transaksi" class="student-history-col"><span class="badge-count"><?= (int)$student['history_count'] ?>x</span></td>
                 <td data-label="Aksi" class="aksi-col">
-                  <a class="btn-tbl btn-tbl-edit" href="<?= htmlspecialchars($editUrl) ?>">Edit</a>
-                  <?php if(!$isGraduate): ?><form method="POST" action="daftar.php" style="display:inline" onsubmit="return confirm('<?= $student['is_active'] ? 'Arsipkan' : 'Pulihkan' ?> siswa <?= htmlspecialchars(addslashes($student['NAMA'])) ?>?')">
+                  <a class="btn-tbl btn-tbl-edit" href="<?= htmlspecialchars($editUrl) ?>"><?= !empty($student['legacy_pending']) ? 'Aktifkan & Tempatkan' : 'Edit' ?></a>
+                  <?php if(!$isGraduate && empty($student['legacy_pending'])): ?><form method="POST" action="daftar.php" style="display:inline" onsubmit="return confirm('<?= $student['is_active'] ? 'Arsipkan' : 'Pulihkan' ?> siswa <?= htmlspecialchars(addslashes($student['NAMA'])) ?>?')">
                     <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($_SESSION['csrf_student']) ?>" />
                     <input type="hidden" name="aksi" value="toggle_status" /><input type="hidden" name="id" value="<?= (int)$student['id'] ?>" /><input type="hidden" name="target_active" value="<?= $student['is_active'] ? '0' : '1' ?>" />
                     <button type="submit" class="btn-tbl btn-tbl-toggle"><?= $student['is_active'] ? 'Arsipkan' : 'Pulihkan' ?></button>
@@ -798,7 +800,7 @@ $sppRatePreview = spp_current_effective_rate($koneksi, $previewLevel, $previewDi
     </main>
   </div>
 
-  <script src="../assets/js/app.js?v=10.5"></script>
+  <script src="../assets/js/app.js?v=<?= filemtime(__DIR__ . '/../assets/js/app.js') ?>"></script>
   <script>
     document.addEventListener('DOMContentLoaded', function () {
       const toggle = document.getElementById('advanced-enabled');

@@ -22,6 +22,8 @@ $tahun = trim((string)($_GET['tahun'] ?? ''));
 $editId = max(0, (int)($_GET['edit_id'] ?? 0));
 $transactionStarted = false;
 
+try { unit_resolve_student($koneksi,$noInduk,(int)($_GET['student_id']??0)); }catch(Throwable $e){http_response_code(409);echo json_encode(['ok'=>false,'message'=>$e->getMessage()]);exit;}
+
 try {
     if ($noInduk === '' || $bulan === '' || !preg_match('/^\d{4}$/', $tahun)) {
         throw new InvalidArgumentException('Data siswa dan periode SPP belum lengkap.');

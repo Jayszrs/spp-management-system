@@ -46,6 +46,6 @@ requireRole(['admin','bendahara','kasir']);
     </div>
   </main>
 </div>
-<script src="../assets/js/app.js?v=10.4"></script>
+<script src="../assets/js/app.js?v=<?= filemtime(__DIR__ . '/../assets/js/app.js') ?>"></script>
 </body>
 </html>

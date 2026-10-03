@@ -26,35 +26,34 @@ $allowedPageSizes = [10, 25, 50];
 $perPage = page_size_param('per_page', $allowedPageSizes, 10);
 $page = page_int_param('page');
 
-$selectedFilterNis = '';
+$selectedFilterNis = '';$selectedFilterUnit=0;
 if ($filter_nis !== '') {
-    $stmtIdentity = $koneksi->prepare('SELECT NO_INDUK FROM siswa WHERE NO_INDUK=? OR NO_induk_diknas=? OR NAMA=? LIMIT 1');
-    $stmtIdentity->bind_param('sss', $filter_nis, $filter_nis, $filter_nis);
-    $stmtIdentity->execute();
-    $identity = $stmtIdentity->get_result()->fetch_assoc();
-    $stmtIdentity->close();
-    if ($identity) $selectedFilterNis = (string)$identity['NO_INDUK'];
+    $stmtIdentity=$koneksi->prepare('SELECT NO_INDUK,unit_id FROM siswa s WHERE (NO_INDUK=? OR NO_induk_diknas=? OR NAMA=?)'.unit_student_selection_where());
+    $stmtIdentity->bind_param('sss',$filter_nis,$filter_nis,$filter_nis);$stmtIdentity->execute();$identities=$stmtIdentity->get_result()->fetch_all(MYSQLI_ASSOC);$stmtIdentity->close();
+    if(count($identities)===1){$selectedFilterNis=$identities[0]['NO_INDUK'];$selectedFilterUnit=(int)$identities[0]['unit_id'];}
 }
 
 // Query gabungan masuk + keluar. Filter NIS selalu diparameterkan agar
 // input URL tidak pernah menjadi bagian dari SQL.
 $where_nis_masuk = $filter_nis !== '' ? ' AND (tm.NO_INDUK = ? OR s.NO_induk_diknas = ? OR s.NAMA LIKE ?)' : '';
 $where_nis_keluar = $filter_nis !== '' ? ' AND (tk.NO_INDUK = ? OR s.NO_induk_diknas = ? OR s.NAMA LIKE ?)' : '';
+$where_nis_masuk .= unit_student_selection_where();
+$where_nis_keluar .= unit_student_selection_where();
 $periodStart = $filter_tanggal_awal . ' 00:00:00';
 $periodEnd = date('Y-m-d H:i:s', strtotime($filter_tanggal_akhir . ' +1 day'));
 
 $sql_masuk = "
-    SELECT tm.id, tm.NO_INDUK, s.NAMA, s.KELAS, tm.TANGGAL,
+    SELECT tm.id,tm.unit_id, tm.NO_INDUK, s.NAMA, s.KELAS, tm.TANGGAL,
            tm.MASUK as nominal, 0 as keluar, 'masuk' as jenis, tm.user_id, tm.keterangan
     FROM transaksi_m tm
-    JOIN siswa s ON s.NO_INDUK = tm.NO_INDUK
+    JOIN siswa s ON s.NO_INDUK = tm.NO_INDUK AND s.unit_id=tm.unit_id
     WHERE tm.TANGGAL >= ? AND tm.TANGGAL < ?$where_nis_masuk
 ";
 $sql_keluar = "
-    SELECT tk.id, tk.NO_INDUK, s.NAMA, s.KELAS, tk.TANGGAL,
+    SELECT tk.id,tk.unit_id, tk.NO_INDUK, s.NAMA, s.KELAS, tk.TANGGAL,
            0 as nominal, tk.KELUAR as keluar, 'keluar' as jenis, tk.user_id, tk.keterangan
     FROM transaksi_k tk
-    JOIN siswa s ON s.NO_INDUK = tk.NO_INDUK
+    JOIN siswa s ON s.NO_INDUK = tk.NO_INDUK AND s.unit_id=tk.unit_id
     WHERE tk.TANGGAL >= ? AND tk.TANGGAL < ?$where_nis_keluar
 ";
 
@@ -90,7 +89,7 @@ $stmt->close();
 // Rekap saldo semua siswa aktif. Siswa yang belum punya tabungan tetap tampil
 // agar admin bisa langsung menemukan nama dan mulai setoran pertama.
 $saldo_list = $koneksi->query("
-    SELECT s.NO_INDUK, s.unit_id, s.NO_induk_diknas, s.NAMA, s.KELAS, COALESCE(t.SALDO, 0) AS SALDO,
+    SELECT s.id AS student_id,s.NO_INDUK, s.unit_id, s.NO_induk_diknas, s.NAMA, s.KELAS, COALESCE(t.SALDO, 0) AS SALDO,
            COALESCE(m.total_masuk, 0) AS total_masuk,
            COALESCE(k.total_keluar, 0) AS total_keluar,
            CASE
@@ -100,17 +99,17 @@ $saldo_list = $koneksi->query("
              ELSE k.last_keluar
            END AS last_activity
     FROM siswa s
-    LEFT JOIN tabungan t ON t.NO_INDUK = s.NO_INDUK
+    LEFT JOIN tabungan t ON t.NO_INDUK = s.NO_INDUK AND t.unit_id=s.unit_id
     LEFT JOIN (
-        SELECT NO_INDUK, SUM(MASUK) AS total_masuk, MAX(TANGGAL) AS last_masuk
+        SELECT unit_id,NO_INDUK, SUM(MASUK) AS total_masuk, MAX(TANGGAL) AS last_masuk
         FROM transaksi_m
-        GROUP BY NO_INDUK
-    ) m ON m.NO_INDUK = s.NO_INDUK
+        GROUP BY unit_id,NO_INDUK
+    ) m ON m.NO_INDUK = s.NO_INDUK AND m.unit_id=s.unit_id
     LEFT JOIN (
-        SELECT NO_INDUK, SUM(KELUAR) AS total_keluar, MAX(TANGGAL) AS last_keluar
+        SELECT unit_id,NO_INDUK, SUM(KELUAR) AS total_keluar, MAX(TANGGAL) AS last_keluar
         FROM transaksi_k
-        GROUP BY NO_INDUK
-    ) k ON k.NO_INDUK = s.NO_INDUK
+        GROUP BY unit_id,NO_INDUK
+    ) k ON k.NO_INDUK = s.NO_INDUK AND k.unit_id=s.unit_id
     WHERE s.is_active = 1
     ORDER BY CAST(s.KELAS AS UNSIGNED), s.NAMA ASC
 ")->fetch_all(MYSQLI_ASSOC);
@@ -124,7 +123,7 @@ sort($kelas_rekap, SORT_NATURAL);
 $selected_saldo = null;
 if ($selectedFilterNis !== '') {
     foreach ($saldo_list as $saldo_row) {
-        if ((string)$saldo_row['NO_INDUK'] === (string)$selectedFilterNis) {
+        if ((string)$saldo_row['NO_INDUK'] === (string)$selectedFilterNis && (int)$saldo_row['unit_id']===$selectedFilterUnit) {
             $selected_saldo = $saldo_row;
             break;
         }
@@ -230,7 +229,7 @@ $periodLabel = $filter_tanggal_awal === $filter_tanggal_akhir
 
         <form method="GET" class="recap-header-controls history-recap-filter tabungan-filter-form">
           <span class="recap-filter-label">Filter Riwayat</span>
-          <div class="field-row report-date-range-field"><label class="field-label">Tanggal Transaksi</label><div class="report-date-range-control report-date-range-picker" data-range-picker data-empty-label="<?= htmlspecialchars($periodLabel) ?>"><input type="hidden" name="tanggal_awal" value="<?= htmlspecialchars($filter_tanggal_awal) ?>"><input type="hidden" name="tanggal_akhir" value="<?= htmlspecialchars($filter_tanggal_akhir) ?>"><button type="button" class="report-date-range-button" aria-expanded="false"><span class="report-date-range-icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg></span><span class="report-date-range-value"><?= htmlspecialchars($periodLabel) ?></span></button><div class="report-date-range-popover" hidden><label><span>Mulai</span><input type="date" value="<?= htmlspecialchars($filter_tanggal_awal) ?>" data-range-start></label><label><span>Sampai</span><input type="date" value="<?= htmlspecialchars($filter_tanggal_akhir) ?>" data-range-end></label><div class="report-date-range-popover-actions"><button type="button" class="btn btn-primary btn-sm" data-range-apply>Terapkan</button></div></div></div></div><div class="field-row tabungan-filter-nis full-span"><label class="field-label">Cari Siswa (Nama / NIS / NIS Diknas)</label><div class="search-box"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input type="text" id="savings-history-student" data-student-search data-student-list="savings-history-student-list" data-student-select-callback="selectReportStudentSearchOption" data-student-query-target="savings-history-nis" placeholder="Ketik nama, NIS, atau NIS Diknas..." value="<?= htmlspecialchars($selected_saldo['NAMA'] ?? $filter_nis) ?>" autocomplete="off"><input type="hidden" id="savings-history-nis" name="nis" value="<?= htmlspecialchars($filter_nis) ?>"></div><datalist id="savings-history-student-list"><?php foreach ($saldo_list as $studentOption): ?><option value="<?= htmlspecialchars($studentOption['NAMA']) ?>" data-nis="<?= htmlspecialchars($studentOption['NO_INDUK']) ?>" data-diknas="<?= htmlspecialchars((string)($studentOption['NO_induk_diknas'] ?? '')) ?>" data-nama="<?= htmlspecialchars($studentOption['NAMA']) ?>" data-kelas="<?= htmlspecialchars((unit_all_readonly()?unit_label((int)$studentOption['unit_id']).' · ':'').$studentOption['KELAS']) ?>"></option><?php endforeach; ?></datalist></div><div class="field-row tabungan-filter-page">
+          <div class="field-row report-date-range-field"><label class="field-label">Tanggal Transaksi</label><div class="report-date-range-control report-date-range-picker" data-range-picker data-empty-label="<?= htmlspecialchars($periodLabel) ?>"><input type="hidden" name="tanggal_awal" value="<?= htmlspecialchars($filter_tanggal_awal) ?>"><input type="hidden" name="tanggal_akhir" value="<?= htmlspecialchars($filter_tanggal_akhir) ?>"><button type="button" class="report-date-range-button" aria-expanded="false"><span class="report-date-range-icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg></span><span class="report-date-range-value"><?= htmlspecialchars($periodLabel) ?></span></button><div class="report-date-range-popover" hidden><label><span>Mulai</span><input type="date" value="<?= htmlspecialchars($filter_tanggal_awal) ?>" data-range-start></label><label><span>Sampai</span><input type="date" value="<?= htmlspecialchars($filter_tanggal_akhir) ?>" data-range-end></label><div class="report-date-range-popover-actions"><button type="button" class="btn btn-primary btn-sm" data-range-apply>Terapkan</button></div></div></div></div><div class="field-row tabungan-filter-nis full-span"><label class="field-label">Cari Siswa (Nama / NIS / NIS Diknas)</label><div class="search-box"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><input type="text" id="savings-history-student" data-student-search data-student-list="savings-history-student-list" data-student-select-callback="selectReportStudentSearchOption" data-student-query-target="savings-history-nis" placeholder="Ketik nama, NIS, atau NIS Diknas..." value="<?= htmlspecialchars($selected_saldo['NAMA'] ?? $filter_nis) ?>" autocomplete="off"><input type="hidden" name="student_id" value="<?= (int)($_GET['student_id']??0) ?>"><input type="hidden" id="savings-history-nis" name="nis" value="<?= htmlspecialchars($filter_nis) ?>"></div><datalist id="savings-history-student-list"><?php foreach ($saldo_list as $studentOption): ?><option value="<?= htmlspecialchars($studentOption['NAMA']) ?>" data-student-id="<?= (int)($studentOption['student_id']??0) ?>" data-unit-id="<?= (int)($studentOption['unit_id']??0) ?>" data-nis="<?= htmlspecialchars($studentOption['NO_INDUK']) ?>" data-diknas="<?= htmlspecialchars((string)($studentOption['NO_induk_diknas'] ?? '')) ?>" data-nama="<?= htmlspecialchars($studentOption['NAMA']) ?>" data-kelas="<?= htmlspecialchars((unit_all_readonly()?unit_label((int)$studentOption['unit_id']).' · ':'').$studentOption['KELAS']) ?>"></option><?php endforeach; ?></datalist></div><div class="field-row tabungan-filter-page">
             <label class="field-label">Per Halaman</label>
             <select class="field-input field-select" name="per_page" aria-label="Jumlah transaksi tabungan per halaman">
               <?php foreach ($allowedPageSizes as $pageSize): ?>
@@ -419,7 +418,7 @@ $periodLabel = $filter_tanggal_awal === $filter_tanggal_akhir
   </main>
 </div>
 <div class="toast" id="toast"><span id="toast-icon"></span><span id="toast-msg"></span></div>
-<script src="../assets/js/app.js?v=10.4"></script>
+<script src="../assets/js/app.js?v=<?= filemtime(__DIR__ . '/../assets/js/app.js') ?>"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function(){
   autoHideFlash();

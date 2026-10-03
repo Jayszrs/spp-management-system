@@ -70,6 +70,8 @@ try {
         WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='siswa'")->fetch_assoc()['n'] !== 1) {
         throw new RuntimeException('Migrasi multiunit tidak membuat view operasional siswa.');
     }
+    require_once __DIR__.'/../includes/legacy_schema.php';
+    if(!legacy_schema_ready($koneksi))throw new RuntimeException('Fresh install missing Legacy/unit identity schema');
     // The documented workflow runs account bootstrap in a new CLI process.
     $process = proc_open([PHP_BINARY, __DIR__ . '/../sql/bootstrap_unit_accounts.php', $credentialsFile],
         [['pipe', 'r'], ['pipe', 'w'], ['pipe', 'w']], $pipes, dirname(__DIR__), null,

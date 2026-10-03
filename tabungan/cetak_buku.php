@@ -35,16 +35,20 @@ if (!is_string($output) || !in_array($output, ['preview', 'pdf'], true)) {
 
 try {
     $koneksi->begin_transaction();
-    $studentStmt = $koneksi->prepare('SELECT s.NO_INDUK, s.unit_id, s.NO_induk_diknas, s.NAMA, s.KELAS, COALESCE(t.SALDO, 0) AS SALDO FROM siswa s LEFT JOIN tabungan t ON t.NO_INDUK=s.NO_INDUK WHERE s.NO_INDUK=? LIMIT 1');
-    $studentStmt->bind_param('s', $nis);
+    $studentStmt = $koneksi->prepare('SELECT s.NO_INDUK, s.unit_id, s.NO_induk_diknas, s.NAMA, s.KELAS, COALESCE(t.SALDO, 0) AS SALDO FROM siswa s LEFT JOIN tabungan t ON t.NO_INDUK=s.NO_INDUK AND t.unit_id=s.unit_id WHERE s.NO_INDUK=? AND (?=0 OR s.id=?)');
+    $studentId=(int)($_GET['student_id']??0);
+    $studentStmt->bind_param('sii', $nis,$studentId,$studentId);
     $studentStmt->execute();
-    $student = $studentStmt->get_result()->fetch_assoc();
+    $matches=$studentStmt->get_result()->fetch_all(MYSQLI_ASSOC);
+    if(count($matches)>1) book_error(409,'NIS ambigu. Pilih siswa dan unit dari Cetak Tabungan.');
+    $student=$matches[0]??null;
     $studentStmt->close();
     if (!$student) {
         $koneksi->commit();
         book_error(404, 'Siswa dengan NIS tersebut tidak ditemukan.');
     }
 
+    unit_set_context($koneksi,(int)$student['unit_id']);
     $transactionStmt = $koneksi->prepare("SELECT x.id, x.tanggal, x.masuk, x.keluar, x.urutan_mutasi FROM (
         SELECT id, TANGGAL AS tanggal, MASUK AS masuk, 0 AS keluar, 0 AS urutan_mutasi FROM transaksi_m WHERE NO_INDUK=?
         UNION ALL
@@ -65,7 +69,7 @@ try {
     book_error(500, 'Terjadi kesalahan saat menyiapkan buku tabungan. Coba lagi atau hubungi administrator.');
 }
 
-$pdfUrl = 'cetak_buku.php?' . http_build_query(['nis' => $nis, 'output' => 'pdf']);
+$pdfUrl = 'cetak_buku.php?' . http_build_query(['nis' => $nis, 'student_id'=>$studentId, 'output' => 'pdf']);
 if ($output === 'preview'):
     header('Content-Type: text/html; charset=UTF-8');
 ?>

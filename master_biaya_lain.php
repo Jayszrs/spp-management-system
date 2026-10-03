@@ -483,7 +483,7 @@ $_SESSION['fee_publish_request_keys'] = array_slice($_SESSION['fee_publish_reque
       </div>
     </main>
   </div>
-  <script src="assets/js/app.js?v=10.4"></script>
+  <script src="assets/js/app.js?v=<?= filemtime(__DIR__ . '/assets/js/app.js') ?>"></script>
   <script>
     document.addEventListener('DOMContentLoaded', function () {
       var nominal = document.getElementById('nominal-biaya');

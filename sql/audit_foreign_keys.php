@@ -78,6 +78,7 @@ function fk_audit_actual(mysqli $db): array {
     foreach ($rows as $row) {
         $constraintKey = strtolower($row['TABLE_NAME'] . '.' . $row['CONSTRAINT_NAME']);
         $row['column_count'] = $constraintSizes[$constraintKey];
+        $row['unit_pair']=count(array_filter($rows,static fn($other)=>$other['TABLE_NAME']===$row['TABLE_NAME'] && $other['CONSTRAINT_NAME']===$row['CONSTRAINT_NAME'] && $other['COLUMN_NAME']==='unit_id' && $other['REFERENCED_COLUMN_NAME']==='unit_id'))===1;
         $key = strtolower($row['TABLE_NAME'] . '.' . $row['COLUMN_NAME'] . '>'
             . $row['REFERENCED_TABLE_SCHEMA'] . '.' . $row['REFERENCED_TABLE_NAME']
             . '.' . $row['REFERENCED_COLUMN_NAME']);
@@ -125,6 +126,7 @@ function fk_audit_first_indexes(mysqli $db): array {
         $first = $indexColumns[0];
         $result[strtolower($first['TABLE_NAME'] . '.' . $first['COLUMN_NAME'])][] = [
             'index' => $first['INDEX_NAME'],
+            'unique_columns'=>(int)$first['NON_UNIQUE']===0?array_column($indexColumns,'COLUMN_NAME'):[],
             'unique_single_column' => (int)$first['NON_UNIQUE'] === 0 && count($indexColumns) === 1,
         ];
     }
@@ -166,8 +168,9 @@ function fk_audit_preflight(array $relation, array $columns, array $indexes, arr
             $issues[] = 'set_null_on_nonnullable_child';
         }
     }
+    if(!empty($relation['unit_pair']))$parentKey=strtolower($relation['physical_parent'].'.unit_id');
     if (empty($indexes[$parentKey])) $issues[] = 'parent_leading_index_missing';
-    if (!array_filter($indexes[$parentKey] ?? [], static fn($index) => $index['unique_single_column'])) {
+    if (!array_filter($indexes[$parentKey] ?? [], static fn($index) => !empty($relation['unit_pair'])?$index['unique_columns']===['unit_id','NO_INDUK']:$index['unique_single_column'])) {
         $issues[] = 'parent_unique_single_column_index_missing';
     }
     foreach (['physical_child', 'physical_parent'] as $tableKey) {
@@ -183,7 +186,7 @@ function fk_audit_orphans(mysqli $db, array $relation): int {
     $column = fk_audit_identifier($relation['column']);
     $parent = fk_audit_identifier($relation['physical_parent']);
     $parentColumn = fk_audit_identifier($relation['parent_column']);
-    $sql = "SELECT COUNT(*) AS n FROM `{$child}` c LEFT JOIN `{$parent}` p ON p.`{$parentColumn}`=c.`{$column}` WHERE c.`{$column}` IS NOT NULL AND p.`{$parentColumn}` IS NULL";
+    $sql = "SELECT COUNT(*) AS n FROM `{$child}` c LEFT JOIN `{$parent}` p ON p.`{$parentColumn}`=c.`{$column}` ".(!empty($relation['unit_pair'])?' AND p.unit_id=c.unit_id':'')." WHERE c.`{$column}` IS NOT NULL AND p.`{$parentColumn}` IS NULL";
     return (int)$db->query($sql)->fetch_assoc()['n'];
 }
 
@@ -207,6 +210,7 @@ function fk_audit_report(mysqli $db): array {
         }
         $relation['physical_child'] = $child;
         $relation['physical_parent'] = $parent;
+        $relation['unit_pair']=$parent==='siswa_data' && $relation['parent_column']==='NO_INDUK' && isset($columns['siswa_data.legacy_pending']);
         $key = strtolower($child . '.' . $relation['column'] . '>' . DB_NAME . '.'
             . $parent . '.' . $relation['parent_column']);
         $childKey = strtolower($child . '.' . $relation['column']);
@@ -217,7 +221,8 @@ function fk_audit_report(mysqli $db): array {
         if ($matches || $existingOnColumn) {
             $sameDefinition = count($matches) === 1
                 && count($existingOnColumn) === 1
-                && (int)$matches[0]['column_count'] === 1
+                && (int)$matches[0]['column_count'] === (!empty($relation['unit_pair'])?2:1)
+                && (empty($relation['unit_pair']) || $matches[0]['unit_pair'])
                 && fk_audit_rule_equivalent($matches[0]['DELETE_RULE'], $relation['on_delete'])
                 && fk_audit_rule_equivalent($matches[0]['UPDATE_RULE'], $relation['on_update']);
             if (!$sameDefinition) {

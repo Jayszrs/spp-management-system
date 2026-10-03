@@ -9,7 +9,7 @@ requireRole(['admin', 'kasir']);
 $query = trim((string)($_GET['q'] ?? ''));
 $filterClass = (int)($_GET['kelas'] ?? 0);
 $filterStatus = (string)($_GET['status'] ?? 'active');
-if (!in_array($filterStatus, ['active', 'archived', 'all'], true)) $filterStatus = 'active';
+if (!in_array($filterStatus, ['active', 'archived', 'legacy', 'all'], true)) $filterStatus = 'active';
 
 $sql = "
     SELECT s.*, mk.tingkat AS master_tingkat, mk.kode_rombel, mk.is_placeholder
@@ -17,7 +17,7 @@ $sql = "
     LEFT JOIN master_kelas mk ON mk.id = s.master_kelas_id
     WHERE (? = '' OR s.NO_INDUK LIKE CONCAT('%', ?, '%') OR s.NAMA LIKE CONCAT('%', ?, '%') OR s.NO_induk_diknas LIKE CONCAT('%', ?, '%'))
       AND (? = 0 OR s.master_kelas_id = ?)
-      AND (? = 'all' OR s.is_active = IF(? = 'archived', 0, 1))
+      AND (? = 'all' OR CASE ? WHEN 'legacy' THEN s.legacy_pending=1 WHEN 'archived' THEN s.legacy_pending=0 AND s.is_active=0 ELSE s.legacy_pending=0 AND s.is_active=1 END)
     ORDER BY s.is_active DESC, COALESCE(mk.tingkat, s.KELAS), mk.kode_rombel, s.NAMA
 ";
 $stmt = $koneksi->prepare($sql);
@@ -35,7 +35,7 @@ $escape = static function ($value) use ($download): string {
     }
     return htmlspecialchars($text, ENT_QUOTES, 'UTF-8');
 };
-$statusLabels = ['active'=>'Aktif', 'archived'=>'Arsip/Lulus', 'all'=>'Semua'];
+$statusLabels = ['legacy'=>'Legacy', 'active'=>'Aktif', 'archived'=>'Arsip/Lulus', 'all'=>'Semua'];
 $filterParts = [];
 if ($query !== '') $filterParts[] = 'Pencarian: ' . $query;
 if ($filterClass > 0) {
@@ -63,7 +63,7 @@ ob_start();
 <div class="summary"><div><span>Jumlah Siswa</span><strong><?= number_format(count($rows)) ?></strong></div></div>
 <table><thead><tr><th>No</th><?php if(unit_all_readonly()): ?><th>Unit</th><?php endif; ?><th>NIS</th><th>NIS Diknas</th><th>Nama</th><th>Kelas/Rombel</th><th>SPP Per Bulan</th><th>Status</th></tr></thead><tbody>
 <?php if (!$rows): ?><tr><td colspan="<?= unit_all_readonly()?8:7 ?>" class="center">Tidak ada siswa sesuai filter.</td></tr><?php else: foreach ($rows as $index => $row): ?>
-<tr><td class="center"><?= $index + 1 ?></td><?php if(unit_all_readonly()): ?><td><?= $escape(unit_label((int)$row['unit_id'])) ?></td><?php endif; ?><td><?= $escape($row['NO_INDUK']) ?></td><td><?= $escape((string)($row['NO_induk_diknas'] ?? '')) ?></td><td><?= $escape($row['NAMA']) ?></td><td><?= $escape(class_label(['tingkat'=>$row['master_tingkat'] ?: $row['KELAS'],'kode_rombel'=>$row['kode_rombel'] ?? 'BELUM','is_placeholder'=>$row['is_placeholder'] ?? 1])) ?></td><td class="money">Rp <?= number_format((float)$row['SPP_PERBULAN'], 0, ',', '.') ?></td><td><?= ((int)$row['is_active'] === 1) ? 'Aktif' : 'Arsip/Lulus' ?></td></tr>
+<tr><td class="center"><?= $index + 1 ?></td><?php if(unit_all_readonly()): ?><td><?= $escape(unit_label((int)$row['unit_id'])) ?></td><?php endif; ?><td><?= $escape($row['NO_INDUK']) ?></td><td><?= $escape((string)($row['NO_induk_diknas'] ?? '')) ?></td><td><?= $escape($row['NAMA']) ?></td><td><?= $escape(class_label(['tingkat'=>$row['master_tingkat'] ?: $row['KELAS'],'kode_rombel'=>$row['kode_rombel'] ?? 'BELUM','is_placeholder'=>$row['is_placeholder'] ?? 1])) ?></td><td class="money">Rp <?= number_format((float)$row['SPP_PERBULAN'], 0, ',', '.') ?></td><td><?= !empty($row['legacy_pending']) ? 'Legacy' : (((int)$row['is_active'] === 1) ? 'Aktif' : 'Arsip/Lulus') ?></td></tr>
 <?php endforeach; endif; ?>
 </tbody></table><div class="footer">SistemSPP | Data mengikuti filter aktif pada saat laporan dibuat.</div></body></html>
 <?php

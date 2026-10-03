@@ -145,9 +145,9 @@ $stmt = $koneksi->prepare("
         COALESCE(du.jumlah, 0) AS uang_du,
         COALESCE(tdu.nominal_tagihan, 0) AS du_nominal_tagihan,
         COALESCE(op.nama, NULLIF(b.user_id, '')) AS operator_name,
-        COALESCE((SELECT SUM(bd.jumlah) FROM bayar_du bd WHERE bd.no_induk = b.NO_INDUK), 0) AS total_du_bayar
+        COALESCE((SELECT SUM(bd.jumlah) FROM bayar_du bd WHERE bd.no_induk = b.NO_INDUK AND bd.unit_id=b.unit_id), 0) AS total_du_bayar
     FROM bayar b
-    JOIN siswa s ON s.NO_INDUK = b.NO_INDUK
+    JOIN siswa s ON s.NO_INDUK = b.NO_INDUK AND s.unit_id=b.unit_id
     LEFT JOIN admin op ON op.id = CAST(b.user_id AS UNSIGNED)
     LEFT JOIN bayar_du du ON du.bayar_id = b.id
     LEFT JOIN tagihan_daftar_ulang tdu ON tdu.id = du.tagihan_daftar_ulang_id
@@ -157,6 +157,7 @@ $stmt = $koneksi->prepare("
 $stmt->bind_param('i', $paymentId);
 $stmt->execute();
 $payment = $stmt->get_result()->fetch_assoc();
+if($payment) unit_set_context($koneksi,(int)$payment['unit_id']);
 $stmt->close();
 $sppAllocation = spp_billing_schema_ready($koneksi) ? spp_payment_allocation_summary($koneksi, $paymentId) : null;
 

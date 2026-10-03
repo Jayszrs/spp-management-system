@@ -69,7 +69,7 @@ $allowedPageSizes = [10, 25, 50];
 $perPage = page_size_param('per_page', $allowedPageSizes, 10);
 $page = page_int_param('page');
 
-$where = "WHERE 1=1";
+$where = "WHERE 1=1".unit_student_selection_where();
 $params = [];
 $types  = '';
 $where .= " AND p.TGL_BYR >= ? AND p.TGL_BYR < ?";
@@ -84,7 +84,7 @@ if ($search) {
 }
 
 $countSql = "SELECT COUNT(*) AS total FROM bayar p
-        JOIN siswa s ON s.NO_INDUK = p.NO_INDUK
+        JOIN siswa s ON s.NO_INDUK = p.NO_INDUK AND s.unit_id=p.unit_id
         $where";
 $stmtCount = $koneksi->prepare($countSql);
 if ($params) { $stmtCount->bind_param($types, ...$params); }
@@ -98,7 +98,7 @@ $offset = ($page - 1) * $perPage;
 
 $sql = "SELECT p.*, s.NO_INDUK, s.NO_induk_diknas, s.NAMA,
         COALESCE(NULLIF(p.kelas_rombel_snapshot,''),NULLIF(p.KELAS,''),s.KELAS) AS kelas_transaksi FROM bayar p
-        JOIN siswa s ON s.NO_INDUK = p.NO_INDUK
+        JOIN siswa s ON s.NO_INDUK = p.NO_INDUK AND s.unit_id=p.unit_id
         $where ORDER BY p.created_at DESC
         LIMIT ? OFFSET ?";
 
@@ -121,14 +121,10 @@ $lastShown = $totalPayments > 0 ? min($offset + $perPage, $totalPayments) : 0;
 $periodLabel = $filter_tanggal_awal === $filter_tanggal_akhir
     ? date('d/m/Y', strtotime($filter_tanggal_awal))
     : date('d/m/Y', strtotime($filter_tanggal_awal)) . ' - ' . date('d/m/Y', strtotime($filter_tanggal_akhir));
-$studentOptions = $koneksi->query("SELECT s.NO_INDUK,s.unit_id,s.NO_induk_diknas,s.NAMA,s.KELAS FROM siswa s WHERE s.is_active=1 ORDER BY s.NAMA")->fetch_all(MYSQLI_ASSOC);
+$studentOptions = $koneksi->query("SELECT s.id AS student_id,s.NO_INDUK,s.unit_id,s.NO_induk_diknas,s.NAMA,s.KELAS FROM siswa s WHERE s.is_active=1 ORDER BY s.NAMA")->fetch_all(MYSQLI_ASSOC);
 $studentSearchDisplay = $search;
-foreach ($studentOptions as $studentOption) {
-    if ($search !== '' && ($search === $studentOption['NO_INDUK'] || $search === (string)($studentOption['NO_induk_diknas'] ?? ''))) {
-        $studentSearchDisplay = $studentOption['NAMA'];
-        break;
-    }
-}
+$displayMatches=array_values(array_filter($studentOptions,static fn($o)=>(int)($_GET['student_id']??0)>0 ? (int)$o['student_id']===(int)$_GET['student_id'] : ($search!==''&&($search===$o['NO_INDUK']||$search===(string)($o['NO_induk_diknas']??'')))));
+if(count($displayMatches)===1)$studentSearchDisplay=$displayMatches[0]['NAMA'];
 ?>
 <!DOCTYPE html>
 <html lang="id" data-palette="<?= unit_palette_for_view(isset($reportUnitId) ? (int)$reportUnitId : null) ?>">
@@ -203,7 +199,7 @@ foreach ($studentOptions as $studentOption) {
           </div>
 
         <!-- Filter Bar -->
-        <form method="GET" action="lihat.php" class="recap-header-controls history-recap-filter filter-bar">
+        <form method="GET" action="lihat.php" class="recap-header-controls history-recap-filter filter-bar"><input type="hidden" name="student_id" data-student-identity="1" value="<?= max(0,(int)($_GET['student_id']??0)) ?>">
           <span class="recap-filter-label">Filter Riwayat</span>
           <div class="field-row report-date-range-field">
             <label class="field-label">Tanggal Transaksi</label>
@@ -230,7 +226,7 @@ foreach ($studentOptions as $studentOption) {
             </div>
             <datalist id="payment-history-siswa-list">
               <?php foreach ($studentOptions as $studentOption): ?>
-              <option value="<?= htmlspecialchars($studentOption['NAMA']) ?>" data-nis="<?= htmlspecialchars($studentOption['NO_INDUK']) ?>" data-diknas="<?= htmlspecialchars((string)($studentOption['NO_induk_diknas'] ?? '')) ?>" data-nama="<?= htmlspecialchars($studentOption['NAMA']) ?>" data-kelas="<?= htmlspecialchars((unit_all_readonly()?unit_label((int)$studentOption['unit_id']).' · ':'').$studentOption['KELAS']) ?>"></option>
+              <option value="<?= htmlspecialchars($studentOption['NAMA']) ?>" data-student-id="<?= (int)($studentOption['student_id']??0) ?>" data-unit-id="<?= (int)($studentOption['unit_id']??0) ?>" data-nis="<?= htmlspecialchars($studentOption['NO_INDUK']) ?>" data-diknas="<?= htmlspecialchars((string)($studentOption['NO_induk_diknas'] ?? '')) ?>" data-nama="<?= htmlspecialchars($studentOption['NAMA']) ?>" data-kelas="<?= htmlspecialchars((unit_all_readonly()?unit_label((int)$studentOption['unit_id']).' · ':'').$studentOption['KELAS']) ?>"></option>
               <?php endforeach; ?>
             </datalist>
           </div>
@@ -371,7 +367,7 @@ foreach ($studentOptions as $studentOption) {
     </form>
   </div>
 
-  <script src="../assets/js/app.js?v=10.4"></script>
+  <script src="../assets/js/app.js?v=<?= filemtime(__DIR__ . '/../assets/js/app.js') ?>"></script>
   <script>
   (() => {
     const modal = document.getElementById('payment-delete-request-modal');

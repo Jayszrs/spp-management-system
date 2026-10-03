@@ -54,8 +54,8 @@ console.log('OK: independent page CSS parsed');
     await page.locator('#restore-cancel').click();
     for(const [file,message] of [
       [{name:'empty.sql',buffer:Buffer.alloc(0)},/kosong/],
-      [{name:'wrong.txt',buffer:Buffer.from('a')},/Format tidak diterima/],
-      [{name:'SD.dat',buffer:Buffer.from('a')},/SQL Server.*dikonversi/]
+      [{name:'wrong.txt',buffer:Buffer.from('a')},/Pilih satu file SQL/],
+      [{name:'SD.dat',buffer:Buffer.from('a')},/Pilih satu file SQL/]
     ]){
       await select('restore',{mimeType:'application/octet-stream',...file});
       assert.match(await page.locator('#restore-status').textContent(),message);
@@ -103,15 +103,15 @@ console.log('OK: independent page CSS parsed');
     }
     for(const unit of ['SD','SMP','SMA'])await page.locator('#legacy-unit').selectOption(unit);
     await select('legacy',valid);
-    assert.match(await page.locator('#legacy-readiness').textContent(),/unit SMA/);
+    assert.equal(await page.locator('#legacy-start').isDisabled(),true);
     assert.equal(await page.locator('#legacy-unit').inputValue(),'SMA');
     await select('legacy',{name:'legacy.dat',mimeType:'application/octet-stream',buffer:Buffer.from('a')});
-    assert.match(await page.locator('#legacy-status').textContent(),/dikonversi/);
-    await select('legacy',valid); await page.locator('#legacy-remove').click();
+    assert.match(await page.locator('#legacy-status').textContent(),/Belum diperiksa/);
+    await select('legacy',{name:'legacy.dat',mimeType:'application/octet-stream',buffer:Buffer.from('a')}); await page.locator('#legacy-remove').click();
     assert.equal(await page.locator('#legacy-summary').isVisible(),false);
-    assert.equal(await page.locator('.dbt-steps li small').count(),3);
+    assert.equal(await page.locator('.dbt-steps li').count(),4);
     assert.equal(await page.locator('button:enabled').filter({hasText:'Pemetaan & Validasi'}).count(),0);
-    console.log('OK: preliminary file rules, safe names, change/remove/drop, modal keyboard/focus, category/unit/tab interactions; execution remains disabled');
+    console.log('OK: preliminary file rules, safe names, change/remove/drop, modal keyboard/focus, category/unit/tab interactions; no backup/restore execution; file selection alone never uploads');
     const results=[];
     await page.locator('#tab-backup').click();
     await page.setViewportSize({width:900,height:1000});

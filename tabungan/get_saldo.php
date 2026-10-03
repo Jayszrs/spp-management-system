@@ -29,6 +29,7 @@ $rawSaldo = 0;
 $saldoMinus = false;
 
 if ($nis) {
+    if(unit_active_id()===0 || (int)($_GET['student_id']??0)>0){try {unit_resolve_student($koneksi,$nis,(int)($_GET['student_id']??0));}catch(Throwable $e){http_response_code(409);echo json_encode(['error'=>$e->getMessage()]);exit;}}
     $stmt = $koneksi->prepare("SELECT SALDO FROM tabungan WHERE NO_INDUK = ? LIMIT 1");
     $stmt->bind_param('s', $nis);
     $stmt->execute();

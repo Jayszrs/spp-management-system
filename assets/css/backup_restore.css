@@ -114,3 +114,13 @@
   .dbt-dialog-actions { flex-direction: column-reverse; }
   .dbt-empty-content { max-width: calc(100vw - 126px); margin: 0; }
 }
+
+/* Legacy job state, isolated from shared application CSS. */
+#legacy-dialog { width:min(960px,calc(100% - 32px)); }
+#legacy-dialog progress { width:100%;height:14px;accent-color:var(--accent); }
+#legacy-dialog td { padding:10px;vertical-align:top;border-top:1px solid var(--border); }
+#legacy-preview { max-height:320px;overflow:auto; }
+#legacy-confirm-section { margin-top:18px; }
+.db-tools-page #legacy-activation label { display:block;margin-top:12px;font-weight:600; }
+.db-tools-page #legacy-activation input[type=number],.db-tools-page #legacy-activation select { width:100%; }
+.db-tools-page #legacy-activation input[type=checkbox] { min-height:0;accent-color:var(--accent); }

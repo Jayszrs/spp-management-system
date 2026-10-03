@@ -5,6 +5,7 @@ require_once __DIR__ . '/tagihan_tahunan.php';
 require_once __DIR__ . '/komite_billing.php';
 
 function class_label(array $class): string {
+    if (($class['tingkat']??$class['KELAS']??'')==='LEGACY') return 'Legacy';
     $level = (int)($class['tingkat'] ?? 0);
     $code = strtoupper(trim((string)($class['kode_rombel'] ?? '')));
     if ($level === 0 || $code === 'PSB') {
@@ -71,8 +72,8 @@ function class_highest_active_regular_level(mysqli $db, string $targetYear): int
     $stmt = $db->prepare("SELECT COALESCE(MAX(CAST(sta.kelas AS UNSIGNED)), 0) AS level
         FROM siswa_tahun_ajaran sta
         JOIN tahun_ajaran ta ON ta.id=sta.tahun_ajaran_id
-        JOIN siswa s ON s.NO_INDUK=sta.no_induk AND s.is_active=1
-        LEFT JOIN siswa_tahun_ajaran next_sta ON next_sta.no_induk=sta.no_induk
+        JOIN siswa s ON s.NO_INDUK=sta.no_induk AND s.unit_id=sta.unit_id AND s.is_active=1
+        LEFT JOIN siswa_tahun_ajaran next_sta ON next_sta.no_induk=sta.no_induk AND next_sta.unit_id=sta.unit_id
           AND next_sta.tahun_ajaran_id=(SELECT id FROM tahun_ajaran WHERE label=? LIMIT 1)
         WHERE ta.label=? AND sta.status='aktif' AND next_sta.id IS NULL
           AND CAST(sta.kelas AS UNSIGNED) {$range}");
@@ -96,10 +97,10 @@ function class_students_for_manual_step(mysqli $db, int $level, string $targetYe
         COALESCE(mk.is_placeholder,1) AS is_placeholder, sta.kelas_rombel_snapshot
         FROM siswa_tahun_ajaran sta
         JOIN tahun_ajaran ta ON ta.id=sta.tahun_ajaran_id
-        JOIN siswa s ON s.NO_INDUK=sta.no_induk AND s.is_active=1
+        JOIN siswa s ON s.NO_INDUK=sta.no_induk AND s.unit_id=sta.unit_id AND s.is_active=1
         LEFT JOIN master_kelas mk ON mk.id=sta.master_kelas_id
         LEFT JOIN master_kelas active_mk ON active_mk.id=s.master_kelas_id
-        LEFT JOIN siswa_tahun_ajaran next_sta ON next_sta.no_induk=sta.no_induk
+        LEFT JOIN siswa_tahun_ajaran next_sta ON next_sta.no_induk=sta.no_induk AND next_sta.unit_id=sta.unit_id
           AND next_sta.tahun_ajaran_id=(SELECT id FROM tahun_ajaran WHERE label=? LIMIT 1)
         WHERE ta.label=? AND sta.status='aktif' AND next_sta.id IS NULL
           AND CAST(sta.kelas AS UNSIGNED)=?
@@ -122,9 +123,9 @@ function class_students_missing_source_year(mysqli $db, string $targetYear): arr
     $range = unit_level_between_sql();
     $stmt = $db->prepare("SELECT s.NO_INDUK,s.NAMA
         FROM siswa s LEFT JOIN master_kelas mk ON mk.id=s.master_kelas_id
-        LEFT JOIN siswa_tahun_ajaran source_sta ON source_sta.no_induk=s.NO_INDUK
+        LEFT JOIN siswa_tahun_ajaran source_sta ON source_sta.no_induk=s.NO_INDUK AND source_sta.unit_id=s.unit_id
           AND source_sta.tahun_ajaran_id=(SELECT id FROM tahun_ajaran WHERE label=? LIMIT 1)
-        LEFT JOIN siswa_tahun_ajaran target_sta ON target_sta.no_induk=s.NO_INDUK
+        LEFT JOIN siswa_tahun_ajaran target_sta ON target_sta.no_induk=s.NO_INDUK AND target_sta.unit_id=s.unit_id
           AND target_sta.tahun_ajaran_id=(SELECT id FROM tahun_ajaran WHERE label=? LIMIT 1)
         WHERE s.is_active=1
           AND COALESCE(mk.tingkat,CAST(s.KELAS AS UNSIGNED)) {$range}
@@ -254,7 +255,7 @@ function class_manual_graduate_student(mysqli $db, string $noInduk, string $targ
     $stmt = $db->prepare("SELECT sta.id,sta.kelas,sta.status,
         EXISTS(SELECT 1 FROM siswa_tahun_ajaran next_sta JOIN tahun_ajaran next_ta
             ON next_ta.id=next_sta.tahun_ajaran_id
-            WHERE next_sta.no_induk=sta.no_induk AND next_ta.label=?) AS has_target
+            WHERE next_sta.no_induk=sta.no_induk AND next_sta.unit_id=sta.unit_id AND next_ta.label=?) AS has_target
         FROM siswa_tahun_ajaran sta JOIN tahun_ajaran ta ON ta.id=sta.tahun_ajaran_id
         WHERE sta.no_induk=? AND ta.label=? LIMIT 1 FOR UPDATE");
     $stmt->bind_param('sss', $targetYear, $noInduk, $graduationYear);
@@ -318,7 +319,7 @@ function class_manual_promote_student(mysqli $db, string $noInduk, int $targetCl
     $stmt = $db->prepare("SELECT sta.id,sta.kelas,sta.status,
         EXISTS(SELECT 1 FROM siswa_tahun_ajaran next_sta JOIN tahun_ajaran next_ta
             ON next_ta.id=next_sta.tahun_ajaran_id
-            WHERE next_sta.no_induk=sta.no_induk AND next_ta.label=?) AS has_target
+            WHERE next_sta.no_induk=sta.no_induk AND next_sta.unit_id=sta.unit_id AND next_ta.label=?) AS has_target
         FROM siswa_tahun_ajaran sta JOIN tahun_ajaran ta ON ta.id=sta.tahun_ajaran_id
         WHERE sta.no_induk=? AND ta.label=? LIMIT 1 FOR UPDATE");
     $stmt->bind_param('sss', $targetYear, $noInduk, $sourceYear);

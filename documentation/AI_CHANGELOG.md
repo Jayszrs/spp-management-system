@@ -13,6 +13,16 @@ File ini mencatat perubahan proyek secara reverse chronological. Baca [PROJECT_C
 - Jangan menghapus atau menulis ulang entri lama. Tambahkan entri koreksi bila diperlukan.
 - Perubahan implementasi dan entri changelog wajib masuk commit yang sama.
 
+## 2026-10-03 - Backend identitas Legacy dan aktivasi manual
+
+- Aktor: Codex, rencana pemilik; implementasi di atas `926753b`, diuji dalam worktree/clone sebelum penerapan trial.
+- Perilaku: impor `.dat` identitas melalui worker CLI LocalDB privat dan SQLite, upload/status/pratinjau/konfirmasi/cancel/CSV ber-CSRF; progress aktual. Backup/Restore dan kategori keuangan tetap tidak tersedia.
+- Identitas: NIS unik per unit, FK/indeks/join/agregasi/selection ID/struk/buku mengikuti pemilik. Legacy pending tidak aktif, tidak ditempatkan, tanpa kewajiban/saldo; aktivasi manual satu transaksi oleh admin/kasir/Super Admin, replay ditolak, tarif master dikonfirmasi, tanpa tagihan otomatis.
+- Penerbitan: master SPP menyiapkan pasangan Komite bagi penempatan manual, mempertahankan snapshot/tagihan berbayar.
+- Database: migrasi CLI terpisah DDL, backup/maintenance gate; marker, manifest, unique/FK unit/NIS dan trigger Legacy. Clone bersih 222?1.359 siswa, pembayaran 1.018/Rp577.145.000 dan Tabungan 12/Rp1.050.000 utuh; baseline trial final dicatat dalam audit backend.
+- Verifikasi: tiga backup nyata, 1.137 diterima/8 ditahan/142 GK; reimport/recovery/rollback, migrasi parsial/replay/restore/install, tiga siklus reguler/PSB serta tiga dari identitas impor sampai kelulusan, NIS sama tiga unit, finansial/races/307 akses, layar/Excel/PDF, UI empat tema dan aktivasi; sintaks, CSS, 26 integritas. Batas throughput upload 100 MiB dicatat terpisah dari kelulusan validasi ukuran.
+- Dokumentasi: [audit backend](LEGACY_IMPORT_BACKEND_20261003.md), [runbook](LEGACY_IMPORT_RUNBOOK_20261003.md), audit sumber/UI historis diberi penanda; seluruh data pribadi/backup/log/screenshot berada di luar Git. Startup worker manual lokal, bukan layanan deployment umum.
+
 ## 2026-10-03 - Antarmuka Backup, Restore dan Import Legacy
 
 - Aktor: Codex, implementasi rencana pemilik pada `main` di atas `de10aef`.

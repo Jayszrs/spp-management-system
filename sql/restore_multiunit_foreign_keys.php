@@ -67,8 +67,8 @@ if ($report['unresolved'] || $report['mismatched'] || $orphanCount || $issueCoun
                     . '>' . $parent . '.' . $parentColumn . ':' . $item['on_delete']
                     . ':' . $item['on_update'])), 0, 16);
                 $ddl = 'ALTER TABLE `' . $child . '` DROP FOREIGN KEY `' . $name
-                    . '`, ADD CONSTRAINT `' . $newName . '` FOREIGN KEY (`' . $column . '`) REFERENCES `'
-                    . $parent . '` (`' . $parentColumn . '`) ON DELETE ' . $item['on_delete']
+                    . '`, ADD CONSTRAINT `' . $newName . '` FOREIGN KEY (' . (!empty($item['unit_pair'])?'`unit_id`,':'') . '`' . $column . '`) REFERENCES `'
+                    . $parent . '` (' . (!empty($item['unit_pair'])?'`unit_id`,':'') . '`' . $parentColumn . '`) ON DELETE ' . $item['on_delete']
                     . ' ON UPDATE ' . $item['on_update'];
                 $replacements[] = [$ddl, $child, $column];
                 echo 'REVIEW_REPLACEMENT ' . $ddl . ";\n";
@@ -98,8 +98,9 @@ foreach ($report['missing'] as $relation) {
     $update = $relation['on_update'];
     $name = 'fk_restore_' . substr(sha1(strtolower($child . '.' . $column . '>' . $parent . '.' . $parentColumn)), 0, 16);
     // DDL implicitly commits. Keep each relation deterministic so interrupted runs can resume.
+    $unitColumns=!empty($relation['unit_pair'])?'`unit_id`,':'';
     $koneksi->query("ALTER TABLE `{$child}` ADD CONSTRAINT `{$name}`
-        FOREIGN KEY (`{$column}`) REFERENCES `{$parent}` (`{$parentColumn}`)
+        FOREIGN KEY ({$unitColumns}`{$column}`) REFERENCES `{$parent}` ({$unitColumns}`{$parentColumn}`)
         ON DELETE {$delete} ON UPDATE {$update}");
     echo 'ADDED ' . $child . '.' . $column . ' -> ' . $parent . '.' . $parentColumn . "\n";
 }

@@ -153,7 +153,7 @@ function annual_fee_sync_for_placement(mysqli $db, int $placementId, string $cre
     $stmt = $db->prepare("SELECT sta.*, ta.label AS tahun_ajaran, s.*
         FROM siswa_tahun_ajaran sta
         JOIN tahun_ajaran ta ON ta.id = sta.tahun_ajaran_id
-        JOIN siswa s ON s.NO_INDUK = sta.no_induk
+        JOIN siswa s ON s.NO_INDUK = sta.no_induk AND s.unit_id=sta.unit_id
         WHERE sta.id = ? LIMIT 1 FOR UPDATE");
     $stmt->bind_param('i', $placementId);
     $stmt->execute();
@@ -222,7 +222,7 @@ function annual_fee_reconcile_for_placement(mysqli $db, int $placementId, string
             s.NAMA,s.POMG
         FROM siswa_tahun_ajaran sta
         JOIN tahun_ajaran ta ON ta.id=sta.tahun_ajaran_id
-        JOIN siswa s ON s.NO_INDUK=sta.no_induk
+        JOIN siswa s ON s.NO_INDUK=sta.no_induk AND s.unit_id=sta.unit_id
         WHERE sta.id=? LIMIT 1 FOR UPDATE");
     $stmt->bind_param('i', $placementId);
     $stmt->execute();

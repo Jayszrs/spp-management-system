@@ -9,6 +9,8 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'GET') {
     header('Allow: GET');
     exit('Halaman ini hanya menyediakan tampilan baca. Operasi database belum tersedia.');
 }
+require_once __DIR__.'/includes/legacy_import.php';
+if(empty($_SESSION['csrf_legacy_import']))$_SESSION['csrf_legacy_import']=bin2hex(random_bytes(32));
 $databaseConnected = false;
 $databaseSize = null;
 try {
@@ -33,11 +35,11 @@ function backup_ui_icon(string $name): string {
 function backup_ui_picker(string $prefix, string $label): void { ?>
   <div class="dbt-dropzone" id="<?= $prefix ?>-dropzone">
     <?= backup_ui_icon('upload') ?>
-    <span>Tarik satu file SQL ke sini atau</span>
+    <span>Tarik satu file <?= $prefix==='legacy'?'.dat':'SQL' ?> ke sini atau</span>
     <button type="button" class="dbt-button dbt-button-outline" id="<?= $prefix ?>-choose">Pilih File</button>
-    <input type="file" id="<?= $prefix ?>-file" accept=".sql" class="dbt-file-input" aria-label="<?= $label ?>" tabindex="-1">
+    <input type="file" id="<?= $prefix ?>-file" accept="<?= $prefix==='legacy'?'.dat':'.sql' ?>" class="dbt-file-input" aria-label="<?= $label ?>" tabindex="-1">
   </div>
-  <p class="dbt-hint">SQL (.sql), tidak kosong, maksimal 100 MB. File tetap di browser dan tidak dikirim.</p>
+  <p class="dbt-hint"><?= $prefix==='legacy'?'Backup SQL Server (.dat), maksimal 100 MiB. Diunggah hanya ketika proses dimulai.':'SQL (.sql), maksimal 100 MiB. File tetap di browser dan tidak dikirim.' ?></p>
   <div class="dbt-file-summary" id="<?= $prefix ?>-summary" hidden>
     <?= backup_ui_icon('file') ?><div><strong id="<?= $prefix ?>-name"></strong><span id="<?= $prefix ?>-size"></span></div>
     <button type="button" class="dbt-text-button" id="<?= $prefix ?>-change">Ganti</button>
@@ -67,7 +69,7 @@ function backup_ui_picker(string $prefix, string $label): void { ?>
   </div>
   <div class="db-tools-page">
     <nav class="dbt-breadcrumb" aria-label="Lokasi halaman">Pengaturan <span aria-hidden="true">›</span> Backup &amp; Restore Database</nav>
-    <header class="dbt-heading"><span class="dbt-icon"><?= backup_ui_icon('database') ?></span><div><h1>Backup &amp; Restore Database</h1><p>Kelola rencana pencadangan, pemulihan, dan impor data SistemSPP.</p></div><span class="dbt-badge">Pratinjau UI</span></header>
+    <header class="dbt-heading"><span class="dbt-icon"><?= backup_ui_icon('database') ?></span><div><h1>Backup &amp; Restore Database</h1><p>Kelola rencana pencadangan, pemulihan, dan impor data SistemSPP.</p></div><span class="dbt-badge">Import identitas Legacy</span></header>
     <div class="dbt-tabs" role="tablist" aria-label="Mode pengelolaan database">
       <button type="button" role="tab" id="tab-backup" aria-controls="panel-backup" aria-selected="true">Backup &amp; Restore</button>
       <button type="button" role="tab" id="tab-legacy" aria-controls="panel-legacy" aria-selected="false" tabindex="-1">Import Legacy</button>
@@ -104,7 +106,7 @@ function backup_ui_picker(string $prefix, string $label): void { ?>
       </section>
     </section>
     <section id="panel-legacy" role="tabpanel" aria-labelledby="tab-legacy" hidden>
-      <div class="dbt-notice"><?= backup_ui_icon('info') ?><div><strong>Import Legacy memetakan data sumber</strong><p>Impor menyesuaikan data dari sistem lama ke SistemSPP. Restore mengganti seluruh database. Layanan pemetaan, validasi, pratinjau data, dan penerapan impor belum tersedia.</p></div></div>
+      <div class="dbt-notice"><?= backup_ui_icon('info') ?><div><strong>Import Legacy memetakan data sumber</strong><p>Impor menyesuaikan data dari sistem lama ke SistemSPP. Restore mengganti seluruh database. Tahap ini hanya mengimpor identitas siswa sebagai Legacy, belum aktif dan belum ditempatkan. Kelas, tarif, pembayaran, dan saldo sumber tidak menjadi data operasional.</p></div></div>
       <div class="dbt-card">
         <h2>Pilih data yang akan dipetakan</h2>
         <div class="dbt-categories" role="group" aria-label="Kategori impor">
@@ -112,12 +114,12 @@ function backup_ui_picker(string $prefix, string $label): void { ?>
           <button type="button" class="dbt-category" data-category="<?= $key ?>" aria-pressed="<?= $key === 'students' ? 'true' : 'false' ?>"><?= $label ?></button>
           <?php endforeach; ?>
         </div>
-        <div class="dbt-audit-condition" role="status" aria-live="polite"><strong id="legacy-condition-title">Identitas siswa perlu diselesaikan</strong><p id="legacy-condition">Benturan NIS dan pemetaan status siswa memerlukan keputusan; tidak diganti atau digabung otomatis.</p><span class="dbt-badge">Penerapan belum tersedia</span></div>
-        <ol class="dbt-steps" aria-label="Tahapan impor"><li aria-current="step"><span>1</span>Pilih File</li><li><span>2</span>Pemetaan &amp; Validasi <small>Terkunci</small></li><li><span>3</span>Pratinjau <small>Terkunci</small></li><li><span>4</span>Terapkan <small>Terkunci</small></li></ol>
-        <div class="dbt-import-grid"><div><label class="dbt-label" for="legacy-unit">Unit sumber <span>(wajib dipilih)</span></label><select id="legacy-unit" required><option value="">Pilih unit sumber</option><option value="SD">SD</option><option value="SMP">SMP</option><option value="SMA">SMA</option></select><p class="dbt-hint">Satu berkas untuk satu unit sumber. Pilihan ini tidak mengubah unit di sidebar.</p><p>Backup SQL Server (.dat) perlu dikonversi terlebih dahulu. Ekstensi .sql bukan bukti kompatibilitas dengan MySQL.</p></div><div><?php backup_ui_picker('legacy', 'Pilih file SQL sumber legacy'); ?></div></div>
+        <div class="dbt-audit-condition" role="status" aria-live="polite"><strong id="legacy-condition-title">Identitas siswa perlu diselesaikan</strong><p id="legacy-condition">NIS dipertahankan per unit. Duplikasi dalam unit ditahan; aktivasi dilakukan manual melalui Data Siswa.</p><span class="dbt-badge">Identitas siswa saja</span></div>
+        <ol class="dbt-steps" aria-label="Tahapan impor"><li aria-current="step"><span>1</span>Pilih File</li><li><span>2</span>Pemetaan &amp; Validasi</li><li><span>3</span>Pratinjau</li><li><span>4</span>Terapkan</li></ol>
+        <div class="dbt-import-grid"><div><label class="dbt-label" for="legacy-unit">Unit sumber <span>(wajib dipilih)</span></label><select id="legacy-unit" required><option value="">Pilih unit sumber</option><option value="SD">SD</option><option value="SMP">SMP</option><option value="SMA">SMA</option></select><p class="dbt-hint">Satu berkas untuk satu unit sumber. Pilihan ini tidak mengubah unit di sidebar.</p><p>Pilih unit yang sama di sidebar sebelum mengunggah .dat. Importer memeriksa backup pada SQL Server terpisah; SQL mentah tidak dieksekusi.</p></div><div><?php backup_ui_picker('legacy', 'Pilih backup SQL Server .dat'); ?></div></div>
         <p id="legacy-readiness" role="status" aria-live="polite">Pilih unit sumber dan file untuk menyiapkan pilihan. Pemetaan belum tersedia.</p>
-        <button type="button" class="dbt-button dbt-button-primary" disabled>Pemetaan &amp; Validasi — belum tersedia</button>
-        <p class="dbt-hint">Tidak ada data yang diterapkan. Lihat <a href="documentation/LEGACY_IMPORT_FEASIBILITY_20261003.md">audit kelayakan impor legacy</a> untuk bukti, kekurangan histori, dan keputusan lanjutan.</p>
+        <button type="button" id="legacy-start" class="dbt-button dbt-button-primary" disabled>Unggah &amp; Periksa Backup</button> <button type="button" id="legacy-reopen" class="dbt-button dbt-button-outline" hidden>Lihat Progres Terakhir</button>
+        <p class="dbt-hint">Kandidat hanya diterapkan setelah pratinjau dan konfirmasi. Lihat <a href="documentation/LEGACY_IMPORT_FEASIBILITY_20261003.md">audit kelayakan impor legacy</a> untuk bukti, kekurangan histori, dan keputusan lanjutan.</p>
       </div>
     </section>
     <noscript><div class="dbt-warning">Aktifkan JavaScript untuk pemilihan file dan pratinjau alur. Operasi database tetap belum tersedia.</div></noscript>
@@ -137,7 +139,19 @@ function backup_ui_picker(string $prefix, string $label): void { ?>
     <div class="dbt-dialog-actions"><button type="button" class="dbt-button dbt-button-outline" id="restore-cancel" autofocus>Batal</button><button type="button" class="dbt-button dbt-button-primary" id="restore-apply" disabled aria-describedby="restore-unavailable">Pulihkan Database</button></div>
   </div>
 </dialog>
-<script src="assets/js/app.js?v=10.4"></script>
+<script src="assets/js/app.js?v=<?= filemtime(__DIR__ . '/assets/js/app.js') ?>"></script>
 <script src="assets/js/backup_restore.js?v=<?= filemtime(__DIR__ . '/assets/js/backup_restore.js') ?>"></script>
+
+<dialog id="legacy-dialog" class="dbt-dialog" aria-labelledby="legacy-dialog-title">
+ <div class="dbt-dialog-content"><h2 id="legacy-dialog-title">Progres Import Legacy</h2><p id="legacy-job-name"></p>
+ <p id="legacy-progress-status" role="status" aria-live="polite"></p><progress id="legacy-progress" max="100" aria-label="Progres pekerjaan"></progress>
+ <p id="legacy-counts"></p><div id="legacy-preview" class="dbt-table-scroll"></div>
+ <a id="legacy-issues" class="dbt-button dbt-button-outline" hidden>Unduh hasil per baris</a>
+ <div id="legacy-confirm-section" hidden><p>Siswa diterima sebagai Legacy, tanpa penempatan, tagihan, atau rekening Tabungan.</p><label for="legacy-confirmation">Ketik IMPOR LEGACY</label><input id="legacy-confirmation" type="text" autocomplete="off"><button id="legacy-confirm" type="button" class="dbt-button dbt-button-primary" disabled>Impor Identitas Legacy</button></div>
+ <p><button id="legacy-cancel-job" type="button" class="dbt-button dbt-button-outline">Batalkan Pekerjaan</button> <button id="legacy-close" type="button" class="dbt-button dbt-button-outline">Tutup</button></p><p class="dbt-hint">Menutup modal tidak membatalkan pekerjaan.</p></div>
+</dialog>
+<script id="legacy-config" type="application/json"><?= json_encode(['unit'=>unit_active_id(),'csrf'=>$_SESSION['csrf_legacy_import'],'key'=>DB_NAME.':'.$_SESSION['admin_id']],JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_QUOT|JSON_HEX_APOS) ?></script>
+<script src="assets/js/legacy_import.js?v=<?= filemtime(__DIR__.'/assets/js/legacy_import.js') ?>"></script>
+
 </body>
 </html>

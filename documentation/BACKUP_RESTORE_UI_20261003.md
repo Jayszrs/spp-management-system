@@ -1,5 +1,8 @@
 # Backup, Restore, dan Import Legacy — tahap antarmuka
 
+> **Pembaruan:** dokumen ini adalah bukti tahap UI sebelum backend. Import Legacy kini memiliki backend identitas `.dat`, progress dan aktivasi manual sesuai [audit backend](LEGACY_IMPORT_BACKEND_20261003.md). Backup/Restore penuh masih nonaktif; perilaku `.sql` pada mode Restore tetap.
+
+
 ## Status 3 Oktober 2026
 
 Antarmuka tersedia melalui **Pengaturan → Backup & Restore**, hanya untuk Super Admin. Implementasi di atas kode `de10aef` pada `main`. Halaman menggunakan stylesheet/JavaScript khusus dengan versi `filemtime`; stylesheet bersama tidak berubah.

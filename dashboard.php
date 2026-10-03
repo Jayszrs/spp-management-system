@@ -237,6 +237,6 @@ $exportSetoranExcelUrl = 'laporan/export_global.php?template=setoran&format=exce
     </main>
   </div><!-- /layout -->
 
-  <script src="assets/js/app.js?v=10.4"></script>
+  <script src="assets/js/app.js?v=<?= filemtime(__DIR__ . '/assets/js/app.js') ?>"></script>
 </body>
 </html>

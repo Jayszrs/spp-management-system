@@ -24,7 +24,7 @@ unset($_SESSION['flash']);
 $id = (int)($_GET['id'] ?? 0);
 if ($id <= 0) { header('Location: lihat.php'); exit; }
 
-$stmt = $koneksi->prepare("SELECT p.*, s.NO_INDUK, s.NAMA, s.KELAS, s.SPP_PERBULAN FROM bayar p JOIN siswa s ON s.NO_INDUK = p.NO_INDUK WHERE p.id = ?");
+$stmt = $koneksi->prepare("SELECT p.*, s.NO_INDUK, s.NAMA, s.KELAS, s.SPP_PERBULAN FROM bayar p JOIN siswa s ON s.NO_INDUK = p.NO_INDUK AND s.unit_id=p.unit_id WHERE p.id = ?");
 $stmt->bind_param('i', $id);
 $stmt->execute();
 $d = $stmt->get_result()->fetch_assoc();
@@ -67,32 +67,32 @@ $siswa_sql = "
         mk.tingkat AS master_tingkat, mk.kode_rombel, mk.is_placeholder,
         (SELECT ta_l.label FROM siswa_tahun_ajaran sta_l
          JOIN tahun_ajaran ta_l ON ta_l.id=sta_l.tahun_ajaran_id
-         WHERE sta_l.no_induk=s.NO_INDUK AND sta_l.status='lulus'
+         WHERE sta_l.no_induk=s.NO_INDUK AND sta_l.unit_id=s.unit_id AND sta_l.status='lulus'
          ORDER BY ta_l.label DESC LIMIT 1) AS graduation_year
     FROM siswa s
     LEFT JOIN master_kelas mk ON mk.id=s.master_kelas_id
     LEFT JOIN (
-        SELECT NO_INDUK, SUM(U_PANGKAL) AS paid_pangkal, SUM(U_PSB) AS paid_psb
+        SELECT unit_id,NO_INDUK, SUM(U_PANGKAL) AS paid_pangkal, SUM(U_PSB) AS paid_psb
         FROM bayar
         WHERE id <> ?
-        GROUP BY NO_INDUK
-    ) p ON p.NO_INDUK = s.NO_INDUK
+        GROUP BY unit_id,NO_INDUK
+    ) p ON p.NO_INDUK = s.NO_INDUK AND p.unit_id=s.unit_id
     LEFT JOIN (
-        SELECT no_induk, SUM(jumlah) AS paid_du
+        SELECT unit_id,no_induk, SUM(jumlah) AS paid_du
         FROM bayar_du
         WHERE bayar_id IS NULL OR bayar_id <> ?
-        GROUP BY no_induk
-    ) du ON du.no_induk = s.NO_INDUK
+        GROUP BY unit_id,no_induk
+    ) du ON du.no_induk = s.NO_INDUK AND du.unit_id=s.unit_id
     WHERE s.is_active = 1 OR s.NO_INDUK = ? OR (
-        EXISTS(SELECT 1 FROM siswa_tahun_ajaran sta_l WHERE sta_l.no_induk=s.NO_INDUK AND sta_l.status='lulus')
+        EXISTS(SELECT 1 FROM siswa_tahun_ajaran sta_l WHERE sta_l.no_induk=s.NO_INDUK AND sta_l.unit_id=s.unit_id AND sta_l.status='lulus')
         AND (EXISTS(SELECT 1 FROM tagihan_daftar_ulang tdu_o
             LEFT JOIN bayar_du bd_o ON bd_o.tagihan_daftar_ulang_id=tdu_o.id
-            WHERE tdu_o.no_induk=s.NO_INDUK AND tdu_o.status='open'
+            WHERE tdu_o.no_induk=s.NO_INDUK AND tdu_o.unit_id=s.unit_id AND tdu_o.status='open'
               AND tdu_o.tahun_ajaran_snapshot<='$activeAcademicYearSql'
             GROUP BY tdu_o.id,tdu_o.nominal_tagihan
             HAVING tdu_o.nominal_tagihan-COALESCE(SUM(bd_o.jumlah),0)>.001)
-          OR EXISTS(SELECT 1 FROM tagihan_spp ts_o LEFT JOIN spp_alokasi a_o ON a_o.tagihan_spp_id=ts_o.id LEFT JOIN spp_alokasi_batch ab_o ON ab_o.id=a_o.batch_id WHERE ts_o.no_induk=s.NO_INDUK AND ts_o.status='open' GROUP BY ts_o.id HAVING MIN(ts_o.nominal_tagihan)-COALESCE(SUM(CASE WHEN ab_o.status='active' THEN a_o.nominal_dari_bayar ELSE 0 END),0)>.001)
-          OR EXISTS(SELECT 1 FROM tagihan_komite tk_o LEFT JOIN bayar_komite bk_o ON bk_o.tagihan_komite_id=tk_o.id WHERE tk_o.no_induk=s.NO_INDUK AND tk_o.status='open' GROUP BY tk_o.id HAVING MIN(tk_o.nominal_tagihan)-COALESCE(SUM(bk_o.nominal),0)>.001))
+          OR EXISTS(SELECT 1 FROM tagihan_spp ts_o LEFT JOIN spp_alokasi a_o ON a_o.tagihan_spp_id=ts_o.id LEFT JOIN spp_alokasi_batch ab_o ON ab_o.id=a_o.batch_id WHERE ts_o.no_induk=s.NO_INDUK AND ts_o.unit_id=s.unit_id AND ts_o.status='open' GROUP BY ts_o.id HAVING MIN(ts_o.nominal_tagihan)-COALESCE(SUM(CASE WHEN ab_o.status='active' THEN a_o.nominal_dari_bayar ELSE 0 END),0)>.001)
+          OR EXISTS(SELECT 1 FROM tagihan_komite tk_o LEFT JOIN bayar_komite bk_o ON bk_o.tagihan_komite_id=tk_o.id WHERE tk_o.no_induk=s.NO_INDUK AND tk_o.unit_id=s.unit_id AND tk_o.status='open' GROUP BY tk_o.id HAVING MIN(tk_o.nominal_tagihan)-COALESCE(SUM(bk_o.nominal),0)>.001))
     )
     ORDER BY s.NAMA ASC
 ";
@@ -617,7 +617,7 @@ $selectedPaymentMethod = $d['sistem_pembayaran'] ?? 'VA';
       JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT
     ) ?>;
   </script>
-  <script src="../assets/js/app.js?v=11.6"></script>
+  <script src="../assets/js/app.js?v=<?= filemtime(__DIR__ . '/../assets/js/app.js') ?>"></script>
 </body>
 </html>
 

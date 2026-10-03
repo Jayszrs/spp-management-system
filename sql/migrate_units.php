@@ -57,7 +57,7 @@ foreach ($tables as $table) {
     $koneksi->query("ALTER TABLE `{$table}` ADD COLUMN unit_id TINYINT UNSIGNED NOT NULL DEFAULT 1, ADD KEY `idx_unit_id` (unit_id)");
 }
 
-// Existing global uniques become unique within a unit. NO_INDUK stays global.
+// Existing global uniques become unique within a unit. Student NIS is converted by the final Legacy identity stage.
 $koneksi->query('ALTER TABLE master_kelas DROP INDEX uk_master_kelas_tingkat_rombel, ADD UNIQUE KEY uk_master_kelas_unit_tingkat_rombel (unit_id,tingkat,kode_rombel)');
 $koneksi->query('ALTER TABLE tahun_ajaran DROP INDEX uk_tahun_ajaran_label, ADD UNIQUE KEY uk_tahun_ajaran_unit_label (unit_id,label)');
 $koneksi->query('ALTER TABLE master_biaya_lain DROP INDEX nama, ADD UNIQUE KEY uk_master_biaya_lain_unit_nama (unit_id,nama)');
@@ -177,3 +177,6 @@ foreach ([2 => [7,9], 3 => [10,12]] as $unitId => [$start,$end]) {
 }
 $koneksi->query('SET @app_unit_id=1');
 echo "OK: migrasi unit selesai. Jalankan bootstrap akun dan verifikasi sebelum membuka aplikasi.\n";
+
+require_once __DIR__.'/../includes/legacy_schema.php';
+legacy_schema_apply($koneksi);

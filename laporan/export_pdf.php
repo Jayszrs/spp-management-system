@@ -165,15 +165,15 @@ $stmt = $koneksi->prepare("
         COALESCE(one_paid.total_psb_bayar, 0) AS total_psb_bayar,
         COALESCE(op.nama, NULLIF(b.user_id, '')) AS operator_name
     FROM bayar b
-    JOIN siswa s ON s.NO_INDUK = b.NO_INDUK
+    JOIN siswa s ON s.NO_INDUK = b.NO_INDUK AND s.unit_id=b.unit_id
     LEFT JOIN admin op ON op.id = CAST(b.user_id AS UNSIGNED)
     LEFT JOIN bayar_du du_current ON du_current.bayar_id=b.id
     LEFT JOIN tagihan_daftar_ulang du_bill ON du_bill.id=du_current.tagihan_daftar_ulang_id
     LEFT JOIN (
-        SELECT NO_INDUK, SUM(U_PANGKAL) AS total_pangkal_bayar, SUM(U_PSB) AS total_psb_bayar
+        SELECT unit_id,NO_INDUK, SUM(U_PANGKAL) AS total_pangkal_bayar, SUM(U_PSB) AS total_psb_bayar
         FROM bayar
-        GROUP BY NO_INDUK
-    ) one_paid ON one_paid.NO_INDUK = b.NO_INDUK
+        GROUP BY unit_id,NO_INDUK
+    ) one_paid ON one_paid.NO_INDUK = b.NO_INDUK AND one_paid.unit_id=b.unit_id
     $where_sql
     ORDER BY b.TGL_BYR DESC, b.id DESC
 ");
@@ -540,7 +540,7 @@ ob_start();
     $signer = $row['operator_name'] ?: ($_SESSION['admin_nama'] ?? 'Bagian Keuangan');
   ?>
   <section class="slip">
-    <h1 class="school-title"><?= e(unit_school_name($reportUnitId)) ?></h1>
+    <h1 class="school-title"><?= e(unit_school_name((int)$row['unit_id'])) ?></h1>
     <p class="school-address">Perum Bekasi Griya Asri II, Blok E Jl.H.Nabrih Ds. Sumber Jaya Kp.Buwek Tambun Selatan Telp. 021.88363466</p>
     <div class="line"></div>
     <div class="doc-title">SLIP PEMBAYARAN SEKOLAH</div>

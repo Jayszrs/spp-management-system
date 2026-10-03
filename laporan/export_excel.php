@@ -44,6 +44,7 @@ if ($filter_q !== '') {
     $studentLike = '%' . $filter_q . '%';
     $studentParams = [$studentLike, $studentLike, $studentLike];
 }
+$studentWhere .= unit_student_selection_where();
 $bind = static function (mysqli_stmt $stmt, string $baseTypes, array $baseParams) use ($studentParams): void {
     $types = $baseTypes . str_repeat('s', count($studentParams));
     $params = array_merge($baseParams, $studentParams);
@@ -65,12 +66,12 @@ if ($filter_tanggal_awal !== '' && $filter_tanggal_akhir !== '') {
 
 // Ambil data pembayaran
 $stmt = $koneksi->prepare("
-    SELECT s.NO_INDUK, s.NO_induk_diknas, s.NAMA,
+    SELECT s.id AS student_id,s.NO_INDUK, s.NO_induk_diknas, s.NAMA,
            COALESCE(NULLIF(b.kelas_rombel_snapshot,''),NULLIF(b.KELAS,''),s.KELAS) AS KELAS,
            b.BULAN, b.TAHUN,
            b.U_PANGKAL, b.U_PSB, b.U_SPP, b.U_KOMITE,
            b.sistem_pembayaran, b.total_jumlah, b.TGL_BYR
-    FROM bayar b JOIN siswa s ON s.NO_INDUK = b.NO_INDUK
+    FROM bayar b JOIN siswa s ON s.NO_INDUK = b.NO_INDUK AND s.unit_id=b.unit_id
     WHERE b.TGL_BYR >= ? AND b.TGL_BYR < ? $studentWhere
     ORDER BY b.TGL_BYR DESC
 ");
@@ -83,7 +84,7 @@ $stmtKomponen = $koneksi->prepare("
     SELECT SUM(U_PANGKAL) AS pangkal, SUM(U_PSB) AS psb,
            SUM(U_SPP) AS spp,
            SUM(U_KOMITE) AS komite, SUM(potong_spp) AS potongan_spp
-    FROM bayar b JOIN siswa s ON s.NO_INDUK = b.NO_INDUK
+    FROM bayar b JOIN siswa s ON s.NO_INDUK = b.NO_INDUK AND s.unit_id=b.unit_id
     WHERE b.TGL_BYR >= ? AND b.TGL_BYR < ? $studentWhere
 ");
 $bind($stmtKomponen, 'ss', [$period_start, $period_end]);
@@ -105,7 +106,7 @@ foreach ($komponenMap as $nama => $key) {
 $stmtBiayaLain = $koneksi->prepare("
     SELECT d.nama_biaya_snapshot AS nama, SUM(d.nominal_snapshot) AS total
     FROM bayar_biaya_lain d JOIN bayar b ON b.id = d.bayar_id
-    JOIN siswa s ON s.NO_INDUK = b.NO_INDUK
+    JOIN siswa s ON s.NO_INDUK = b.NO_INDUK AND s.unit_id=b.unit_id
     WHERE b.TGL_BYR >= ? AND b.TGL_BYR < ? $studentWhere
     GROUP BY d.nama_biaya_snapshot ORDER BY d.nama_biaya_snapshot ASC
 ");
@@ -117,7 +118,7 @@ $stmtBiayaLain->close();
 $stmtDu = $koneksi->prepare("
     SELECT COALESCE(SUM(d.jumlah),0) AS total
     FROM bayar_du d JOIN bayar b ON b.id=d.bayar_id
-    JOIN siswa s ON s.NO_INDUK=b.NO_INDUK
+    JOIN siswa s ON s.NO_INDUK=b.NO_INDUK AND s.unit_id=b.unit_id
     WHERE b.TGL_BYR >= ? AND b.TGL_BYR < ? $studentWhere
 ");
 $bind($stmtDu, 'ss', [$period_start, $period_end]);
@@ -131,11 +132,11 @@ if ($totalDiscount > 0.001) $komponen_rows[] = ['nama'=>'Potongan SPP','total'=>
 // Ambil data tabungan periode ini
 $stmt2 = $koneksi->prepare("
     SELECT tm.NO_INDUK, s.NO_induk_diknas, s.NAMA, s.KELAS, tm.TANGGAL, tm.MASUK as nominal, 'masuk' as jenis, tm.keterangan
-    FROM transaksi_m tm JOIN siswa s ON s.NO_INDUK = tm.NO_INDUK
+    FROM transaksi_m tm JOIN siswa s ON s.NO_INDUK = tm.NO_INDUK AND s.unit_id=tm.unit_id
     WHERE tm.TANGGAL >= ? AND tm.TANGGAL < ? $studentWhere
     UNION ALL
     SELECT tk.NO_INDUK, s.NO_induk_diknas, s.NAMA, s.KELAS, tk.TANGGAL, tk.KELUAR as nominal, 'keluar' as jenis, tk.keterangan
-    FROM transaksi_k tk JOIN siswa s ON s.NO_INDUK = tk.NO_INDUK
+    FROM transaksi_k tk JOIN siswa s ON s.NO_INDUK = tk.NO_INDUK AND s.unit_id=tk.unit_id
     WHERE tk.TANGGAL >= ? AND tk.TANGGAL < ? $studentWhere
     ORDER BY TANGGAL DESC
 ");

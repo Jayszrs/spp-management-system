@@ -66,7 +66,7 @@ session_assert($identity['status'] === 200
 $admin = $koneksi->query("SELECT id,username,password,role,unit_id,is_active FROM admin WHERE role='admin' AND unit_id=1 AND is_active=1 ORDER BY id LIMIT 1")->fetch_assoc();
 session_assert((bool)$admin, 'Admin SD fixture tidak tersedia.');
 $adminId = (int)$admin['id'];
-$student = $koneksi->query('SELECT id,NO_INDUK FROM siswa WHERE is_active=1 ORDER BY NO_INDUK LIMIT 1')->fetch_assoc();
+$student = $koneksi->query('SELECT s.id,s.NO_INDUK FROM siswa s WHERE s.is_active=1 AND NOT EXISTS(SELECT 1 FROM siswa_data other WHERE other.unit_id=2 AND other.NO_INDUK=s.NO_INDUK) ORDER BY s.NO_INDUK LIMIT 1')->fetch_assoc();
 session_assert((bool)$student, 'Siswa SD fixture tidak tersedia.');
 $studentId = (int)$student['id'];
 $sdNis = (string)$student['NO_INDUK'];

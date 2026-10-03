@@ -246,11 +246,11 @@ function validate_student_and_komite(
     int $excludePaymentId = 0,
     ?string $archivedStudentAllowed = null
 ): array {
-    $stmt = $db->prepare("SELECT s.KELAS, s.master_kelas_id, s.POMG, s.SPP_PERBULAN, s.is_active,
+    $stmt = $db->prepare("SELECT s.legacy_pending,s.KELAS, s.master_kelas_id, s.POMG, s.SPP_PERBULAN, s.is_active,
         mk.tingkat, mk.kode_rombel, mk.is_placeholder,
         (SELECT ta.label FROM siswa_tahun_ajaran sta_l
          JOIN tahun_ajaran ta ON ta.id=sta_l.tahun_ajaran_id
-         WHERE sta_l.no_induk=s.NO_INDUK AND sta_l.status='lulus'
+         WHERE sta_l.no_induk=s.NO_INDUK AND sta_l.unit_id=s.unit_id AND sta_l.status='lulus'
          ORDER BY ta.label DESC LIMIT 1) AS graduation_year
         FROM siswa s LEFT JOIN master_kelas mk ON mk.id=s.master_kelas_id
         WHERE s.NO_INDUK = ? FOR UPDATE");
@@ -259,6 +259,7 @@ function validate_student_and_komite(
     $student = $stmt->get_result()->fetch_assoc();
     $stmt->close();
     if (!$student) throw new RuntimeException('Data siswa tidak ditemukan.');
+    if((int)$student['legacy_pending'])throw new RuntimeException('Siswa Legacy harus diaktifkan dan ditempatkan terlebih dahulu.');
     $student['is_graduate'] = !empty($student['graduation_year']);
     if ((int)$student['is_active'] !== 1 && !$student['is_graduate'] && $noInduk !== $archivedStudentAllowed) {
         throw new RuntimeException('Siswa yang diarsipkan tidak dapat dipakai untuk transaksi baru.');

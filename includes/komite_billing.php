@@ -11,7 +11,7 @@ function komite_academic_year(string $month, string $year): string {
 
 /** Tagihan dibuat dari penempatan yang tersimpan, tanpa bergantung pada penerbitan SPP. */
 function komite_sync_placement(mysqli $db, int $placementId): int {
-    $stmt = $db->prepare('SELECT sta.*,ta.label,s.POMG FROM siswa_tahun_ajaran sta JOIN tahun_ajaran ta ON ta.id=sta.tahun_ajaran_id JOIN siswa s ON s.NO_INDUK=sta.no_induk WHERE sta.id=? FOR UPDATE');
+    $stmt = $db->prepare('SELECT sta.*,ta.label,s.POMG FROM siswa_tahun_ajaran sta JOIN tahun_ajaran ta ON ta.id=sta.tahun_ajaran_id JOIN siswa s ON s.NO_INDUK=sta.no_induk AND s.unit_id=sta.unit_id WHERE sta.id=? FOR UPDATE');
     $stmt->bind_param('i', $placementId); $stmt->execute();
     $placement = $stmt->get_result()->fetch_assoc(); $stmt->close();
     [$firstLevel, $lastLevel] = unit_level_bounds();
@@ -178,7 +178,7 @@ function komite_receipt_summary(mysqli $db, int $paymentId): ?array {
 
 /** Pembayaran SPP baru tidak boleh ditinggal tanpa Komite lunas saat Komite diedit/dihapus. */
 function komite_assert_spp_pairs(mysqli $db, string $noInduk): void {
-    $stmt=$db->prepare("SELECT tk.bulan,tk.tahun,tk.nominal_tagihan,COALESCE(SUM(bk.nominal),0) paid FROM tagihan_komite tk LEFT JOIN bayar_komite bk ON bk.tagihan_komite_id=tk.id WHERE tk.no_induk=? AND tk.status='open' AND EXISTS(SELECT 1 FROM tagihan_spp ts JOIN spp_alokasi a ON a.tagihan_spp_id=ts.id JOIN spp_alokasi_batch ab ON ab.id=a.batch_id AND ab.status='active' AND ab.komite_required=1 WHERE ts.no_induk=tk.no_induk AND ts.bulan=tk.bulan AND ts.tahun=tk.tahun) GROUP BY tk.id HAVING tk.nominal_tagihan-paid>.001 LIMIT 1");
+    $stmt=$db->prepare("SELECT tk.bulan,tk.tahun,tk.nominal_tagihan,COALESCE(SUM(bk.nominal),0) paid FROM tagihan_komite tk LEFT JOIN bayar_komite bk ON bk.tagihan_komite_id=tk.id WHERE tk.no_induk=? AND tk.status='open' AND EXISTS(SELECT 1 FROM tagihan_spp ts JOIN spp_alokasi a ON a.tagihan_spp_id=ts.id JOIN spp_alokasi_batch ab ON ab.id=a.batch_id AND ab.status='active' AND ab.komite_required=1 WHERE ts.no_induk=tk.no_induk AND ts.unit_id=tk.unit_id AND ts.bulan=tk.bulan AND ts.tahun=tk.tahun) GROUP BY tk.id HAVING tk.nominal_tagihan-paid>.001 LIMIT 1");
     $stmt->bind_param('s',$noInduk);$stmt->execute();$row=$stmt->get_result()->fetch_assoc();$stmt->close();
     if ($row) throw new RuntimeException('Komite '.spp_month_label((string)$row['bulan']).' '.$row['tahun'].' tidak boleh ditinggalkan karena SPP bulan itu sudah dibayar.');
 }

@@ -251,7 +251,7 @@ function du_student_legacy_amounts(array $student, float $classAmount): array {
 
 function du_sync_student_legacy_from_bill(mysqli $db, int $billId): void {
     $stmt = $db->prepare("UPDATE siswa s
-        JOIN tagihan_daftar_ulang tdu ON tdu.no_induk=s.NO_INDUK
+        JOIN tagihan_daftar_ulang tdu ON tdu.no_induk=s.NO_INDUK AND tdu.unit_id=s.unit_id
         SET s.DAFTAR_ULANG=tdu.nominal_awal,
             s.potong_du=GREATEST(tdu.nominal_awal-tdu.nominal_tagihan,0),
             s.tot_du=tdu.nominal_tagihan
@@ -269,7 +269,7 @@ function du_apply_current_student_override(mysqli $db, string $noInduk): void {
             s.DAFTAR_ULANG,s.potong_du,s.tot_du,
             COALESCE(SUM(bd.jumlah),0) AS paid
         FROM siswa s
-        JOIN tagihan_daftar_ulang tdu ON tdu.no_induk=s.NO_INDUK
+        JOIN tagihan_daftar_ulang tdu ON tdu.no_induk=s.NO_INDUK AND tdu.unit_id=s.unit_id
         JOIN tahun_ajaran ta ON ta.id=tdu.tahun_ajaran_id AND ta.label=?
         LEFT JOIN Daftar_ulang du ON du.id=tdu.master_daftar_ulang_id
         LEFT JOIN bayar_du bd ON bd.tagihan_daftar_ulang_id=tdu.id
@@ -336,7 +336,7 @@ function du_reconcile_current_student_override(mysqli $db, string $noInduk): arr
             COALESCE(du.Jumlah,0) AS class_amount,s.DAFTAR_ULANG,s.potong_du,s.tot_du,
             COALESCE(SUM(bd.jumlah),0) AS paid
         FROM siswa s
-        JOIN tagihan_daftar_ulang tdu ON tdu.no_induk=s.NO_INDUK
+        JOIN tagihan_daftar_ulang tdu ON tdu.no_induk=s.NO_INDUK AND tdu.unit_id=s.unit_id
         JOIN tahun_ajaran ta ON ta.id=tdu.tahun_ajaran_id AND ta.label=?
         LEFT JOIN Daftar_ulang du ON du.id=tdu.master_daftar_ulang_id
         LEFT JOIN bayar_du bd ON bd.tagihan_daftar_ulang_id=tdu.id
@@ -403,7 +403,7 @@ function du_sync_open_bills_for_master_rate(
     $stmt = $db->prepare("SELECT tdu.id,tdu.no_induk,tdu.nominal_awal,tdu.nominal_tagihan,
             s.DAFTAR_ULANG,s.potong_du,s.tot_du,COALESCE(SUM(bd.jumlah),0) paid
         FROM tagihan_daftar_ulang tdu
-        JOIN siswa s ON s.NO_INDUK=tdu.no_induk
+        JOIN siswa s ON s.NO_INDUK=tdu.no_induk AND s.unit_id=tdu.unit_id
         LEFT JOIN bayar_du bd ON bd.tagihan_daftar_ulang_id=tdu.id
         WHERE tdu.master_daftar_ulang_id=? AND tdu.status='open'
         GROUP BY tdu.id,tdu.no_induk,tdu.nominal_awal,tdu.nominal_tagihan,
@@ -452,7 +452,7 @@ function du_create_bill_for_placement(mysqli $db, int $placementId, bool $syncLe
                                 s.DAFTAR_ULANG,s.potong_du,s.tot_du
                          FROM siswa_tahun_ajaran sta
                          JOIN tahun_ajaran ta ON ta.id = sta.tahun_ajaran_id
-                         JOIN siswa s ON s.NO_INDUK=sta.no_induk
+                         JOIN siswa s ON s.NO_INDUK=sta.no_induk AND s.unit_id=sta.unit_id
                          LEFT JOIN Daftar_ulang du ON du.tahun_ajaran_id = ta.id AND du.kelas = sta.kelas
                          WHERE sta.id = ? LIMIT 1 FOR UPDATE");
     $stmt->bind_param('i', $placementId);
@@ -525,7 +525,7 @@ function du_publish_year_from_active_students(mysqli $db, int $yearId, string $l
                 s.SPP_PERBULAN,s.POMG,'aktif'
             FROM siswa s LEFT JOIN master_kelas mk ON mk.id=s.master_kelas_id
             WHERE s.is_active=1 AND s.KELAS IN {$regularClasses}
-              AND NOT EXISTS(SELECT 1 FROM siswa_tahun_ajaran prior WHERE prior.no_induk=s.NO_INDUK)");
+              AND NOT EXISTS(SELECT 1 FROM siswa_tahun_ajaran prior WHERE prior.no_induk=s.NO_INDUK AND prior.unit_id=s.unit_id)");
         $stmt->bind_param('i', $yearId);
         $stmt->execute();
         $stmt->close();
@@ -537,7 +537,7 @@ function du_publish_year_from_active_students(mysqli $db, int $yearId, string $l
 
     if (strcmp($label, $currentYear) >= 0) {
         $stmt = $db->prepare("SELECT COUNT(*) AS missing FROM siswa s
-            LEFT JOIN siswa_tahun_ajaran sta ON sta.no_induk=s.NO_INDUK AND sta.tahun_ajaran_id=?
+            LEFT JOIN siswa_tahun_ajaran sta ON sta.no_induk=s.NO_INDUK AND sta.unit_id=s.unit_id AND sta.tahun_ajaran_id=?
             WHERE s.is_active=1 AND s.KELAS IN {$regularClasses} AND sta.id IS NULL");
         $stmt->bind_param('i', $yearId);
         $stmt->execute();
@@ -565,7 +565,7 @@ function du_publish_year_from_active_students(mysqli $db, int $yearId, string $l
                CASE WHEN ?=1 AND s.DAFTAR_ULANG>0 THEN s.DAFTAR_ULANG ELSE du.Jumlah END,
                CASE WHEN ?=1 AND s.DAFTAR_ULANG>0 THEN GREATEST(s.DAFTAR_ULANG-s.potong_du,0) ELSE du.Jumlah END
         FROM siswa_tahun_ajaran sta
-        JOIN siswa s ON s.NO_INDUK=sta.no_induk
+        JOIN siswa s ON s.NO_INDUK=sta.no_induk AND s.unit_id=sta.unit_id
         JOIN Daftar_ulang du ON du.tahun_ajaran_id=sta.tahun_ajaran_id AND du.kelas=sta.kelas
         WHERE sta.tahun_ajaran_id=? AND sta.kelas IN {$regularClasses}");
     $stmt->bind_param('siii', $label, $isCurrentYear, $isCurrentYear, $yearId); $stmt->execute();
@@ -574,7 +574,7 @@ function du_publish_year_from_active_students(mysqli $db, int $yearId, string $l
 
     if ($isCurrentYear === 1) {
         $stmt = $db->prepare("UPDATE siswa s
-            JOIN tagihan_daftar_ulang tdu ON tdu.no_induk=s.NO_INDUK AND tdu.tahun_ajaran_id=?
+            JOIN tagihan_daftar_ulang tdu ON tdu.no_induk=s.NO_INDUK AND tdu.unit_id=s.unit_id AND tdu.tahun_ajaran_id=?
             SET s.DAFTAR_ULANG=tdu.nominal_awal,
                 s.potong_du=GREATEST(tdu.nominal_awal-tdu.nominal_tagihan,0),
                 s.tot_du=tdu.nominal_tagihan");

@@ -5,13 +5,13 @@ require_once __DIR__ . '/../includes/auth.php';
 requireRole(['admin', 'kasir', 'bendahara']);
 
 $students = $koneksi->query("
-    SELECT s.NO_INDUK, s.unit_id, s.NO_induk_diknas, s.NAMA, s.KELAS,
+    SELECT s.id, s.NO_INDUK, s.unit_id, s.NO_induk_diknas, s.NAMA, s.KELAS,
            COALESCE(t.SALDO, 0) AS saldo,
            COALESCE(m.jumlah, 0) + COALESCE(k.jumlah, 0) AS transaksi
     FROM siswa s
-    LEFT JOIN tabungan t ON t.NO_INDUK = s.NO_INDUK
-    LEFT JOIN (SELECT NO_INDUK, COUNT(*) AS jumlah FROM transaksi_m GROUP BY NO_INDUK) m ON m.NO_INDUK = s.NO_INDUK
-    LEFT JOIN (SELECT NO_INDUK, COUNT(*) AS jumlah FROM transaksi_k GROUP BY NO_INDUK) k ON k.NO_INDUK = s.NO_INDUK
+    LEFT JOIN tabungan t ON t.NO_INDUK = s.NO_INDUK AND t.unit_id=s.unit_id
+    LEFT JOIN (SELECT unit_id,NO_INDUK, COUNT(*) AS jumlah FROM transaksi_m GROUP BY unit_id,NO_INDUK) m ON m.NO_INDUK = s.NO_INDUK AND m.unit_id=s.unit_id
+    LEFT JOIN (SELECT unit_id,NO_INDUK, COUNT(*) AS jumlah FROM transaksi_k GROUP BY unit_id,NO_INDUK) k ON k.NO_INDUK = s.NO_INDUK AND k.unit_id=s.unit_id
     WHERE s.is_active = 1
     ORDER BY s.NAMA, s.NO_INDUK
 ")->fetch_all(MYSQLI_ASSOC);
@@ -95,7 +95,7 @@ function print_book_escape($value): string
               </div>
               <datalist id="savings-print-list">
                 <?php foreach ($students as $student): ?>
-                <option value="<?= print_book_escape($student['NAMA']) ?>" data-nis="<?= print_book_escape($student['NO_INDUK']) ?>" data-diknas="<?= print_book_escape($student['NO_induk_diknas'] ?? '') ?>" data-nama="<?= print_book_escape($student['NAMA']) ?>" data-kelas="<?= print_book_escape((unit_all_readonly()?unit_label((int)$student['unit_id']).' · ':'').$student['KELAS']) ?>" data-kelas-id="<?= print_book_escape($student['KELAS']) ?>" data-saldo="<?= print_book_escape($student['saldo']) ?>" data-transaksi="<?= (int)$student['transaksi'] ?>"></option>
+                <option value="<?= print_book_escape($student['NAMA']) ?>" data-student-id="<?= (int)$student['id'] ?>" data-unit-id="<?= (int)$student['unit_id'] ?>" data-nis="<?= print_book_escape($student['NO_INDUK']) ?>" data-diknas="<?= print_book_escape($student['NO_induk_diknas'] ?? '') ?>" data-nama="<?= print_book_escape($student['NAMA']) ?>" data-kelas="<?= print_book_escape((unit_all_readonly()?unit_label((int)$student['unit_id']).' · ':'').$student['KELAS']) ?>" data-kelas-id="<?= print_book_escape($student['KELAS']) ?>" data-saldo="<?= print_book_escape($student['saldo']) ?>" data-transaksi="<?= (int)$student['transaksi'] ?>"></option>
                 <?php endforeach; ?>
               </datalist>
             </div>
@@ -127,14 +127,14 @@ function print_book_escape($value): string
     </div>
   </main>
 </div>
-<script src="../assets/js/app.js?v=10.4"></script>
+<script src="../assets/js/app.js?v=<?= filemtime(__DIR__ . '/../assets/js/app.js') ?>"></script>
 <script>
 (function () {
   const search = document.getElementById('savings-print-search');
   const classFilter = document.getElementById('savings-print-class');
   const action = document.getElementById('savings-print-action');
   const summary = document.getElementById('savings-print-summary');
-  let selectedNis = '';
+  let selectedNis = ''; let selectedId = '';
   const rupiah = new Intl.NumberFormat('id-ID', {style: 'currency', currency: 'IDR', maximumFractionDigits: 0});
 
   function resetSelection() {
@@ -151,7 +151,7 @@ function print_book_escape($value): string
   window.selectSavingsBookStudent = function (input, option) {
     const nis = option.dataset.nis || '';
     if (!nis) { resetSelection(); return; }
-    selectedNis = nis;
+    selectedNis = nis; selectedId=option.dataset.studentId || '';
     document.getElementById('savings-print-name').textContent = option.dataset.nama || option.value;
     document.getElementById('savings-print-nis').textContent = 'NIS ' + nis + (option.dataset.diknas ? ' · NIS Diknas ' + option.dataset.diknas : '');
     document.getElementById('savings-print-student-class').textContent = 'Kelas ' + (option.dataset.kelas || '-');
@@ -164,7 +164,7 @@ function print_book_escape($value): string
   search.addEventListener('input', resetSelection);
   classFilter.addEventListener('change', function () { search.value = ''; resetSelection(); });
   action.addEventListener('click', function () {
-    if (selectedNis) window.location.href = 'cetak_buku.php?nis=' + encodeURIComponent(selectedNis);
+    if (selectedNis) window.location.href = 'cetak_buku.php?nis=' + encodeURIComponent(selectedNis) + '&student_id=' + encodeURIComponent(selectedId);
   });
 })();
 </script>

@@ -22,12 +22,7 @@
     });
   });
   const selectedFiles = {restore: null, legacy: null};
-  const legacyReadiness = () => {
-    const unit = byId('legacy-unit').value;
-    byId('legacy-readiness').textContent = unit && selectedFiles.legacy
-      ? 'Pilihan siap: unit ' + unit + '. File belum divalidasi; pemetaan dan penerapan belum tersedia.'
-      : 'Pilih unit sumber dan file untuk menyiapkan pilihan. Pemetaan belum tersedia.';
-  };
+  const legacyReadiness = () => document.dispatchEvent(new CustomEvent('legacy-selection-changed'));
   const updateSelection = (prefix, files) => {
     selectedFiles[prefix] = null;
     byId(prefix + '-summary').hidden = true;
@@ -37,8 +32,7 @@
     if (files.length > 1) error = 'Pilih satu file saja; pilihan ganda tidak diterima.';
     else if (files.length === 1) {
       const file = files[0];
-      if (/\.dat$/i.test(file.name)) error = 'Backup SQL Server (.dat) perlu dikonversi terlebih dahulu ke data SQL yang sesuai.';
-      else if (!/\.sql$/i.test(file.name)) error = 'Format tidak diterima. Pilih satu file SQL (.sql).';
+      if (!(prefix === 'legacy' ? /\.dat$/i : /\.sql$/i).test(file.name)) error = prefix === 'legacy' ? 'Pilih satu backup SQL Server (.dat).' : 'Pilih satu file SQL (.sql).';
       else if (file.size === 0) error = 'File kosong tidak dapat digunakan.';
       else if (file.size > 100 * 1024 * 1024) error = 'Ukuran file melebihi batas 100 MB.';
       else {
@@ -48,10 +42,11 @@
         byId(prefix + '-size').textContent = (file.size / 1048576).toLocaleString('id-ID', {maximumFractionDigits: 2}) + ' MB';
       }
     }
-    status.textContent = error || (selectedFiles[prefix] ? 'Belum divalidasi. Pemeriksaan awal nama, ukuran, dan jumlah file terpenuhi; isi SQL belum diperiksa.' : 'Belum ada file dipilih.');
+    status.textContent = error || (selectedFiles[prefix] ? (prefix==='legacy'?'Belum diperiksa. Nama, ukuran, dan jumlah file memenuhi pemeriksaan awal; klik Periksa Backup untuk memeriksa sumber.':'Belum divalidasi. Pemeriksaan awal nama, ukuran, dan jumlah file terpenuhi; isi SQL belum diperiksa.') : 'Belum ada file dipilih.');
     if (error) status.classList.add('is-error');
     if (prefix === 'restore') byId('restore-review').disabled = !selectedFiles.restore;
     legacyReadiness();
+    if(prefix === 'legacy') document.dispatchEvent(new CustomEvent('legacy-file-selected', {detail: selectedFiles.legacy}));
   };
   ['restore', 'legacy'].forEach(prefix => {
     const input = byId(prefix + '-file'), zone = byId(prefix + '-dropzone');
@@ -68,7 +63,7 @@
     });
   });
   const conditions = {
-    students: ['Identitas siswa perlu diselesaikan', 'Benturan NIS dan pemetaan status siswa memerlukan keputusan; tidak diganti atau digabung otomatis.'],
+    students: ['Identitas siswa sebagai Legacy', 'NIS dipertahankan per unit. Duplikasi dalam unit dan identitas yang bermasalah ditahan. Aktivasi dan penempatan dilakukan manual melalui Data Siswa.'],
     classes: ['Histori kelas dan tarif perlu dilengkapi', 'Kelas, rombel, periode, dan tarif harus dipetakan dari bukti sumber. Kelas sebelum penempatan pertama tidak ditebak.'],
     payments: ['Relasi pembayaran perlu dibuktikan', 'Identitas transaksi, periode, siswa, tagihan, potongan, dan nominal perlu dicocokkan. Tidak ada penerimaan fiktif atau pemecahan transaksi otomatis.'],
     savings: ['Saldo dan jurnal perlu direkonsiliasi', 'Saldo Tabungan harus cocok dengan jurnal masuk/keluar. Saldo bukan penerimaan pembayaran sekolah.']
@@ -76,6 +71,7 @@
   document.querySelectorAll('[data-category]').forEach(button => button.addEventListener('click', () => {
     document.querySelectorAll('[data-category]').forEach(item => item.setAttribute('aria-pressed', String(item === button)));
     const [title, description] = conditions[button.dataset.category];
+    document.dispatchEvent(new CustomEvent('legacy-category-selected', {detail: button.dataset.category}));
     byId('legacy-condition-title').textContent = title;
     byId('legacy-condition').textContent = description;
   }));

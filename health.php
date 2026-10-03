@@ -3,6 +3,8 @@
 require_once __DIR__ . '/koneksi.php';
 
 try {
+    require_once __DIR__.'/includes/legacy_schema.php';
+    if(!legacy_schema_ready($koneksi))throw new RuntimeException('Migrasi identitas Legacy belum lengkap.');
     $admin = $koneksi->query('SELECT id FROM admin LIMIT 1');
     $koneksi->query('SELECT id FROM tagihan_komite LIMIT 1');
     $koneksi->query('SELECT request_key FROM keuangan_request LIMIT 0');

@@ -22,6 +22,8 @@ if ($noInduk === '') {
     exit;
 }
 
+try { unit_resolve_student($koneksi,$noInduk,(int)($_GET['student_id']??0)); }catch(Throwable $e){http_response_code(409);echo json_encode(['ok'=>false,'message'=>$e->getMessage()]);exit;}
+
 try {
     $stmt = $koneksi->prepare("SELECT NO_INDUK,NAMA FROM siswa WHERE NO_INDUK=? LIMIT 1");
     $stmt->bind_param('s', $noInduk);

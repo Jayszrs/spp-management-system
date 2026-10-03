@@ -58,6 +58,7 @@ function lifecycle_token(string $html, string $formId): string {
 }
 
 function lifecycle_flash(string $html): string {
+    if(preg_match('/window\.sppFlashWarning = (.*?);/s',$html,$status)){$data=json_decode($status[1],true);if(is_array($data))return ($data['code']??'').': '.($data['message']??'');}
     if (preg_match('/id="flash-msg"[^>]*>(.*?)<\/div>/s', $html, $match)) {
         return trim(html_entity_decode(strip_tags($match[1])));
     }
@@ -111,6 +112,21 @@ try {
 
     $studentPage = lifecycle_request($base . '/siswa/daftar.php', null, $cookies, $firstYear);
     lifecycle_assert($studentPage['status'] === 200, 'Student registration page failed.');
+    if(getenv('SPP_TEST_LEGACY_START')==='1'){
+        $legacy=$koneksi->query("SELECT s.id,s.NO_INDUK FROM siswa s JOIN legacy_student_import m ON m.student_id=s.id AND m.unit_id=s.unit_id WHERE s.legacy_pending=1 AND m.source_name LIKE '%-5.dat' ORDER BY s.id LIMIT 1")->fetch_assoc();
+        lifecycle_assert((bool)$legacy,'Imported Legacy candidate unavailable');$nis=$legacy['NO_INDUK'];$legacyId=(int)$legacy['id'];
+        lifecycle_request($base.'/siswa/daftar.php',['aksi'=>'toggle_status','id'=>$legacyId,'target_active'=>'1','csrf_token'=>lifecycle_token($studentPage['body'],'form-master-siswa')],$cookies,$firstYear);
+        lifecycle_assert((int)$koneksi->query("SELECT legacy_pending FROM siswa WHERE id=$legacyId")->fetch_row()[0]===1,'Normal restore bypassed Legacy activation');
+        $pendingPayment=lifecycle_request($base.'/pembayaran/form.php',null,$cookies,$firstYear);preg_match('/name="request_key" value="([a-f0-9]{32})"/',$pendingPayment['body'],$pk);
+        lifecycle_request($base.'/pembayaran/proses.php',['aksi'=>'input','payment_plan'=>'monthly','no_induk'=>$nis,'uang_pangkal'=>1000,'bulan_bayar'=>'07','tahun_bayar'=>'2030','sistem_pembayaran'=>'Tunai','csrf_token'=>lifecycle_token($pendingPayment['body'],'form-bayar'),'request_key'=>$pk[1]],$cookies,$firstYear);
+        lifecycle_assert((int)$koneksi->query("SELECT COUNT(*) FROM bayar WHERE NO_INDUK='".$koneksi->real_escape_string($nis)."'")->fetch_row()[0]===0,'Legacy payment accepted');
+        $activation=lifecycle_request($base.'/siswa/aktivasi_legacy.php?id='.$legacyId,null,$cookies,$firstYear);
+        lifecycle_assert($activation['status']===200,'Legacy activation page failed');
+        $yearId=(int)$koneksi->query("SELECT id FROM tahun_ajaran WHERE label='$firstYear'")->fetch_row()[0];
+        $activate=lifecycle_request($base.'/siswa/aktivasi_legacy.php',['id'=>$legacyId,'class_id'=>lifecycle_class($koneksi,$unitId,$firstLevel),'year_id'=>$yearId,'spp'=>250000,'pangkal'=>0,'psb'=>0,'komite'=>0,'du'=>0,'confirmed'=>'1','csrf_token'=>lifecycle_token($activation['body'],'legacy-activation')],$cookies,$firstYear);
+        lifecycle_assert($activate['status']===302,'Legacy manual activation failed');
+        lifecycle_assert((int)$koneksi->query("SELECT COUNT(*) FROM tagihan_spp WHERE no_induk='".$koneksi->real_escape_string($nis)."'")->fetch_row()[0]===0,'Activation issued bills automatically');
+    }else{
     $register = lifecycle_request($base . '/siswa/daftar.php', [
         'aksi' => 'tambah', 'csrf_token' => lifecycle_token($studentPage['body'], 'form-master-siswa'),
         'no_induk' => $nis, 'nama' => 'UJI SIKLUS LENGKAP',
@@ -120,6 +136,7 @@ try {
         'potong_pangkal' => 0, 'potong_du' => 0,
     ], $cookies, $firstYear);
     lifecycle_assert($register['status'] === 302, 'Student registration request failed.');
+    }
     $registered = $koneksi->query("SELECT KELAS,is_active FROM siswa WHERE NO_INDUK='" . $koneksi->real_escape_string($nis) . "'")->fetch_assoc();
     lifecycle_assert($registered && $registered['KELAS'] === (string)$firstLevel && (int)$registered['is_active'] === 1,
         'First-level student was not registered.');

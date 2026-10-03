@@ -156,9 +156,25 @@ function unit_record_badge(array $row): string {
     if (($GLOBALS['app_unit_id']??1) !== 0) return '';
     $unitId=(int)($row['unit_id']??0);
     if (!$unitId) {
-        static $students=null;
-        if($students===null){$students=[];foreach($GLOBALS['koneksi']->query('SELECT NO_INDUK,unit_id FROM siswa')->fetch_all(MYSQLI_ASSOC) as $s)$students[$s['NO_INDUK']]=(int)$s['unit_id'];}
-        $unitId=$students[$row['NO_INDUK']??$row['no_induk']??$row['nis']??'']??0;
+        $nis=(string)($row['NO_INDUK']??$row['no_induk']??$row['nis']??'');
+        $stmt=$GLOBALS['koneksi']->prepare('SELECT unit_id FROM siswa WHERE NO_INDUK=?');
+        $stmt->bind_param('s',$nis);$stmt->execute();$owners=$stmt->get_result()->fetch_all(MYSQLI_ASSOC);$stmt->close();
+        $unitId=count($owners)===1?(int)$owners[0]['unit_id']:0;
     }
     return $unitId>0?'<span class="unit-record-pill" data-unit="'.$unitId.'">'.unit_label($unitId).'</span> ':'';
+}
+
+/** Stable identity key for combined read views; a student number alone is not an identity. */
+function unit_student_key(array $row): string { return (int)($row['unit_id']??unit_active_id()).'|'.(string)($row['NO_INDUK']??$row['no_induk']??$row['nis']??''); }
+
+/** Legacy NIS URLs require a unique visible identity or an explicit student ID. */
+function unit_resolve_student(mysqli $db,string $nis,int $id=0):array {
+    $s=$db->prepare('SELECT id,unit_id,NO_INDUK,NAMA,legacy_pending FROM siswa WHERE NO_INDUK=? AND (?=0 OR id=?)');$s->bind_param('sii',$nis,$id,$id);$s->execute();$rows=$s->get_result()->fetch_all(MYSQLI_ASSOC);$s->close();
+    if(count($rows)!==1)throw new RuntimeException(count($rows)>1?'NIS ambigu; pilih siswa dan unit secara eksplisit.':'Siswa tidak ditemukan pada unit ini.');
+    unit_set_context($db,(int)$rows[0]['unit_id']);return $rows[0];
+}
+
+function unit_student_selection_where(string $alias='s'):string {
+    if(!preg_match('/^[a-z][a-z0-9_]*$/D',$alias))throw new LogicException('Invalid alias');
+    $id=max(0,(int)($_GET['student_id']??0));return $id?' AND '.$alias.'.id='.$id:'';
 }

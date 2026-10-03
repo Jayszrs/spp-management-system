@@ -432,7 +432,7 @@ $roleLabels = ['super_admin'=>'Super Admin','admin' => 'Admin', 'bendahara' => '
     </div>
   </div>
 
-  <script src="assets/js/app.js?v=10.4"></script>
+  <script src="assets/js/app.js?v=<?= filemtime(__DIR__ . '/assets/js/app.js') ?>"></script>
   <script>
     (function () {
       const modal = document.getElementById('reset-password-modal');
