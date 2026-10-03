@@ -13,6 +13,14 @@ File ini mencatat perubahan proyek secara reverse chronological. Baca [PROJECT_C
 - Jangan menghapus atau menulis ulang entri lama. Tambahkan entri koreksi bila diperlukan.
 - Perubahan implementasi dan entri changelog wajib masuk commit yang sama.
 
+## 2026-10-03 - Penerapan trial Legacy dan penutupan audit
+
+- Aktor: Codex, atas otorisasi pemilik; kode `62dd273` dipindahkan ke main, migrasi dan tiga sumber diterapkan setelah simulasi/backup/restore lulus.
+- Hasil: 1.137 identitas Legacy pending, 8 baris ditahan, 142 GK dipisahkan. Trial 222 menjadi 1.359 siswa; tidak ada aktivasi massal atau penerapan keuangan legacy.
+- Baseline segera sesudah importer: 1.018 pembayaran/Rp577.145.000, seluruh nilai existing dan 31 tabel original lain identik. Aktivitas sesudah aplikasi dibuka: dua pembayaran SD +Rp645.000 dan perubahan tarif SD dari sesi Super Admin. Pemeriksaan akhir 1.020 pembayaran/Rp577.790.000; original pembayaran/detail/alokasi serta Tabungan 12/Rp1.050.000 tetap utuh. Perubahan tarif aktual dibedakan dari hasil migrasi.
+- Verifikasi akhir: restore pembanding per primary key, 26 invariant nol, health OK, 24 keadaan UI main baca saja. Clone/server/instance khusus tes dibersihkan setelah pemeriksaan kepemilikan; worker dan sumber privat trial dipertahankan.
+- Batas: siap untuk trial identitas pada tiga profil yang diaudit; startup worker manual setelah restart/logoff, histori keuangan/restore web penuh/throughput 100 MiB belum dinyatakan siap. [Audit implementasi](LEGACY_IMPORT_BACKEND_20261003.md) dan [runbook](LEGACY_IMPORT_RUNBOOK_20261003.md).
+
 ## 2026-10-03 - Backend identitas Legacy dan aktivasi manual
 
 - Aktor: Codex, rencana pemilik; implementasi di atas `926753b`, diuji dalam worktree/clone sebelum penerapan trial.

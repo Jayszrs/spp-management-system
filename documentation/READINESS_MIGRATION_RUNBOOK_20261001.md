@@ -1,5 +1,8 @@
 # Runbook terkini ? penghapusan Titipan SPP, 2 Oktober 2026
 
+> **Pembaruan 3 Oktober 2026:** migrasi Legacy/unit-NIS sudah diterapkan pada trial, 1.137 identitas pending ditambahkan tanpa transaksi/penempatan. Baseline siswa kini 1.359. Tepat setelah impor, pembayaran 1.018/Rp577.145.000 dan Tabungan tetap identik. Dua pembayaran operasional berikutnya menghasilkan baseline terbaru 1.020/Rp577.790.000; perubahan tarif SD sesudah impor dicatat dalam audit backend. Tabungan tetap 12/Rp1.050.000. Untuk DDL/restore setelah tahap ini, hentikan worker importer dan gunakan [runbook Legacy](LEGACY_IMPORT_RUNBOOK_20261003.md); bagian di bawah mempertahankan bukti migrasi sebelumnya.
+
+
 ## Hasil lokal
 
 **Pembaruan kode 3 Oktober 2026:** [Semua Unit untuk data/rekap](ALL_UNITS_AUDIT_20261003.md) tersedia pada Super Admin, dengan transaksi dan seluruh mutasi wajib per unit. Paket ini tidak menambah skema/migrasi, tidak menerapkan ulang pembersihan, dan tidak mengubah database utama. Health serta 14 invariant bersih; 222 siswa/1.018 pembayaran/Rp577.145.000 dan fingerprint seluruh 32 tabel tetap sama. Prosedur pemulihan Titipan SPP di bawah tetap merupakan riwayat migrasi 2 Oktober.

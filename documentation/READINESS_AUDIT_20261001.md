@@ -1,7 +1,9 @@
 # Kesiapan SistemSPP — pembaruan 3 Oktober 2026
 
-> **Pembaruan impor Legacy:** identitas per unit, status Legacy dan worker LocalDB diuji pada clone; [audit backend](LEGACY_IMPORT_BACKEND_20261003.md) menjadi rujukan terbaru kategori ini. Kesimpulan audit lama tidak diperluas menjadi kesiapan migrasi histori keuangan atau deployment importer pada server lain.
+> **Pembaruan impor Legacy:** identitas per unit, status Legacy dan worker LocalDB diuji pada clone lalu diterapkan pada trial; 1.359 siswa (1.137 Legacy pending), pada snapshot segera setelah impor, pembayaran/Tabungan serta seluruh nilai existing tetap identik; aktivitas operasional berikutnya dicatat terpisah, health OK dan 26 integritas bersih; [audit backend](LEGACY_IMPORT_BACKEND_20261003.md) menjadi rujukan terbaru kategori ini. Kesimpulan audit lama tidak diperluas menjadi kesiapan migrasi histori keuangan atau deployment importer pada server lain.
 
+
+> **Baseline akhir trial 3 Oktober:** Setelah aplikasi dibuka kembali, tercatat dua pembayaran operasional SD (+Rp645.000) dan aksi `ubah_tarif` SD dari sesi Super Admin pada 12:30:28. Ini terjadi sesudah snapshot verifikasi impor, bukan penulisan fixture audit. Angka terbaru pada pemeriksaan akhir: **1.359 siswa, 1.020 pembayaran/Rp577.790.000**, Tabungan **12 rekening/Rp1.050.000**. Seluruh pembayaran/detail/alokasi original tetap identik per primary key dan fingerprint Tabungan tetap sama. Perubahan tarif menyentuh satu master, SPP aktif 24 siswa existing, serta 119 tagihan yang tidak memiliki alokasi pembayaran; snapshot tagihan berbayar tetap terlindungi. Data tersebut dipertahankan. Seluruh 26 invariant integritas tetap nol.
 
 ## Status terkini
 
@@ -27,7 +29,7 @@ Audit sebelumnya melewatkan regresi visual dari penghapusan Titipan SPP: 10 tand
 - Daftar Ulang, PSB, Pangkal, Biaya Lain, riwayat kelas/tarif dan filter status tetap mengikuti kontraknya. Tabungan merupakan jurnal tersendiri.
 - Endpoint Titipan SPP dihapus, menu/modal/saldo/laporannya dihapus, field status dan snapshot baru tidak memuat titipan. Kiriman lama untuk mencatat/memakai titipan ditolak tanpa transaksi baru. Histori audit lama dipertahankan sebagai bukti.
 
-## Database utama sebelum dan sesudah
+## Baseline historis penghapusan Titipan SPP (2 Oktober)
 
 | Data | Sebelum | Sesudah |
 | --- | ---: | ---: |
