@@ -8,7 +8,7 @@ function page_size_param(string $name = 'per_page', array $allowed = [10, 25, 50
     return in_array($requested, $allowed, true) ? $requested : $default;
 }
 
-function total_pages(int $totalRows, int $perPage): int {
+function total_pages(int $totalRows, int $perPage): int { 
     return max(1, (int)ceil(max(0, $totalRows) / max(1, $perPage)));
 }
 
