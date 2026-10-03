@@ -86,6 +86,9 @@ $allNavItems = [
   ['role_management.php', 'Role Management',
    '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/>',
    ['super_admin'], 'Pengaturan'],
+  ['backup_restore.php', 'Backup & Restore',
+   '<ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 4 16 4 16 0V5M4 12c0 4 16 4 16 0"/>',
+   ['super_admin'], 'Pengaturan'],
 ];
 
 // Filter nav items berdasarkan role
@@ -107,6 +110,7 @@ $shortLabels = [
   'Master Biaya Lain' => 'Biaya',
   'Master Daftar Ulang' => 'DU',
   'Role Management'   => 'Akun',
+  'Backup & Restore'  => 'Backup',
   'Tabungan Masuk'    => 'Masuk',
   'Tabungan Keluar'   => 'Keluar',
   'Riwayat Tabungan'  => 'Riwayat',

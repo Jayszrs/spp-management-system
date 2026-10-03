@@ -49,6 +49,8 @@ Guard backend berada di `includes/auth.php`. Hak akses harus diperiksa pada endp
 
 ## Lokasi kode utama
 
+- `backup_restore.php`: antarmuka baca khusus Super Admin untuk Backup & Restore serta Import Legacy; belum menyediakan backup/upload/restore/import operasional. CSS/JS terpisah, cakupan pemulihan seluruh database. Lihat [batas tahap UI dan verifikasi](BACKUP_RESTORE_UI_20261003.md) serta [audit kelayakan legacy](LEGACY_IMPORT_FEASIBILITY_20261003.md).
+
 - `pembayaran/`: input, histori, edit/hapus, dan struk transaksi.
 - `siswa/`: Data Siswa dan riwayat kelas.
 - `master_spp.php`, `master_kelas.php`, `master_biaya_lain.php`, `master_daftar_ulang.php`: pengelolaan master.

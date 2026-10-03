@@ -13,6 +13,15 @@ File ini mencatat perubahan proyek secara reverse chronological. Baca [PROJECT_C
 - Jangan menghapus atau menulis ulang entri lama. Tambahkan entri koreksi bila diperlukan.
 - Perubahan implementasi dan entri changelog wajib masuk commit yang sama.
 
+## 2026-10-03 - Antarmuka Backup, Restore dan Import Legacy
+
+- Aktor: Codex, implementasi rencana pemilik pada `main` di atas `de10aef`.
+- Perilaku: menu Backup & Restore khusus Super Admin; dua mode dengan ringkasan koneksi/estimasi ukuran baca saja, cakupan seluruh database, riwayat belum tersedia, pemilihan SQL lokal dan modal penjelasan penggantian data. Backup/restore/pemetaan/penerapan tetap nonaktif; tidak ada upload atau eksekusi SQL. Unit sumber legacy SD/SMP/SMA tidak memengaruhi sidebar; NIS/status dan kompatibilitas belum diselesaikan otomatis.
+- Tampilan: mengikuti referensi dan tema existing melalui CSS/JS khusus ber-versi filemtime; stylesheet bersama tidak diubah. Desktop empat ringkasan/dua kartu, tablet dua ringkasan, ponsel vertikal.
+- Database/API/migrasi: tidak ada. Clone khusus `db_spp_audit_backup_ui_20261003`; fingerprint 32 tabel utama dan clone identik sebelum/sesudah. Utama tetap 222 siswa, 1.018 pembayaran/Rp577.145.000, Tabungan 12 rekening/Rp1.050.000.
+- Verifikasi: parser CSS khusus/acuan CSS bersama, lint PHP/JS, tes file dan modal aksesibel, 48 keadaan tampilan (empat palette, dua tema, tiga viewport, dua mode), tablet, tes sesi/role/metode tulis, guard CSRF/Semua Unit dan regresi kontrol browser lintas unit lulus. Tidak ada upload atau error JavaScript.
+- Dokumentasi/bukti: [audit UI](BACKUP_RESTORE_UI_20261003.md), [audit kelayakan legacy](LEGACY_IMPORT_FEASIBILITY_20261003.md) yang sebelumnya belum di-commit, serta konteks diperbarui. Backup/fingerprint/screenshot disimpan di luar repo dalam folder `backup_restore_ui_20261003`; server/clone khusus dibersihkan setelah pemeriksaan.
+
 ## 2026-10-03 - Empat tombol akses cepat cakupan Dashboard
 
 - Aktor: Codex, implementasi rencana pemilik pada `main` di atas `f16d06d`.

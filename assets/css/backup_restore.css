@@ -1,0 +1,116 @@
+/* Scoped administrative UI; the shared design and business screens are unchanged. */
+.dbt-main { min-width: 0; }
+.db-tools-page { padding: 28px; width: 100%; min-width: 0; max-width: 1920px; margin: 0 auto; color: var(--text-primary); }
+.db-tools-page [hidden] { display: none !important; }
+.dbt-breadcrumb { display: flex; gap: 16px; font-size: 12px; color: var(--text-secondary); margin-bottom: 20px; }
+.dbt-heading { display: flex; align-items: center; gap: 14px; margin-bottom: 22px; }
+.dbt-heading h1 { font-size: clamp(23px, 2vw, 30px); margin: 0 0 5px; }
+.dbt-heading p, .dbt-card-heading p, .dbt-metric p { margin: 0; color: var(--text-secondary); font-size: 13px; line-height: 1.6; }
+.dbt-icon { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 48px; width: 48px; height: 48px; background: var(--accent-glow); color: var(--accent); border-radius: 14px; }
+.dbt-badge { display: inline-flex; padding: 6px 11px; background: var(--accent-glow); color: var(--accent); border-radius: 20px; font-size: 12px; font-weight: 700; }
+.dbt-heading > .dbt-badge { margin-left: auto; white-space: nowrap; }
+.dbt-tabs { display: flex; gap: 5px; padding: 5px; border: 1px solid var(--border); border-radius: 12px; width: fit-content; background: var(--bg-elevated); margin-bottom: 20px; }
+.dbt-tabs button, .dbt-category { border: 0; border-radius: 8px; background: transparent; color: var(--text-secondary); font: inherit; font-size: 13px; font-weight: 700; padding: 12px 18px; cursor: pointer; min-height: 44px; }
+.dbt-tabs [aria-selected="true"] { background: var(--accent); color: var(--bg-base); }
+.dbt-notice { display: flex; align-items: flex-start; gap: 12px; padding: 17px 20px; border: 1px solid var(--border); border-radius: 14px; background: var(--accent-glow); margin-bottom: 18px; font-size: 13px; }
+.dbt-notice > svg { flex-shrink: 0; color: var(--accent); }
+.dbt-notice p, .dbt-warning p { margin: 4px 0 0; line-height: 1.6; }
+.dbt-metrics { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 16px; margin-bottom: 18px; }
+.dbt-metric, .dbt-card { border: 1px solid var(--border); border-radius: 16px; background: var(--bg-elevated); box-shadow: 0 5px 20px var(--accent-glow); }
+.dbt-metric { display: flex; align-items: center; padding: 20px; gap: 15px; }
+.dbt-metric h2 { margin: 0 0 6px; font-size: 12px; font-weight: 500; color: var(--text-secondary); }
+.dbt-metric strong { display: block; font-size: clamp(17px,1.4vw,24px); line-height: 1.3; margin-bottom: 3px; }
+.dbt-metric p { font-size: 11px; }
+.dbt-actions { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 18px; margin-bottom: 18px; }
+.dbt-card { padding: 22px; min-width: 0; }
+.dbt-card h2 { font-size: 18px; margin: 0 0 5px; }
+.dbt-card-heading { display: flex; gap: 14px; align-items: flex-start; margin-bottom: 18px; }
+.dbt-definition { background: var(--bg-surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px; margin: 20px 0; font-size: 13px; }
+.dbt-definition > div { display: grid; grid-template-columns: 90px minmax(0,1fr); gap: 12px; margin: 7px 0; }
+.dbt-definition dt { color: var(--text-secondary); }
+.dbt-definition dd { margin: 0; overflow-wrap: anywhere; font-weight: 600; }
+.dbt-button { display: inline-flex; justify-content: center; align-items: center; gap: 8px; min-height: 44px; padding: 10px 17px; border-radius: 10px; border: 1px solid var(--border); font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
+.dbt-button svg { width: 20px; height: 20px; }
+.dbt-button-primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+.dbt-button-outline { background: var(--bg-elevated); color: var(--accent); }
+.dbt-button:disabled { cursor: not-allowed; opacity: .55; }
+.dbt-wide { width: 100%; }
+.dbt-hint { font-size: 12px; line-height: 1.6; margin: 10px 0; color: var(--text-secondary); }
+.dbt-hint a { color: var(--accent); text-decoration: underline; }
+.dbt-warning { border: 1px solid var(--orange); background: var(--orange-bg); color: var(--text-primary); padding: 12px 15px; border-radius: 10px; font-size: 12px; margin-bottom: 15px; }
+.dbt-warning strong { color: var(--orange); }
+.dbt-dropzone { position: relative; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 12px; padding: 18px; border: 2px dashed var(--border-hover); border-radius: 10px; background: var(--bg-surface); font-size: 13px; text-align: center; }
+.dbt-dropzone > svg { color: var(--text-secondary); }
+.dbt-dropzone.is-dragging { border-color: var(--accent); background: var(--accent-glow); }
+.dbt-file-input { display: none; }
+.dbt-file-summary { display: flex; gap: 10px; align-items: center; padding: 12px; border: 1px solid var(--border); border-radius: 10px; font-size: 12px; }
+.dbt-file-summary > svg { color: var(--accent); flex-shrink: 0; }
+.dbt-file-summary > div { flex: 1; min-width: 0; }
+.dbt-file-summary strong { display: block; overflow-wrap: anywhere; }
+.dbt-file-summary span { display: block; color: var(--text-secondary); margin-top: 4px; }
+.dbt-text-button { background: transparent; border: 0; color: var(--accent); font: inherit; font-weight: 600; cursor: pointer; padding: 10px 4px; min-height: 44px; }
+.dbt-file-status { font-size: 12px; line-height: 1.6; color: var(--text-secondary); min-height: 20px; margin: 10px 0; }
+.dbt-file-status.is-error { color: var(--red); }
+.dbt-history-heading { display: flex; justify-content: space-between; align-items: center; gap: 18px; margin-bottom: 16px; }
+.dbt-history-heading .dbt-card-heading { margin: 0; }
+.dbt-history-controls { display: flex; gap: 10px; }
+.db-tools-page input, .db-tools-page select, .dbt-dialog input[type="text"] { font: inherit; color: var(--text-primary); background: var(--bg-surface); border: 1px solid var(--border); border-radius: 9px; padding: 11px 12px; min-height: 44px; max-width: 100%; }
+.dbt-history-controls input { width: 220px; }
+.db-tools-page input:disabled, .db-tools-page select:disabled { opacity: .55; cursor: not-allowed; }
+.dbt-table-scroll { overflow-x: auto; border: 1px solid var(--border); border-radius: 10px; }
+.dbt-table-scroll table { width: 100%; border-collapse: collapse; font-size: 12px; min-width: 670px; }
+.dbt-table-scroll th { padding: 13px; background: var(--accent-glow); color: var(--accent); text-align: left; white-space: nowrap; }
+.dbt-table-scroll .dbt-empty { text-align: center; padding: 28px; color: var(--text-secondary); }
+.dbt-empty svg { display: block; margin: 0 auto 10px; color: var(--accent); }
+.dbt-empty strong { display: block; color: var(--text-primary); }
+.dbt-empty p { margin-top: 8px; line-height: 1.6; }
+.dbt-empty-content { max-width: 700px; margin: 0 auto; }
+.dbt-categories { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 10px; margin: 18px 0; }
+.dbt-category { border: 1px solid var(--border); background: var(--bg-surface); }
+.dbt-category[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); background: var(--accent-glow); }
+.dbt-audit-condition { padding: 15px; border: 1px solid var(--border); border-radius: 10px; background: var(--bg-surface); font-size: 13px; line-height: 1.7; }
+.dbt-audit-condition p { margin: 5px 0 10px; color: var(--text-secondary); }
+.dbt-steps { list-style: none; display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 12px; padding: 0; margin: 22px 0; }
+.dbt-steps li { border-bottom: 2px solid var(--border); padding: 12px 0; font-size: 12px; color: var(--text-muted); }
+.dbt-steps li[aria-current] { color: var(--accent); border-color: var(--accent); font-weight: 700; }
+.dbt-steps span { display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; background: var(--bg-surface); border: 1px solid var(--border); width: 26px; height: 26px; margin-right: 5px; }
+.dbt-steps small { display: block; margin: 8px 0 0 32px; }
+.dbt-import-grid { display: grid; grid-template-columns: 1fr 1.3fr; gap: 26px; font-size: 13px; line-height: 1.7; }
+.dbt-label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 8px; }
+.dbt-label span { font-weight: 400; color: var(--text-secondary); }
+#legacy-unit { width: 100%; }
+.dbt-dialog { width: min(640px,calc(100% - 32px)); max-height: calc(100dvh - 32px); padding: 0; border: 1px solid var(--border); border-radius: 18px; background: var(--bg-elevated); color: var(--text-primary); box-shadow: var(--shadow); }
+.dbt-dialog::backdrop { background: rgba(12,16,30,.65); }
+.dbt-dialog-content { padding: 26px; }
+.dbt-dialog h2 { font-size: 22px; line-height: 1.4; margin: 14px 0; }
+.dbt-dialog p { font-size: 13px; line-height: 1.7; margin: 12px 0; }
+.dbt-checkbox { display: flex; align-items: flex-start; gap: 10px; margin: 18px 0; font-size: 13px; line-height: 1.7; }
+.dbt-checkbox input { margin-top: 4px; accent-color: var(--accent); }
+.dbt-dialog input[type="text"] { width: 100%; }
+.dbt-dialog-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 12px; margin-top: 20px; }
+.db-tools-page button:focus-visible, .db-tools-page a:focus-visible, .db-tools-page select:focus-visible, .dbt-dialog button:focus-visible, .dbt-dialog input:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+@media (max-width: 1150px) {
+  .dbt-metrics { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .dbt-history-heading { align-items: flex-start; flex-direction: column; }
+}
+@media (max-width: 760px) {
+  .db-tools-page { padding: 18px 14px; }
+  .dbt-heading { flex-wrap: wrap; gap: 10px; }
+  .dbt-heading > div { flex: 1; min-width: 220px; }
+  .dbt-heading > .dbt-badge { margin-left: 0; }
+  .dbt-actions, .dbt-import-grid { grid-template-columns: minmax(0,1fr); }
+  .dbt-categories, .dbt-steps { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .dbt-card { padding: 18px; }
+  .dbt-history-controls { width: 100%; flex-wrap: wrap; }
+  .dbt-history-controls input { width: 100%; }
+  .dbt-file-summary { flex-wrap: wrap; }
+  .dbt-file-summary > div { flex-basis: calc(100% - 38px); }
+  .dbt-dialog-content { padding: 20px; }
+}
+@media (max-width: 480px) {
+  .dbt-metrics { grid-template-columns: minmax(0,1fr); }
+  .dbt-tabs { width: 100%; }
+  .dbt-tabs button { flex: 1; padding: 12px 9px; }
+  .dbt-dialog-actions { flex-direction: column-reverse; }
+  .dbt-empty-content { max-width: calc(100vw - 126px); margin: 0; }
+}
